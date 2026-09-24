@@ -389,14 +389,21 @@ namespace Ktory.Core.Parser
                 content = guardMatch.Groups[2].Value.Trim();
             }
 
-            // Extract [label] from the marker line if present
-            int labelStart = content.IndexOf('[');
-            int labelEnd = content.IndexOf(']');
-            if (labelStart >= 0 && labelEnd > labelStart)
+            // Extract all [label] variants from the marker line if present
+            while (true)
             {
-                string rawLabel = content.Substring(labelStart + 1, labelEnd - labelStart - 1).Trim();
-                ParseOptionLabelVariant(rawLabel, item, file.DefaultLang, line.LineNumber);
-                content = content.Substring(labelEnd + 1).Trim();
+                int labelStart = content.IndexOf('[');
+                int labelEnd = content.IndexOf(']');
+                if (labelStart >= 0 && labelEnd > labelStart)
+                {
+                    string rawLabel = content.Substring(labelStart + 1, labelEnd - labelStart - 1).Trim();
+                    ParseOptionLabelVariant(rawLabel, item, file.DefaultLang, line.LineNumber);
+                    content = content.Substring(labelEnd + 1).Trim();
+                }
+                else
+                {
+                    break;
+                }
             }
 
             // Check target jump on the same line: e.g. => Sub_OpenDrawer or -> break or -> Label

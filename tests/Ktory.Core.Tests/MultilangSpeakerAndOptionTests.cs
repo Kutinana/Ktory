@@ -249,5 +249,23 @@ alice:
             seq.SetLanguage("zh");
             Assert.Equal("好的", seq.CurrentChoice!.Options[0].Label);
         }
+
+        [Fact]
+        public void Option_SingleLine_MultipleVariants()
+        {
+            string script = @"
+@defaultLang: zh
+
+#choice
+  * [@zh: ""选择一""] [@en: ""Choice 1""]
+";
+            var file = KtoryParser.Parse(script);
+            var seq = new KtorySequencer(file);
+            seq.Start(requestedLocale: "en");
+            Assert.Equal("Choice 1", seq.CurrentChoice!.Options[0].Label);
+
+            seq.SetLanguage("zh");
+            Assert.Equal("选择一", seq.CurrentChoice!.Options[0].Label);
+        }
     }
 }

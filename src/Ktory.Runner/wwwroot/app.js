@@ -23,8 +23,11 @@ const state = {
   fastForwardLockTimer: null,
   typewriterTimer: null,
   fullTextHtml: '',
+  currentActivePassageEl: null,
+  currentActiveSpeakerEl: null,
   currentActiveTypingEl: null,
   currentActiveCursorEl: null,
+  currentActiveChoiceEl: null,
   activeTags: [],
 
   // Hold & Countdown (.next / .wait)
@@ -403,6 +406,10 @@ async function stepSession() {
 
 async function submitChoice(choiceId) {
   clearTimers();
+  if (state.currentActiveChoiceEl) {
+    state.currentActiveChoiceEl.classList.add('has-selection');
+    state.currentActiveChoiceEl = null;
+  }
   try {
     const res = await fetch('/api/session/choice', {
       method: 'POST',
@@ -453,6 +460,11 @@ function resetStoryStream() {
   el.storyStream.innerHTML = '';
   el.storyCompletedBanner.style.display = 'none';
   state.beatsCount = 0;
+  state.currentActivePassageEl = null;
+  state.currentActiveSpeakerEl = null;
+  state.currentActiveTypingEl = null;
+  state.currentActiveCursorEl = null;
+  state.currentActiveChoiceEl = null;
   el.metricBeatsCount.textContent = '0';
   el.metricExploredCount.textContent = '0';
 }
@@ -502,10 +514,38 @@ function updateState(serverState, isLanguageSwitch = false) {
 }
 
 function renderBeat(payload, isLanguageSwitch = false) {
-  // Hot language switch: update current typing/active text if applicable
+  // Hot language switch: update current typing/active text and speaker if applicable
   if (isLanguageSwitch && state.currentActiveTypingEl) {
+    // 1. Immediately abort typewriter timer and fast-forward lock timer
+    clearInterval(state.typewriterTimer);
+    clearTimeout(state.fastForwardLockTimer);
+    state.typewriterTimer = null;
+    state.fastForwardLockTimer = null;
+    state.isTyping = false;
+
+    // 2. Hide typing cursor
+    if (state.currentActiveCursorEl) {
+      state.currentActiveCursorEl.style.display = 'none';
+    }
+
+    // 3. Dynamically update speaker display name in DOM
+    if (state.currentActiveSpeakerEl) {
+      state.currentActiveSpeakerEl.textContent = payload.speaker || '';
+    } else if (payload.speaker && state.currentActivePassageEl) {
+      const spEl = state.currentActivePassageEl.querySelector('.speaker-name');
+      if (spEl) spEl.textContent = payload.speaker;
+    }
+
+    // 4. Update the text content
     state.fullTextHtml = payload.content;
     state.currentActiveTypingEl.innerHTML = payload.content;
+
+    // 5. Update prompt hint if not holding
+    if (!state.isHolding) {
+      el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
+    }
+
+    scrollToBottom();
     return;
   }
 
@@ -547,7 +587,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
     passage.innerHTML = `
       <div class="speaker-header">
         <span class="speaker-mark">✦</span>
-        <span class="speaker-name">${payload.speaker}</span>
+        <span class="speaker-name">${escapeHtml(payload.speaker)}</span>
         ${emotionArg ? `<span class="speaker-emotion-tag">${escapeHtml(emotionArg)}</span>` : ''}
       </div>
       <div class="dialogue-body">
@@ -557,6 +597,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
     `;
     textContainer = passage.querySelector('.dialogue-text');
     cursorEl = passage.querySelector('.typing-cursor');
+    state.currentActiveSpeakerEl = passage.querySelector('.speaker-name');
   } else {
     // Narrator
     passage.classList.add('passage-narrator');
@@ -566,8 +607,10 @@ function renderBeat(payload, isLanguageSwitch = false) {
     `;
     textContainer = passage.querySelector('.passage-prose');
     cursorEl = passage.querySelector('.typing-cursor');
+    state.currentActiveSpeakerEl = null;
   }
 
+  state.currentActivePassageEl = passage;
   el.storyStream.appendChild(passage);
   scrollToBottom();
 
@@ -778,11 +821,25 @@ function clearTimers() {
 // ==========================================================================
 function renderChoices(choicePayload) {
   clearTimers();
+
+  // If there is already an active unselected choice group on screen, remove it before rendering the updated one
+  if (state.currentActiveChoiceEl && !state.currentActiveChoiceEl.classList.contains('has-selection')) {
+    state.currentActiveChoiceEl.remove();
+    state.currentActiveChoiceEl = null;
+  }
+  const existingUnselected = el.storyStream.querySelector('.choice-group-block:not(.has-selection)');
+  if (existingUnselected) {
+    existingUnselected.remove();
+  }
+
   const choiceGroup = document.createElement('div');
   choiceGroup.className = 'choice-group-block';
+  state.currentActiveChoiceEl = choiceGroup;
 
   const isInvestigate = choicePayload.containerName === 'investigate';
-  const titleText = isInvestigate ? '调查中 (Investigation Hub)' : '请做出抉择';
+  const titleText = isInvestigate
+    ? (state.requestedLocale === 'en' ? 'Investigation Hub' : '调查中 (Investigation Hub)')
+    : (state.requestedLocale === 'en' ? 'Make a Choice' : '请做出抉择');
 
   choiceGroup.innerHTML = `
     <div class="choice-group-header">
@@ -804,13 +861,14 @@ function renderChoices(choicePayload) {
         <span class="choice-marker">${escapeHtml(opt.marker || '*')}</span>
         <span class="choice-text">${escapeHtml(opt.label)}</span>
       </div>
-      ${opt.isConsumed ? '<span class="choice-state-tag">✓ 已探索</span>' : ''}
+      ${opt.isConsumed ? `<span class="choice-state-tag">${state.requestedLocale === 'en' ? '✓ Visited' : '✓ 已探索'}</span>` : ''}
     `;
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       btn.classList.add('is-selected');
       choiceGroup.classList.add('has-selection');
+      state.currentActiveChoiceEl = null;
       submitChoice(opt.id);
     });
 
@@ -820,7 +878,9 @@ function renderChoices(choicePayload) {
   el.storyStream.appendChild(choiceGroup);
   scrollToBottom();
 
-  el.dockStepHint.textContent = '请做出选择 (按数字键 1, 2... 或点击选项)';
+  el.dockStepHint.textContent = state.requestedLocale === 'en'
+    ? 'Please choose an option (press 1, 2... or click)'
+    : '请做出选择 (按数字键 1, 2... 或点击选项)';
 }
 
 // ==========================================================================
