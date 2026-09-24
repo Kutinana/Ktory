@@ -1,0 +1,33 @@
+// Title: 多语言与快显倒计时 (Multi-language & Skippable)
+@defaultLang: zh
+@speaker: zh="主角" | en="Protagonist"
+@speaker alice: zh="艾莉丝" | en="Alice"
+
+主角:
+  @zh: 这是一句测试文本，前两秒禁止点击快显。
+  @en: This is a test line; fast-forward click is locked for the first 2 seconds.
+  .skippable(false, 2)
+  .next(2)
+
+主角:
+  @zh: 这一句没有快显限制，文字显示完毕后将自动等待 3 秒推进。
+  @en: This line has no fast-forward lock and will auto-advance after a 3s hold.
+  .next(3)
+
+alice:
+  @zh: 请点击上方的语言切换按钮，可以在中文与英文之间即时热切换！
+  @en: Click the language buttons above to hot-switch between Chinese and English instantly!
+  .emotion(smile)
+
+#choice
+  * [@zh: "明白了，继续前进"]
+    [@en: "Understood, moving forward"]
+    主角:
+      @zh: 很好，我们出发。
+      @en: Great, let's head out.
+
+  * [@zh: "再停留一下"]
+    [@en: "Wait a moment"]
+    alice:
+      @zh: 没问题，随你节奏。
+      @en: No problem, at your pace.

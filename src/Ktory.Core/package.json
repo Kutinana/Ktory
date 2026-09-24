@@ -1,0 +1,16 @@
+{
+  "name": "com.ktory.core",
+  "version": "1.0.0",
+  "displayName": "Ktory Core",
+  "description": "Core dialogue-driven discrete event sequencer and narrative runtime for Ktory.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Ktory Authors"
+  },
+  "keywords": [
+    "dialogue",
+    "narrative",
+    "visual novel",
+    "sequencer"
+  ]
+}

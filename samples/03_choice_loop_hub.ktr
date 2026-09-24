@@ -1,0 +1,16 @@
+// Title: 分支选择与循环调查 (Choice & Loop Hub)
+@defaultLang: zh
+
+=== Room_Investigation ===
+
+#choice.loop
+  * [查看书桌]
+    #do .sfx("paper")
+    主角: 桌上有一张泛黄的日记碎片。
+  * [检查窗户]
+    主角: 窗户被铁栅栏焊死了。
+  + [尝试撞门]
+    主角: 门纹丝不动，撞得肩膀生疼。
+  + [放弃思考] -> break
+
+主角: 我们离开这里吧。
