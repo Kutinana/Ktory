@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sampleKeys.length > 0) {
     state.currentSampleKey = sampleKeys[0];
     el.scriptInput.value = state.samples[state.currentSampleKey];
-    updateOverviewStoryInfo(state.currentSampleKey);
+    syncSampleSelect(state.currentSampleKey);
     await startSession(state.samples[state.currentSampleKey], 'zh');
   }
 });
@@ -198,7 +198,7 @@ function setupEventListeners() {
     if (selected && state.samples[selected]) {
       state.currentSampleKey = selected;
       el.scriptInput.value = state.samples[selected];
-      updateOverviewStoryInfo(selected);
+      syncSampleSelect(selected);
     }
   });
 
@@ -241,7 +241,6 @@ function setupEventListeners() {
           if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
         }
 
-        updateOverviewStoryInfo(title);
         closeAllDrawers();
         await startSession(content, state.requestedLocale);
       } catch (err) {
@@ -523,7 +522,7 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
       if (sampleKeys.length > 0 && !state.payload) {
         state.currentSampleKey = sampleKeys[0];
         el.scriptInput.value = state.samples[state.currentSampleKey];
-        updateOverviewStoryInfo(state.currentSampleKey);
+        syncSampleSelect(state.currentSampleKey);
         startSession(state.samples[state.currentSampleKey], 'zh');
       }
     });
@@ -710,9 +709,8 @@ function resetStoryStream() {
   state.currentActiveCursorEl = null;
 }
 
-function updateOverviewStoryInfo(title) {
-  if (el.sampleSelect) el.sampleSelect.value = title;
-  document.title = `${title} — Ktory Web Reader`;
+function syncSampleSelect(sampleKey) {
+  if (el.sampleSelect && sampleKey) el.sampleSelect.value = sampleKey;
   if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
 }
 
