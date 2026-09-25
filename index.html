@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ktory Web Reader</title>
+
+  <!-- Typography: Cormorant Garamond (Serif), Noto Serif SC (Songti), Inter (Sans), JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="theme-ink font-serif font-size-md">
+  <div id="app" class="app-layout">
+
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <div class="brand">
+          <span class="brand-title">Ktory Web Reader</span>
+        </div>
+      </div>
+
+      <div class="nav-right">
+
+        <!-- Language Switcher Pills -->
+        <div class="nav-pill-group" id="langSwitcher" title="切换语言">
+          <button class="pill-btn active" data-locale="zh">中</button>
+          <button class="pill-btn" data-locale="en">EN</button>
+          <button class="pill-btn" data-locale="ja">日</button>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Auto Advance Toggle -->
+        <button id="btnAutoPlay" class="nav-toggle-btn" title="自动阅读模式 (A)">
+          <span class="toggle-dot"></span>
+          <span class="btn-label">AUTO</span>
+        </button>
+
+        <!-- Restart Button -->
+        <button id="btnRestartSession" class="nav-text-btn danger-hover" title="重新从头开始试读 (R)">
+          <span class="btn-icon">↺</span>
+          <span>RESTART</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Scrollable Reading Viewport -->
+    <main class="reader-viewport" id="readerViewport">
+      <div class="reader-container" id="readerContainer">
+
+        <!-- Elegant Section Divider -->
+        <div class="narrative-divider">
+          <span class="divider-line"></span>
+          <span class="divider-glyph">✦</span>
+          <span class="divider-line"></span>
+        </div>
+
+        <!-- Continuous Story Stream (Ink-style flowing narrative) -->
+        <div class="story-stream" id="storyStream">
+          <!-- Story passages will append here dynamically -->
+        </div>
+
+        <!-- Story Completed Flourish Banner -->
+        <div class="story-completed-banner" id="storyCompletedBanner" style="display: none;">
+          <div class="completion-ornament">✦ ✦ ✦</div>
+          <h2 class="completion-title">剧本演练结束</h2>
+          <p class="completion-desc">— The narrative sequence has reached its conclusion —</p>
+          <button id="btnReplayStory" class="completion-replay-btn">↺ 重新开始试读</button>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Bottom Floating Dock (Minimalist Progress & Controls) -->
+    <footer class="floating-dock" id="floatingDock">
+      <div class="dock-container">
+        <!-- Hold / Next Countdown Bar -->
+        <div class="dock-progress-track">
+          <div class="dock-progress-bar" id="dockProgressBar"></div>
+        </div>
+
+        <div class="dock-content">
+          <div class="dock-left">
+            <span class="status-indicator-dot" id="dockStatusDot"></span>
+            <span class="dock-status-text" id="dockStatusText">就绪 (Ready)</span>
+          </div>
+
+          <div class="dock-center" id="dockStepHintContainer">
+            <span class="dock-hint-text" id="dockStepHint">点击页面或按 [空格] 推进阅读 ▾</span>
+          </div>
+
+          <div class="dock-right">
+            <span class="dock-locale-tag" id="dockLocaleTag">ZH</span>
+            <button id="btnFastForward" class="dock-mini-btn" title="立即显示全文 (F)">快显</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Side Drawer: Script Editor (Docked Left with Pull Handle & Resizer) -->
+    <aside class="drawer drawer-left" id="editorDrawer">
+      <!-- Drag Resize Handle on Right Border -->
+      <div class="drawer-resizer" id="drawerResizer" title="按住拖拽调整宽度"></div>
+
+      <!-- Pull Tab Handle attached to the Right Border -->
+      <button id="btnToggleEditor" class="drawer-pull-handle" title="展开 / 收起编辑器 (E)">
+        <span class="handle-icon">✎</span>
+        <span class="handle-label">EDITOR</span>
+        <span class="handle-chevron">›</span>
+      </button>
+
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <span class="drawer-eyebrow">SOURCE CODE</span>
+          <h3 class="drawer-title">剧本编辑器 (.ktr)</h3>
+        </div>
+        <button class="drawer-close-btn" id="btnCloseEditor" title="关闭 (Esc)">×</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="drawer-form-group">
+          <label for="sampleSelect">内置示例剧本:</label>
+          <select id="sampleSelect" class="drawer-select">
+            <option value="">-- 选择示例剧本 --</option>
+          </select>
+        </div>
+
+        <div class="drawer-form-group flex-1">
+          <label for="scriptInput">脚本源码 (.ktr):</label>
+          <textarea id="scriptInput" class="drawer-textarea" spellcheck="false"></textarea>
+        </div>
+
+        <div class="drawer-actions">
+          <input type="file" id="fileInputKtr" accept=".ktr,.ktory,.txt" style="display: none;" />
+          <button id="btnUploadScript" class="secondary-pill-btn" title="上传本地 .ktr 文件并试读">
+            <span class="btn-icon">↑</span> 上传剧本
+          </button>
+          <button id="btnRunScript" class="primary-pill-btn">▶ 重新加载并试读</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Backdrop for Drawers -->
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <!-- Optional WebAssembly Runtime (auto-boots on static hosts like Vercel / GitHub Pages) -->
+  <script>
+    (function () {
+      const wasmScript = document.createElement('script');
+      wasmScript.src = '_framework/blazor.webassembly.js';
+      wasmScript.setAttribute('autostart', 'true');
+      wasmScript.onerror = function () {
+        console.log('[Ktory] Standalone mode: WebAssembly bundle not found, using REST API.');
+      };
+      document.body.appendChild(wasmScript);
+    })();
+  </script>
+</body>
+
+</html>
