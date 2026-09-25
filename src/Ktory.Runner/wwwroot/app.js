@@ -63,18 +63,7 @@ const el = {
   btnFontSizeToggle: document.getElementById('btnFontSizeToggle'),
   fontSizeLabel: document.getElementById('fontSizeLabel'),
   btnToggleEditor: document.getElementById('btnToggleEditor'),
-  btnToggleInspector: document.getElementById('btnToggleInspector'),
   btnRestartSession: document.getElementById('btnRestartSession'),
-
-  // Story Overview Card
-  overviewStoryTitle: document.getElementById('overviewStoryTitle'),
-  metricBeatsCount: document.getElementById('metricBeatsCount'),
-  metricExploredCount: document.getElementById('metricExploredCount'),
-  overviewEntryScene: document.getElementById('overviewEntryScene'),
-  overviewActiveLang: document.getElementById('overviewActiveLang'),
-  overviewCallStack: document.getElementById('overviewCallStack'),
-  overviewActiveModifiers: document.getElementById('overviewActiveModifiers'),
-  overviewStoryDesc: document.getElementById('overviewStoryDesc'),
 
   // Floating Dock
   floatingDock: document.getElementById('floatingDock'),
@@ -87,26 +76,14 @@ const el = {
 
   // Drawers & Backdrop
   editorDrawer: document.getElementById('editorDrawer'),
-  inspectorDrawer: document.getElementById('inspectorDrawer'),
   drawerBackdrop: document.getElementById('drawerBackdrop'),
   btnCloseEditor: document.getElementById('btnCloseEditor'),
-  btnCloseInspector: document.getElementById('btnCloseInspector'),
   sampleSelect: document.getElementById('sampleSelect'),
   scriptInput: document.getElementById('scriptInput'),
   btnUploadScript: document.getElementById('btnUploadScript'),
   fileInputKtr: document.getElementById('fileInputKtr'),
   btnRunScript: document.getElementById('btnRunScript'),
-
-  // Inspector Elements
-  inspectorStatusDot: document.getElementById('inspectorStatusDot'),
-  statusName: document.getElementById('statusName'),
-  infoReqLang: document.getElementById('infoReqLang'),
-  infoActLang: document.getElementById('infoActLang'),
-  infoDefLang: document.getElementById('infoDefLang'),
-  infoCallStack: document.getElementById('infoCallStack'),
-  visitedCount: document.getElementById('visitedCount'),
-  visitedList: document.getElementById('visitedList'),
-  tagsLog: document.getElementById('tagsLog')
+  drawerResizer: document.getElementById('drawerResizer')
 };
 
 // ==========================================================================
@@ -114,6 +91,7 @@ const el = {
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
+  setupDrawerResizer();
   await loadSamples();
 
   // Start with first catalog sample
@@ -157,8 +135,6 @@ function setupEventListeners() {
       toggleAutoPlay();
     } else if (e.code === 'KeyE') {
       toggleEditorDrawer();
-    } else if (e.code === 'KeyI') {
-      toggleInspectorDrawer();
     } else if (e.code === 'KeyR') {
       restartSession();
     } else if (e.code === 'Escape') {
@@ -196,13 +172,7 @@ function setupEventListeners() {
     toggleEditorDrawer();
   });
 
-  el.btnToggleInspector.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleInspectorDrawer();
-  });
-
   el.btnCloseEditor.addEventListener('click', () => closeAllDrawers());
-  el.btnCloseInspector.addEventListener('click', () => closeAllDrawers());
   el.drawerBackdrop.addEventListener('click', () => closeAllDrawers());
 
   // Restart Button
@@ -300,19 +270,139 @@ function toggleEditorDrawer() {
   }
 }
 
-function toggleInspectorDrawer() {
-  const isOpen = el.inspectorDrawer.classList.contains('open');
-  closeAllDrawers();
-  if (!isOpen) {
-    el.inspectorDrawer.classList.add('open');
-    el.drawerBackdrop.classList.add('active');
-  }
-}
-
 function closeAllDrawers() {
   el.editorDrawer.classList.remove('open');
-  el.inspectorDrawer.classList.remove('open');
   el.drawerBackdrop.classList.remove('active');
+}
+
+function setupDrawerResizer() {
+  if (!el.drawerResizer || !el.editorDrawer) return;
+
+  // Restore saved width if valid
+  try {
+    const saved = localStorage.getItem('ktory_editor_drawer_width');
+    if (saved) {
+      const numW = parseFloat(saved);
+      const minW = Math.min(480, window.innerWidth * 0.9);
+      const maxW = window.innerWidth * 0.9;
+      if (!isNaN(numW) && numW >= minW && numW <= maxW) {
+        el.editorDrawer.style.width = `${numW}px`;
+      }
+    }
+  } catch {}
+
+  const onDragStart = (startClientX) => {
+    el.editorDrawer.classList.add('no-transition');
+    document.body.classList.add('is-resizing-drawer');
+
+    const updateWidth = (clientX) => {
+      const minW = Math.min(480, window.innerWidth * 0.9);
+      const maxW = window.innerWidth * 0.9;
+      let newW = clientX;
+      if (newW < minW) newW = minW;
+      if (newW > maxW) newW = maxW;
+      el.editorDrawer.style.width = `${newW}px`;
+    };
+
+    const onMouseMove = (e) => updateWidth(e.clientX);
+    const onTouchMove = (e) => {
+      if (e.touches && e.touches.length > 0) {
+        updateWidth(e.touches[0].clientX);
+      }
+    };
+
+    const onDragEnd = () => {
+      el.editorDrawer.classList.remove('no-transition');
+      document.body.classList.remove('is-resizing-drawer');
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onDragEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onDragEnd);
+
+      try {
+        localStorage.setItem('ktory_editor_drawer_width', el.editorDrawer.style.width);
+      } catch {}
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onDragEnd);
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onDragEnd);
+  };
+
+  el.drawerResizer.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onDragStart(e.clientX);
+  });
+
+  el.drawerResizer.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      onDragStart(e.touches[0].clientX);
+    }
+  }, { passive: true });
+
+  // Support dragging directly via pull handle when drawer is already open
+  let handleStartX = 0;
+  let isHandleDragging = false;
+
+  el.btnToggleEditor.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (!el.editorDrawer.classList.contains('open')) return;
+    handleStartX = e.clientX;
+    isHandleDragging = false;
+
+    const onHandleMouseMove = (moveEvent) => {
+      if (!isHandleDragging && Math.abs(moveEvent.clientX - handleStartX) > 4) {
+        isHandleDragging = true;
+        el.editorDrawer.classList.add('no-transition');
+        document.body.classList.add('is-resizing-drawer');
+      }
+      if (isHandleDragging) {
+        const minW = Math.min(480, window.innerWidth * 0.9);
+        const maxW = window.innerWidth * 0.9;
+        let newW = moveEvent.clientX;
+        if (newW < minW) newW = minW;
+        if (newW > maxW) newW = maxW;
+        el.editorDrawer.style.width = `${newW}px`;
+      }
+    };
+
+    const onHandleMouseUp = () => {
+      window.removeEventListener('mousemove', onHandleMouseMove);
+      window.removeEventListener('mouseup', onHandleMouseUp);
+
+      if (isHandleDragging) {
+        el.editorDrawer.classList.remove('no-transition');
+        document.body.classList.remove('is-resizing-drawer');
+        try {
+          localStorage.setItem('ktory_editor_drawer_width', el.editorDrawer.style.width);
+        } catch {}
+        setTimeout(() => { isHandleDragging = false; }, 60);
+      }
+    };
+
+    window.addEventListener('mousemove', onHandleMouseMove);
+    window.addEventListener('mouseup', onHandleMouseUp);
+  });
+
+  // Intercept click on btnToggleEditor if it was a drag
+  el.btnToggleEditor.addEventListener('click', (e) => {
+    if (isHandleDragging) {
+      e.stopImmediatePropagation();
+      isHandleDragging = false;
+    }
+  }, true);
+
+  // Keep drawer width bounded on window resize
+  window.addEventListener('resize', () => {
+    const maxW = window.innerWidth * 0.9;
+    const currentW = parseFloat(el.editorDrawer.style.width);
+    if (!isNaN(currentW) && currentW > maxW) {
+      el.editorDrawer.style.width = `${maxW}px`;
+    }
+  });
 }
 
 function toggleAutoPlay() {
@@ -368,8 +458,6 @@ async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
       entryBlock = match[1];
     }
   }
-
-  el.overviewEntryScene.textContent = entryBlock || 'RootBlock';
 
   try {
     const res = await fetch('/api/session/start', {
@@ -464,14 +552,11 @@ function resetStoryStream() {
   state.currentActiveSpeakerEl = null;
   state.currentActiveTypingEl = null;
   state.currentActiveCursorEl = null;
-  state.currentActiveChoiceEl = null;
-  el.metricBeatsCount.textContent = '0';
-  el.metricExploredCount.textContent = '0';
 }
 
 function updateOverviewStoryInfo(title) {
-  el.overviewStoryTitle.textContent = title;
   if (el.sampleSelect) el.sampleSelect.value = title;
+  document.title = `${title} — Ktory Web Reader`;
 }
 
 function updateState(serverState, isLanguageSwitch = false) {
@@ -484,13 +569,8 @@ function updateState(serverState, isLanguageSwitch = false) {
   state.callStackDepth = serverState.callStackDepth || 0;
   state.recentTags = serverState.recentTags || [];
 
-  // Update Overview Card metrics
-  el.metricExploredCount.textContent = state.visitedItems.length;
-  el.overviewActiveLang.textContent = `${(state.requestedLocale || 'zh').toUpperCase()} / ${(serverState.payload?.actualLanguage || state.requestedLocale || 'zh').toUpperCase()}`;
-  el.overviewCallStack.textContent = `Depth: ${state.callStackDepth}`;
-  el.dockLocaleTag.textContent = (serverState.payload?.actualLanguage || state.requestedLocale || 'ZH').toUpperCase();
+  if (el.dockLocaleTag) el.dockLocaleTag.textContent = (serverState.payload?.actualLanguage || state.requestedLocale || 'ZH').toUpperCase();
 
-  updateInspector(serverState);
   updateDockStatus(state.status);
 
   // If Completed
@@ -550,7 +630,6 @@ function renderBeat(payload, isLanguageSwitch = false) {
   }
 
   state.beatsCount++;
-  el.metricBeatsCount.textContent = state.beatsCount;
 
   // 1. Directives beat (#do, .bg, .sfx, etc.)
   if (payload.stepType === 1 || payload.stepType === 'Directive') {
@@ -572,11 +651,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
     emotionArg = emotionTag.positionalArgs[0];
   }
 
-  // Update ambient overview directives
-  const bgTag = tags.find(t => t.name.toLowerCase() === 'bg');
-  if (bgTag && bgTag.positionalArgs.length > 0) {
-    el.overviewActiveModifiers.textContent = bgTag.positionalArgs[0];
-  }
+
 
   let textContainer = null;
   let cursorEl = null;
@@ -884,7 +959,7 @@ function renderChoices(choicePayload) {
 }
 
 // ==========================================================================
-// Inspector & Status Updates
+// Status Updates
 // ==========================================================================
 function updateDockStatus(status) {
   el.dockStatusText.textContent = status;
@@ -898,51 +973,6 @@ function updateDockStatus(status) {
   } else {
     el.dockStatusDot.style.background = 'var(--accent-green)';
     el.dockStatusDot.style.boxShadow = '0 0 6px var(--accent-green)';
-  }
-}
-
-function updateInspector(session) {
-  el.statusName.textContent = session.status;
-  el.infoReqLang.textContent = session.requestedLanguage;
-  el.infoActLang.textContent = session.payload ? session.payload.actualLanguage : session.requestedLanguage;
-  el.infoDefLang.textContent = session.defaultLanguage;
-  el.infoCallStack.textContent = session.callStackDepth;
-
-  // Status dot in inspector
-  if (session.status === 'Completed') {
-    el.inspectorStatusDot.style.background = 'var(--accent-gold)';
-  } else if (session.status === 'AwaitingChoice') {
-    el.inspectorStatusDot.style.background = 'var(--accent-blue)';
-  } else {
-    el.inspectorStatusDot.style.background = 'var(--accent-green)';
-  }
-
-  // Visited choices chips
-  el.visitedCount.textContent = session.visitedItems ? session.visitedItems.length : 0;
-  if (session.visitedItems && session.visitedItems.length > 0) {
-    el.visitedList.innerHTML = '';
-    session.visitedItems.forEach(id => {
-      const chip = document.createElement('span');
-      chip.className = 'visited-chip';
-      chip.textContent = `✓ ${id}`;
-      el.visitedList.appendChild(chip);
-    });
-  } else {
-    el.visitedList.innerHTML = '<span class="empty-hint">暂无已消耗选项</span>';
-  }
-
-  // Recent tags feed
-  if (session.recentTags && session.recentTags.length > 0) {
-    el.tagsLog.innerHTML = '';
-    session.recentTags.slice().reverse().forEach(tag => {
-      const div = document.createElement('div');
-      div.className = 'tag-entry-item';
-      const pos = tag.positionalArgs.map(p => JSON.stringify(p)).join(', ');
-      div.textContent = `.${tag.name}(${pos})`;
-      el.tagsLog.appendChild(div);
-    });
-  } else {
-    el.tagsLog.innerHTML = '<span class="empty-hint">等待修饰符派发...</span>';
   }
 }
 

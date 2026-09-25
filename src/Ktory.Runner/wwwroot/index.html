@@ -44,20 +44,6 @@
           <span class="btn-label">AUTO</span>
         </button>
 
-        <div class="nav-divider"></div>
-
-        <!-- Script Editor Drawer Toggle -->
-        <button id="btnToggleEditor" class="nav-text-btn" title="查看或编辑剧本代码 (E)">
-          <span class="btn-icon">✎</span>
-          <span>EDITOR</span>
-        </button>
-
-        <!-- Runtime Inspector Drawer Toggle -->
-        <button id="btnToggleInspector" class="nav-text-btn" title="运行时状态与修饰符监视 (I)">
-          <span class="btn-icon">⚡</span>
-          <span>INSPECTOR</span>
-        </button>
-
         <!-- Restart Button -->
         <button id="btnRestartSession" class="nav-text-btn danger-hover" title="重新从头开始试读 (R)">
           <span class="btn-icon">↺</span>
@@ -69,66 +55,6 @@
     <!-- Main Scrollable Reading Viewport -->
     <main class="reader-viewport" id="readerViewport">
       <div class="reader-container" id="readerContainer">
-
-        <!-- Story Overview Card (Directly inspired by the reference screenshot's "Pages and effective access" card) -->
-        <section class="story-overview-card" id="storyOverviewCard">
-          <div class="card-header-row">
-            <div class="card-titles">
-              <span class="card-eyebrow">STORY ARCHIVE · INK PLAYTHROUGH</span>
-              <h1 class="card-title" id="overviewStoryTitle">灯塔办公室 (Lighthouse Office)</h1>
-            </div>
-
-            <!-- Corner Metrics (Like "Visible 0 | Editable 0" in screenshot) -->
-            <div class="card-metrics-box">
-              <div class="metric-item">
-                <span class="metric-label">BEATS</span>
-                <span class="metric-value" id="metricBeatsCount">0</span>
-              </div>
-              <div class="metric-item">
-                <span class="metric-label">VISITED</span>
-                <span class="metric-value" id="metricExploredCount">0</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 4-item Metadata Grid (Like My drafts / Watched pages / Awaiting review / Effective permissions) -->
-          <div class="card-details-grid">
-            <div class="grid-item">
-              <span class="item-icon">📄</span>
-              <div class="item-text">
-                <span class="item-label">Entry Scene</span>
-                <span class="item-value" id="overviewEntryScene">Scene_Lighthouse_Office</span>
-              </div>
-            </div>
-            <div class="grid-item">
-              <span class="item-icon">🌐</span>
-              <div class="item-text">
-                <span class="item-label">Active Language</span>
-                <span class="item-value" id="overviewActiveLang">ZH (Chinese)</span>
-              </div>
-            </div>
-            <div class="grid-item">
-              <span class="item-icon">🛡</span>
-              <div class="item-text">
-                <span class="item-label">Call Stack Depth</span>
-                <span class="item-value" id="overviewCallStack">Depth: 0</span>
-              </div>
-            </div>
-            <div class="grid-item">
-              <span class="item-icon">⚡</span>
-              <div class="item-text">
-                <span class="item-label">Ambient Directives</span>
-                <span class="item-value" id="overviewActiveModifiers">Lighthouse_Snow</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Bottom Card Tracking Hint -->
-          <div class="card-footer-desc">
-            <span class="desc-meta">Recent narrative trace</span>
-            <span class="desc-text" id="overviewStoryDesc">基于 Ktory 规范构建的纯文本极简试读器。点击页面任意处或按空格推进剧情。</span>
-          </div>
-        </section>
 
         <!-- Elegant Section Divider -->
         <div class="narrative-divider">
@@ -179,8 +105,18 @@
       </div>
     </footer>
 
-    <!-- Side Drawer: Script Editor -->
-    <aside class="drawer drawer-right" id="editorDrawer">
+    <!-- Side Drawer: Script Editor (Docked Left with Pull Handle & Resizer) -->
+    <aside class="drawer drawer-left" id="editorDrawer">
+      <!-- Drag Resize Handle on Right Border -->
+      <div class="drawer-resizer" id="drawerResizer" title="按住拖拽调整宽度 (最小 480px, 最大 90%)"></div>
+
+      <!-- Pull Tab Handle attached to the Right Border -->
+      <button id="btnToggleEditor" class="drawer-pull-handle" title="展开 / 收起编辑器 (E)">
+        <span class="handle-icon">✎</span>
+        <span class="handle-label">EDITOR</span>
+        <span class="handle-chevron">›</span>
+      </button>
+
       <div class="drawer-header">
         <div class="drawer-title-group">
           <span class="drawer-eyebrow">SOURCE CODE</span>
@@ -208,65 +144,6 @@
             <span class="btn-icon">↑</span> 上传剧本
           </button>
           <button id="btnRunScript" class="primary-pill-btn">▶ 重新加载并试读</button>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Side Drawer: Runtime Inspector -->
-    <aside class="drawer drawer-right" id="inspectorDrawer">
-      <div class="drawer-header">
-        <div class="drawer-title-group">
-          <span class="drawer-eyebrow">RUNTIME TELEMETRY</span>
-          <h3 class="drawer-title">调试监视器</h3>
-        </div>
-        <button class="drawer-close-btn" id="btnCloseInspector" title="关闭 (Esc)">×</button>
-      </div>
-
-      <div class="drawer-body">
-        <!-- Card 1: Core State -->
-        <div class="inspector-card">
-          <span class="card-eyebrow">EXECUTION STATUS</span>
-          <div class="status-indicator-row">
-            <span class="status-indicator-dot" id="inspectorStatusDot"></span>
-            <span class="status-indicator-title" id="statusName">SuspendedAtBeat</span>
-          </div>
-          <div class="inspector-grid">
-            <div class="info-row">
-              <span class="info-k">请求语言:</span>
-              <span class="info-v" id="infoReqLang">zh</span>
-            </div>
-            <div class="info-row">
-              <span class="info-k">输出语言:</span>
-              <span class="info-v" id="infoActLang">zh</span>
-            </div>
-            <div class="info-row">
-              <span class="info-k">默认语言:</span>
-              <span class="info-v" id="infoDefLang">zh</span>
-            </div>
-            <div class="info-row">
-              <span class="info-k">调用栈深度:</span>
-              <span class="info-v" id="infoCallStack">0</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 2: Consumed Visited Choices -->
-        <div class="inspector-card">
-          <div class="card-header-flex">
-            <span class="card-eyebrow">VISITED OPTIONS</span>
-            <span class="card-badge" id="visitedCount">0</span>
-          </div>
-          <div class="visited-chips-list" id="visitedList">
-            <span class="empty-hint">暂无已消耗选项</span>
-          </div>
-        </div>
-
-        <!-- Card 3: Modifiers / Tags History -->
-        <div class="inspector-card flex-1">
-          <span class="card-eyebrow">MODIFIER DISPATCH LOG</span>
-          <div class="tags-feed" id="tagsLog">
-            <span class="empty-hint">等待修饰符派发...</span>
-          </div>
         </div>
       </div>
     </aside>
