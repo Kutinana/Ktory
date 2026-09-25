@@ -127,10 +127,35 @@
 
       <div class="drawer-body">
         <div class="drawer-form-group">
-          <label for="sampleSelect">内置示例剧本:</label>
-          <select id="sampleSelect" class="drawer-select">
-            <option value="">-- 选择示例剧本 --</option>
-          </select>
+          <div class="form-label-row">
+            <span class="label-glyph">✦</span>
+            <label for="sampleSelect" class="form-label-title">内置示例剧本</label>
+            <span class="form-label-badge">CATALOG</span>
+          </div>
+
+          <!-- Custom Dark-Gold Dropdown Component -->
+          <div class="custom-select-wrapper" id="sampleSelectWrapper">
+            <!-- Native select kept visually hidden for accessibility and value syncing -->
+            <select id="sampleSelect" class="sr-only-select">
+              <option value="">-- 选择示例剧本 --</option>
+            </select>
+
+            <!-- Custom Trigger -->
+            <button type="button" class="custom-select-trigger" id="sampleSelectTrigger" aria-haspopup="listbox" aria-expanded="false">
+              <div class="trigger-label-group">
+                <span class="trigger-icon">📜</span>
+                <span class="trigger-text" id="sampleSelectTriggerText">-- 选择示例剧本 --</span>
+              </div>
+              <span class="trigger-chevron">▾</span>
+            </button>
+
+            <!-- Floating Menu Popover -->
+            <div class="custom-select-popover" id="sampleSelectPopover" role="listbox">
+              <div class="custom-select-options-list" id="sampleSelectOptionsList">
+                <!-- Dynamically generated options -->
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="drawer-form-group flex-1">
