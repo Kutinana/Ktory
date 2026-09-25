@@ -1,0 +1,35 @@
+name: Publish UPM Branch
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/Ktory.Core/**'
+      - 'src/Ktory.Unity/**'
+      - 'scripts/publish-upm.ps1'
+      - '.github/workflows/publish-upm.yml'
+  workflow_dispatch:
+
+jobs:
+  publish-upm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git Author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate UPM branch with .meta files and push
+        shell: pwsh
+        run: |
+          ./scripts/publish-upm.ps1 -Push

@@ -68,4 +68,6 @@ Builds/
 Logs/
 UserSettings/
 MemoryCaptures/
-Recordings/
+Recordings/
+src/Ktory.Unity/Runtime/Core/
+
