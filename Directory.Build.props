@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Redirect all .NET build outputs and obj files to the root /artifacts folder -->
+    <!-- This completely prevents Unity from scanning bin/obj DLLs inside UPM package folders -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+  </PropertyGroup>
+</Project>

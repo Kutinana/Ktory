@@ -1,0 +1,20 @@
+{
+  "name": "com.ktory.unity",
+  "version": "1.0.0",
+  "displayName": "Ktory Unity Integration",
+  "description": "Unity integration, asset importer, and runtime tools for the Ktory narrative system.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Ktory Authors"
+  },
+  "dependencies": {
+    "com.ktory.core": "1.0.0"
+  },
+  "keywords": [
+    "dialogue",
+    "narrative",
+    "visual novel",
+    "importer",
+    "ktory"
+  ]
+}

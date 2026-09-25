@@ -48,6 +48,7 @@ $RECYCLE.BIN/
 ### .NET
 bin/
 obj/
+artifacts/
 *.user
 *.suo
 *.userosscache
@@ -56,3 +57,15 @@ obj/
 
 # AI
 AGENT.md
+
+### Unity
+*.meta
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+MemoryCaptures/
+Recordings/
