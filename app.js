@@ -92,6 +92,7 @@ const el = {
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupDrawerResizer();
+  setupCustomSampleSelect();
   await loadSamples();
 
   // Start with first catalog sample
@@ -237,6 +238,7 @@ function setupEventListeners() {
             el.sampleSelect.appendChild(opt);
           }
           el.sampleSelect.value = customKey;
+          if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
         }
 
         updateOverviewStoryInfo(title);
@@ -405,6 +407,74 @@ function setupDrawerResizer() {
   });
 }
 
+function setupCustomSampleSelect() {
+  const wrapper = document.getElementById('sampleSelectWrapper');
+  const trigger = document.getElementById('sampleSelectTrigger');
+  const triggerText = document.getElementById('sampleSelectTriggerText');
+  const list = document.getElementById('sampleSelectOptionsList');
+  if (!wrapper || !trigger || !list) return;
+
+  function renderOptions() {
+    list.innerHTML = '';
+    const options = Array.from(el.sampleSelect.options);
+    const selectedVal = el.sampleSelect.value;
+
+    let selectedText = '-- 选择示例剧本 --';
+
+    options.forEach(opt => {
+      if (!opt.value) return;
+      const isSelected = opt.value === selectedVal;
+      if (isSelected) selectedText = opt.textContent;
+
+      const item = document.createElement('div');
+      item.className = `custom-select-option ${isSelected ? 'selected' : ''}`;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      item.dataset.value = opt.value;
+      item.innerHTML = `
+        <span class="option-check">✓</span>
+        <span class="option-title">${escapeHtml(opt.textContent)}</span>
+      `;
+
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.sampleSelect.value = opt.value;
+        el.sampleSelect.dispatchEvent(new Event('change'));
+        wrapper.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+        renderOptions();
+      });
+
+      list.appendChild(item);
+    });
+
+    triggerText.textContent = selectedText;
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = wrapper.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!wrapper.contains(e.target)) {
+      wrapper.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && wrapper.classList.contains('open')) {
+      wrapper.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  window.refreshCustomSampleSelect = renderOptions;
+  renderOptions();
+}
+
 function toggleAutoPlay() {
   state.autoPlay = !state.autoPlay;
   el.btnAutoPlay.classList.toggle('active', state.autoPlay);
@@ -495,6 +565,7 @@ async function loadSamples() {
         } else if (prevValue && state.samples[prevValue]) {
           el.sampleSelect.value = prevValue;
         }
+        if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
       }
     }
   } catch (err) {
@@ -642,6 +713,7 @@ function resetStoryStream() {
 function updateOverviewStoryInfo(title) {
   if (el.sampleSelect) el.sampleSelect.value = title;
   document.title = `${title} — Ktory Web Reader`;
+  if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
 }
 
 function updateState(serverState, isLanguageSwitch = false) {
