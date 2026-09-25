@@ -1,0 +1,39 @@
+name: Build & Deploy Web Reader
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'samples/**'
+      - '.github/workflows/deploy-reader.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish WebAssembly Static Site
+        run: |
+          dotnet publish src/Ktory.Web -c Release -o dist
+
+      - name: Deploy to deploy-web branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: deploy-web
+          publish_dir: ./dist/wwwroot
+          commit_message: "Automated Web Reader build from ${{ github.sha }}"

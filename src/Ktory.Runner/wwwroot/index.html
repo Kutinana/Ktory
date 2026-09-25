@@ -108,7 +108,7 @@
     <!-- Side Drawer: Script Editor (Docked Left with Pull Handle & Resizer) -->
     <aside class="drawer drawer-left" id="editorDrawer">
       <!-- Drag Resize Handle on Right Border -->
-      <div class="drawer-resizer" id="drawerResizer" title="按住拖拽调整宽度 (最小 480px, 最大 90%)"></div>
+      <div class="drawer-resizer" id="drawerResizer" title="按住拖拽调整宽度"></div>
 
       <!-- Pull Tab Handle attached to the Right Border -->
       <button id="btnToggleEditor" class="drawer-pull-handle" title="展开 / 收起编辑器 (E)">
@@ -153,6 +153,18 @@
   </div>
 
   <script src="app.js"></script>
+  <!-- Optional WebAssembly Runtime (auto-boots on static hosts like Vercel / GitHub Pages) -->
+  <script>
+    (function () {
+      const wasmScript = document.createElement('script');
+      wasmScript.src = '_framework/blazor.webassembly.js';
+      wasmScript.setAttribute('autostart', 'true');
+      wasmScript.onerror = function () {
+        console.log('[Ktory] Standalone mode: WebAssembly bundle not found, using REST API.');
+      };
+      document.body.appendChild(wasmScript);
+    })();
+  </script>
 </body>
 
 </html>

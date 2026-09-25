@@ -415,13 +415,68 @@ function toggleAutoPlay() {
 }
 
 // ==========================================================================
-// API Interaction
+// WebAssembly Bridge (For Vercel / GitHub Pages Static Hosting)
+// ==========================================================================
+window.registerKtoryWasmBridge = function(dotNetRef) {
+  window.KtoryWasm = {
+    async start(script, requestedLocale, entryBlock) {
+      const json = await dotNetRef.invokeMethodAsync('Start', script, requestedLocale, entryBlock || null);
+      return JSON.parse(json);
+    },
+    async step() {
+      const json = await dotNetRef.invokeMethodAsync('Step');
+      return JSON.parse(json);
+    },
+    async choice(choiceId) {
+      const json = await dotNetRef.invokeMethodAsync('Choice', choiceId);
+      return JSON.parse(json);
+    },
+    async break() {
+      const json = await dotNetRef.invokeMethodAsync('Break');
+      return JSON.parse(json);
+    },
+    async setLanguage(locale) {
+      const json = await dotNetRef.invokeMethodAsync('SetLanguage', locale);
+      return JSON.parse(json);
+    },
+    async getSamples() {
+      const json = await dotNetRef.invokeMethodAsync('GetSamples');
+      return JSON.parse(json);
+    }
+  };
+  console.log('[Ktory] WebAssembly in-browser engine is ready.');
+
+  // If page loaded before WASM booted, load samples and kick off session
+  if (Object.keys(state.samples).length === 0) {
+    loadSamples().then(() => {
+      const sampleKeys = Object.keys(state.samples);
+      if (sampleKeys.length > 0 && !state.payload) {
+        state.currentSampleKey = sampleKeys[0];
+        el.scriptInput.value = state.samples[state.currentSampleKey];
+        updateOverviewStoryInfo(state.currentSampleKey);
+        startSession(state.samples[state.currentSampleKey], 'zh');
+      }
+    });
+  }
+};
+
+// ==========================================================================
+// API Interaction (Dual-Mode: Local REST API or In-Browser WASM)
 // ==========================================================================
 async function loadSamples() {
   try {
-    const res = await fetch('/api/samples');
-    if (res.ok) {
-      state.samples = await res.json();
+    let samples = null;
+    if (window.KtoryWasm && window.KtoryWasm.getSamples) {
+      samples = await window.KtoryWasm.getSamples();
+    } else {
+      const res = await fetch('/api/samples');
+      if (res.ok) {
+        samples = await res.json();
+      }
+    }
+
+    if (samples) {
+      state.samples = samples;
 
       // Populate drawer dropdown
       if (el.sampleSelect) {
@@ -460,20 +515,29 @@ async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
   }
 
   try {
-    const res = await fetch('/api/session/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ script, requestedLocale, entryBlock })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      updateState(data);
+    let data = null;
+    if (window.KtoryWasm && window.KtoryWasm.start) {
+      data = await window.KtoryWasm.start(script, requestedLocale, entryBlock);
     } else {
-      const err = await res.json();
-      alert(`解析错误: ${err.error}`);
+      const res = await fetch('/api/session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script, requestedLocale, entryBlock })
+      });
+      if (res.ok) {
+        data = await res.json();
+      } else {
+        const err = await res.json();
+        alert(`解析错误: ${err.error}`);
+        return;
+      }
+    }
+    if (data) {
+      updateState(data);
     }
   } catch (err) {
     console.error('Failed to start session:', err);
+    alert(`解析错误: ${err.message || err}`);
   }
 }
 
@@ -482,9 +546,16 @@ async function stepSession() {
   clearTimers();
 
   try {
-    const res = await fetch('/api/session/step', { method: 'POST' });
-    if (res.ok) {
-      const data = await res.json();
+    let data = null;
+    if (window.KtoryWasm && window.KtoryWasm.step) {
+      data = await window.KtoryWasm.step();
+    } else {
+      const res = await fetch('/api/session/step', { method: 'POST' });
+      if (res.ok) {
+        data = await res.json();
+      }
+    }
+    if (data) {
       updateState(data);
     }
   } catch (err) {
@@ -499,13 +570,20 @@ async function submitChoice(choiceId) {
     state.currentActiveChoiceEl = null;
   }
   try {
-    const res = await fetch('/api/session/choice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choiceId })
-    });
-    if (res.ok) {
-      const data = await res.json();
+    let data = null;
+    if (window.KtoryWasm && window.KtoryWasm.choice) {
+      data = await window.KtoryWasm.choice(choiceId);
+    } else {
+      const res = await fetch('/api/session/choice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choiceId })
+      });
+      if (res.ok) {
+        data = await res.json();
+      }
+    }
+    if (data) {
       updateState(data);
     }
   } catch (err) {
@@ -520,13 +598,20 @@ async function changeLanguage(locale) {
   });
 
   try {
-    const res = await fetch('/api/session/language', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locale })
-    });
-    if (res.ok) {
-      const data = await res.json();
+    let data = null;
+    if (window.KtoryWasm && window.KtoryWasm.setLanguage) {
+      data = await window.KtoryWasm.setLanguage(locale);
+    } else {
+      const res = await fetch('/api/session/language', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale })
+      });
+      if (res.ok) {
+        data = await res.json();
+      }
+    }
+    if (data) {
       updateState(data, true);
     }
   } catch (err) {
