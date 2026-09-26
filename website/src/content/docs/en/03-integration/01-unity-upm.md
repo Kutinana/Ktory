@@ -92,4 +92,6 @@ A host may use `PresentationController` as follows, or implement the same contra
 | Reveal the current text immediately | Subscribe to `OnFastForwardRequested`; reveal text without notifying completion again |
 | Change the active language | `player.SetLanguage(...)`, then `RefreshLanguage()` and redraw |
 
+Minimum holds and automatic advancement are separate: `.wait` only unlocks input at its end and never queues clicks. `.wait.next` advances automatically afterwards; an AUTO region or host autoplay can also provide that policy. `.wait(s).next(t)` starts both timers when printing finishes, regardless of order. Route raw input through `HandleUserClick()` rather than bypassing presentation policy with `Step()`. `QueuedAdvance` remains for compatibility and is always `false`.
+
 With the default `AutoStepSequencer == true`, the controller advances the player itself. Do not call `Step()` again from `OnAdvanceRequested`. Resource and portrait bindings, world state and external gates remain host responsibilities. Cancel old inputs and callbacks when replacing or restarting a session or destroying its owner, and use feedback from actual Unity projects to validate core boundaries.

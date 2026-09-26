@@ -21,14 +21,22 @@ namespace Ktory.Core.Runtime
 
         public PresentationPhase Phase { get; private set; } = PresentationPhase.Idle;
         public double ElapsedInPhase { get; private set; }
-        public bool QueuedAdvance { get; private set; }
+        /// <summary>Compatibility property: blocked user input is discarded, never queued.</summary>
+        public bool QueuedAdvance => false;
 
         public bool CanFastForward { get; private set; } = true;
         public double FastForwardLockDuration { get; private set; } = 0;
 
+        /// <summary>The longer of the configured minimum wait and automatic advance delay.</summary>
         public double HoldDuration { get; private set; } = 0;
         public bool AutoAdvanceOnHoldEnd { get; private set; } = false;
-        public bool AllowClickInterruptHold { get; private set; } = true;
+        public bool AllowClickInterruptHold => ElapsedInPhase >= _minimumHoldDuration;
+
+        private double _minimumHoldDuration;
+        private double _autoAdvanceDuration;
+        private double _elapsedForAutoAdvance;
+        private bool _usesEstimatedWait;
+        private bool _usesEstimatedAuto;
 
         /// <summary>
         /// Maximum number of immediate auto-advances processed in a single batch/frame.
@@ -130,20 +138,21 @@ namespace Ktory.Core.Runtime
             }
             else if (Phase == PresentationPhase.Holding)
             {
-                var nextTag = FindTag(payload, "next");
-                var waitTag = FindTag(payload, "wait");
-                var autoPolicy = _sequencer.ActiveAutoPolicy;
-
-                bool isEstimated = (waitTag != null && waitTag.PositionalArgs.Count == 0) ||
-                                   (waitTag == null && nextTag == null && autoPolicy != null && autoPolicy.Enabled && autoPolicy.UseEstimatedReadingTime);
-
-                if (isEstimated)
+                double newDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
+                if (_usesEstimatedWait)
                 {
-                    double newDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
-                    double progressRatio = HoldDuration > 0 ? Math.Min(0.95, ElapsedInPhase / HoldDuration) : 0;
-                    HoldDuration = Math.Max(0.5, newDuration);
-                    ElapsedInPhase = progressRatio * HoldDuration;
+                    double progress = _minimumHoldDuration > 0 ? Math.Min(1, ElapsedInPhase / _minimumHoldDuration) : 1;
+                    _minimumHoldDuration = newDuration;
+                    ElapsedInPhase = progress * newDuration;
                 }
+                if (_usesEstimatedAuto)
+                {
+                    double progress = _autoAdvanceDuration > 0 ? Math.Min(1, _elapsedForAutoAdvance / _autoAdvanceDuration) : 1;
+                    _autoAdvanceDuration = newDuration;
+                    _elapsedForAutoAdvance = progress * newDuration;
+                    ElapsedInPhase = _elapsedForAutoAdvance;
+                }
+                HoldDuration = Math.Max(_minimumHoldDuration, _autoAdvanceDuration);
             }
 
             OnLanguageRefreshed?.Invoke();
@@ -163,9 +172,8 @@ namespace Ktory.Core.Runtime
                 Phase = PresentationPhase.Holding;
             }
 
-            // If a click was queued during printing or wait, advance now if allowed,
-            // or if auto-advance is active with zero hold duration (e.g. standard #AUTO).
-            if (QueuedAdvance || (AutoAdvanceOnHoldEnd && HoldDuration <= 0))
+            // Only an explicit automatic policy can advance when printing finishes.
+            if (AutoAdvanceOnHoldEnd && HoldDuration <= 0)
             {
                 RequestAdvance();
             }
@@ -201,14 +209,10 @@ namespace Ktory.Core.Runtime
             {
                 if (AllowClickInterruptHold)
                 {
-                    // .next(t) / AUTO: click immediately triggers advance and cancels remaining hold timer
+                    // Once the minimum wait expires, a fresh click may interrupt the automatic delay.
                     RequestAdvance();
                 }
-                else
-                {
-                    // .wait(t): queue advance until hold time expires
-                    QueuedAdvance = true;
-                }
+                // Clicks during .wait are discarded, never replayed at its end.
             }
         }
 
@@ -235,7 +239,8 @@ namespace Ktory.Core.Runtime
 
             if (Phase == PresentationPhase.Holding)
             {
-                if (AutoAdvanceOnHoldEnd && ElapsedInPhase >= HoldDuration)
+                _elapsedForAutoAdvance += deltaTime;
+                if (AutoAdvanceOnHoldEnd && AllowClickInterruptHold && _elapsedForAutoAdvance >= _autoAdvanceDuration)
                 {
                     RequestAdvance();
                 }
@@ -243,10 +248,17 @@ namespace Ktory.Core.Runtime
         }
 
         /// <summary>
-        /// Requests an advance to the next beat. Uses iterative batch processing without recursion.
+        /// Requests an advance to the next beat, discarding requests blocked by the active
+        /// fast-forward lock or minimum wait. Raw user input should use HandleUserClick().
+        /// Uses iterative batch processing without recursion.
         /// </summary>
         public void RequestAdvance()
         {
+            if ((Phase == PresentationPhase.Printing && (!CanFastForward || ElapsedInPhase < FastForwardLockDuration)) ||
+                (Phase == PresentationPhase.Holding && !AllowClickInterruptHold))
+            {
+                return;
+            }
             _pendingAdvances++;
             ProcessAdvances();
         }
@@ -254,7 +266,9 @@ namespace Ktory.Core.Runtime
         private void ApplyBeatState()
         {
             ElapsedInPhase = 0;
-            QueuedAdvance = false;
+            _minimumHoldDuration = 0;
+            _autoAdvanceDuration = 0;
+            _elapsedForAutoAdvance = 0;
 
             if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat || _sequencer.CurrentPayload == null)
             {
@@ -339,7 +353,6 @@ namespace Ktory.Core.Runtime
                     }
 
                     Phase = PresentationPhase.Completed;
-                    QueuedAdvance = false;
 
                     long presIdBefore = _sequencer.CurrentPresentationId;
                     OnAdvanceRequested?.Invoke();
@@ -379,52 +392,35 @@ namespace Ktory.Core.Runtime
         {
             Phase = PresentationPhase.Holding;
             ElapsedInPhase = 0;
+            _elapsedForAutoAdvance = 0;
 
             var nextTag = FindTag(payload, "next");
             var waitTag = FindTag(payload, "wait");
+            var autoPolicy = _sequencer.ActiveAutoPolicy;
+            _usesEstimatedWait = waitTag != null && waitTag.PositionalArgs.Count == 0;
+            _usesEstimatedAuto = false;
+            _minimumHoldDuration = waitTag == null ? 0 : _usesEstimatedWait
+                ? EstimateReadingTime(payload.Content, payload.ActualLanguage)
+                : Math.Max(0, waitTag.GetPositional<double>(0, 0));
+            AutoAdvanceOnHoldEnd = nextTag != null || (autoPolicy != null && autoPolicy.Enabled);
 
             if (nextTag != null)
             {
-                AutoAdvanceOnHoldEnd = true;
-                AllowClickInterruptHold = true;
-                HoldDuration = nextTag.PositionalArgs.Count > 0 ? nextTag.GetPositional<double>(0, 0) : 0;
+                _autoAdvanceDuration = Math.Max(0, nextTag.GetPositional<double>(0, 0));
             }
-            else if (waitTag != null)
+            else if (waitTag == null && autoPolicy != null && autoPolicy.Enabled)
             {
-                AutoAdvanceOnHoldEnd = true;
-                AllowClickInterruptHold = false; // queued advance only
-                if (waitTag.PositionalArgs.Count > 0)
-                {
-                    HoldDuration = waitTag.GetPositional<double>(0, 0);
-                }
-                else
-                {
-                    // Estimate reading time from text length
-                    HoldDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
-                }
-            }
-            else if (_sequencer.ActiveAutoPolicy != null && _sequencer.ActiveAutoPolicy.Enabled)
-            {
-                var autoPolicy = _sequencer.ActiveAutoPolicy;
-                AutoAdvanceOnHoldEnd = true;
-                AllowClickInterruptHold = true; // In AUTO mode, clicks can advance immediately
-
-                if (autoPolicy.UseEstimatedReadingTime && payload.StepType == StepType.Text)
-                {
-                    HoldDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
-                }
-                else
-                {
-                    HoldDuration = autoPolicy.DefaultWaitSeconds;
-                }
+                _usesEstimatedAuto = autoPolicy.UseEstimatedReadingTime && payload.StepType == StepType.Text;
+                _autoAdvanceDuration = _usesEstimatedAuto
+                    ? EstimateReadingTime(payload.Content, payload.ActualLanguage)
+                    : Math.Max(0, autoPolicy.DefaultWaitSeconds);
             }
             else
             {
-                // Standard mode: wait indefinitely for user input
-                AutoAdvanceOnHoldEnd = false;
-                AllowClickInterruptHold = true;
-                HoldDuration = 0;
+                // A local wait replaces the AUTO default duration but does not itself enable AUTO.
+                _autoAdvanceDuration = 0;
             }
+            HoldDuration = Math.Max(_minimumHoldDuration, _autoAdvanceDuration);
         }
 
         private static double EstimateReadingTime(string text, string language)

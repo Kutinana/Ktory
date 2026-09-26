@@ -1588,8 +1588,8 @@ alice:
         public void PresentationController_FastForward_NotifyPrintingFinishedInCallback_DoesNotDoubleAdvanceZeroSecondAuto()
         {
             string script = @"
-: 第一句 .wait(0)
-: 第二句 .wait(0)
+: 第一句 .wait(0).next
+: 第二句 .wait(0).next
 : 第三句
 ";
             var file = KtoryParser.Parse(script);

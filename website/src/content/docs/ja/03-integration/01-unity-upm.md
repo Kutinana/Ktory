@@ -92,4 +92,6 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 | 現在の全文を即時表示 | `OnFastForwardRequested` で全文を表示し、完了通知は再送しない |
 | 実行中の言語変更 | `player.SetLanguage(...)`、`RefreshLanguage()`、表示更新 |
 
+最低待機時間と自動進行は別の条件です。`.wait` は終了時に入力制限を解除するだけで、クリックを保留しません。`.wait.next` は待機後に自動進行します。AUTO 領域やホストの自動再生も自動進行を指定できます。`.wait(s).next(t)` は全文表示完了時に同時に計時し、順序には依存しません。入力は `HandleUserClick()` に渡し、`Step()` で表示制御を迂回しないでください。互換性のための `QueuedAdvance` は常に `false` です。
+
 既定の `AutoStepSequencer == true` ではコントローラー自身が進行します。`OnAdvanceRequested` から追加の `Step()` を呼ばないでください。リソースと立ち絵の対応付け、世界状態、外部演出の条件はホストが管理します。セッションの交換・再開や所有オブジェクトの破棄時は古い入力とコールバックを取り消し、実際の Unity プロジェクトのフィードバックでコアの境界を検証します。

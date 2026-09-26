@@ -34,6 +34,12 @@ Decorators attach to their owning anchor; indentation bounds options and branch 
 
 Presentation timing conventions use seconds. `.next(0.5)` requests advancement half a second after text finishes displaying. `.skippable(false, 3)` restricts text fast-forwarding for the first three seconds. The core parses these declarations; the host or presentation controller implements their timing.
 
+`.wait(t)` only enforces a minimum hold after printing; it does not enable automatic advancement. Clicks during that hold are discarded, so manual playback needs a fresh click afterwards. Bare `.wait` uses estimated reading time. `.next(t)` schedules automatic advancement after printing; an omitted argument means zero seconds.
+
+The timers run concurrently, regardless of decorator order. Both `.wait(2).next(2)` and `.next(2).wait(2)` advance after two seconds. `.wait(2).next(5)` advances at five seconds, with fresh clicks allowed from two seconds onwards. `.wait(5).next(2)` cannot advance until five seconds. `.wait.next` advances after the estimated reading hold. `#AUTO` or host autoplay can also supply the automatic policy, but must respect the minimum hold.
+
+Clicks blocked by `.skippable(false[, t])` are also discarded, never replayed when the lock expires or printing finishes.
+
 ## Inline formatting
 
 Supported forms include `*italic*`, `**bold**`, `~~strikethrough~~` and `[desk]{pronunciation}`. Desugaring currently produces tag strings such as `<ruby="pronunciation">desk</ruby>`, not a separate structured Ruby object. Native tags pass through; the renderer determines whether it supports them.

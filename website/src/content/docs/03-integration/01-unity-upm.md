@@ -92,4 +92,6 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 | 快显当前文本 | 订阅 `OnFastForwardRequested`，只显示全文，不再次通知完成 |
 | 当前语言变化 | `player.SetLanguage(...)` 后 `RefreshLanguage()`，并刷新显示 |
 
+最低停留与自动推进分别处理：`.wait` 到期仅解除限制，期间点击不排队；`.wait.next` 才在停留结束后自动推进（AUTO 区域或宿主自动模式也可提供自动策略）。`.wait(s).next(t)` 从全文显示完成时同时计时，顺序无关。`HandleUserClick()` 接收原始用户输入；不要直接用 `Step()` 绕过呈现策略。`QueuedAdvance` 为兼容保留，始终为 `false`。
+
 默认 `AutoStepSequencer == true` 时，控制器自己推进；不要在 `OnAdvanceRequested` 中重复 `Step()`。资源与立绘映射、世界状态和外部演出限制仍由宿主持有。改变会话、重启或销毁对象时撤销旧输入及回调，并以实际 Unity 工程反馈检验核心边界。
