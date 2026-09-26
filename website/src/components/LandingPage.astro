@@ -591,7 +591,18 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
 
         if (lineIndices.length > 0) {
           const firstEl = document.getElementById(`code-line-${lineIndices[0]}`);
-          firstEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          const codeContainer = document.getElementById('code-container');
+          if (firstEl && codeContainer) {
+            // Follow the active line inside the code pane without scrolling the page,
+            // including when updateUI() initializes the demo below the fold.
+            const lineRect = firstEl.getBoundingClientRect();
+            const paneTop = codeContainer.getBoundingClientRect().top + codeContainer.clientTop;
+            const paneBottom = paneTop + codeContainer.clientHeight;
+            const delta = lineRect.top < paneTop
+              ? lineRect.top - paneTop
+              : Math.max(0, lineRect.bottom - paneBottom);
+            if (delta) codeContainer.scrollBy({ top: delta, behavior: 'smooth' });
+          }
         }
       }
 
