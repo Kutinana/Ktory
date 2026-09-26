@@ -149,12 +149,22 @@ Thumbs.db
 
     Write-Host ">>> Generating deterministic Unity .meta files for unified package..."
     $items = Get-ChildItem -Path $tempDir -Recurse | Where-Object { 
-        -not $_.Name.EndsWith(".meta") -and -not $_.Name.StartsWith(".git")
+        if ($_.Name.EndsWith(".meta")) { return $false }
+        $relPath = $_.FullName.Substring($tempDir.Length).TrimStart(@('\', '/')).Replace("\", "/")
+        $segments = $relPath.Split('/')
+        foreach ($seg in $segments) {
+            # In Unity, files/folders starting with '.' or ending with '~' are ignored by the Asset Database,
+            # and MUST NOT have .meta files generated for them (e.g. Samples~, .gitignore).
+            if ($seg.StartsWith(".") -or $seg.EndsWith("~")) {
+                return $false
+            }
+        }
+        return $true
     }
 
     foreach ($item in $items) {
         $fullPath = $item.FullName
-        $relPath = $fullPath.Substring($tempDir.Length).TrimStart("\", "/").Replace("\", "/")
+        $relPath = $fullPath.Substring($tempDir.Length).TrimStart(@('\', '/')).Replace("\", "/")
         Generate-MetaFile -targetPath $fullPath -relPath $relPath
     }
 
