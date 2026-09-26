@@ -22,6 +22,14 @@
       "match": "\\.[a-zA-Z0-9_]+"
     },
     {
+      "match": "^[ \\t]*(@speaker)(?:[ \\t]+([a-zA-Z0-9_-]+))?[ \\t]*([:：])",
+      "captures": {
+        "1": { "name": "keyword.declaration.speaker.ktory" },
+        "2": { "name": "entity.name.function.speaker.ktory" },
+        "3": { "name": "punctuation.separator.key-value.ktory" }
+      }
+    },
+    {
       "name": "constant.language.locale.ktory",
       "match": "@[a-zA-Z0-9_-]+[:：]"
     },

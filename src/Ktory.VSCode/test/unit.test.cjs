@@ -21,10 +21,24 @@ test('the contributed TextMate grammar highlights a representative .ktr document
     ['  * [继续] => Next', 'string.quoted.choice.ktory'],
     ['    .sfx("bell")', 'entity.name.tag.decorator.ktory'],
     ['    @en: Hello.', 'constant.language.locale.ktory'],
+    ['@speaker alice: zh="爱丽丝" | en="Alice"', 'keyword.declaration.speaker.ktory'],
+    ['  @speaker alice_2-id ： zh="爱丽丝"', 'entity.name.function.speaker.ktory'],
+    ['@speaker: zh="爱丽丝"', 'keyword.declaration.speaker.ktory'],
     ['Alice: Hello.', 'entity.name.function.speaker.ktory'],
     ['-> end', 'keyword.control.flow.ktory']
   ]) {
     assert.ok(grammar.tokenizeLine(line, tm.INITIAL).tokens.some(token => token.scopes.includes(expected)), `${line}: ${expected}`);
+  }
+  const declaration = '@speaker alice: zh="爱丽丝"';
+  const tokens = grammar.tokenizeLine(declaration, tm.INITIAL).tokens;
+  const scopeAt = index => tokens.find(token => token.startIndex <= index && token.endIndex > index).scopes;
+  assert.ok(scopeAt(declaration.indexOf('alice')).includes('entity.name.function.speaker.ktory'));
+  assert.ok(!scopeAt(declaration.indexOf('zh=')).includes('entity.name.function.speaker.ktory'), 'declaration header ends at the colon');
+  for (const line of ['  @en: Hello.', '@speakerName: Hello.']) {
+    const scopes = grammar.tokenizeLine(line, tm.INITIAL).tokens.flatMap(token => token.scopes);
+    assert.ok(scopes.includes('constant.language.locale.ktory'));
+    assert.ok(!scopes.includes('keyword.declaration.speaker.ktory'));
+    assert.ok(!scopes.includes('entity.name.function.speaker.ktory'));
   }
   registry.dispose();
 });

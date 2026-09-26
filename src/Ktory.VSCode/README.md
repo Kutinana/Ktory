@@ -7,8 +7,8 @@
 1. In VS Code 1.97 or newer, run **Extensions: Install from VSIX…** and select `ktory-vscode-<version>.vsix`.
 2. Open a `.ktr` file and click **Open Preview to the Side** in the editor title, or run **Ktory: Open Preview to the Side**. The Explorer context menu also supports this command.
 3. Click the reading area or press Space/Enter to reveal text and advance. Select choices using their buttons or number keys. The Reader also supports its existing AUTO, fast-forward and restart controls.
-4. Choose a named entry section, or change the requested language. Missing translations follow the core's fallback rules.
-5. After editing, click **重新载入编辑器内容** or run **Ktory: Reload Preview from Editor**. This reads the latest editor buffer, including unsaved edits, and starts a new session. Typing does not silently restart a running preview. RESTART replays the loaded snapshot.
+4. Choose a named entry section, or use the language dropdown beside the globe icon to switch immediately. It includes zh/en/ja and language tags found in the loaded script. Missing translations follow the core's fallback rules.
+5. After editing, click **重新载入** or run **Ktory: Reload Preview from Editor**. This reads the latest editor buffer, including unsaved edits, and starts a new session. Typing does not silently restart a running preview. RESTART replays the loaded snapshot.
 
 One preview panel follows the document explicitly opened in it. Switching editor tabs does not silently replace the story. Closing the panel releases its runtime; reopening starts a new session. Parse errors appear in the panel and, when the core supplies a source location, VS Code's Problems list. Diagnostics refer to the version actually loaded and clear when that document changes.
 
