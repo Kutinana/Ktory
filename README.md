@@ -5,17 +5,25 @@
 <h1 align="center">Ktory</h1>
 
 <p align="center">
-  A dialog-driven, discrete step-by-step game narrative script system.
+  A dialogue-first, host-driven narrative language and runtime, built around explicit beats.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-netstandard2.1%20%7C%20net9.0-512BD4?logo=dotnet" alt=".NET" />
   <img src="https://img.shields.io/badge/Unity-UPM%20Compatible-000000?logo=unity" alt="Unity UPM" />
-  <img src="https://img.shields.io/badge/Dependencies-Zero%20External-success" alt="Zero Dependencies" />
+  <img src="https://img.shields.io/badge/Core_Dependencies-Zero%20External-success" alt="Core: Zero External Dependencies" />
   <img src="https://img.shields.io/badge/Architecture-Discrete%20Step%20Driven-blue" alt="Architecture" />
 </p>
 
 ---
 
-[Try out Ktory Web Reader](https://ktory.vercel.app)
+Ktory combines structured dialogue and action beats, parameterized decorators, and translations in the same script. The C# core owns story flow; the host owns rendering, timing, world state, and external presentation gates.
 
+Ink already supports host-driven continuation, choices, tags, external functions, and Unity integration. Ktory aims to standardize a more specific dialogue and localization workflow, reducing project-specific conventions. This is a design goal to validate in actual use, not a claim of capabilities that Ink cannot provide.
+
+- [Try Ktory Web Reader](https://ktory.vercel.app)
+- [VS Code syntax highlighting and offline preview](src/Ktory.VSCode/README.md)
+
+The repository contains the shared core (`src/Ktory.Core`), local and WASM Reader hosts (`src/Ktory.Runner`, `src/Ktory.Web`), Unity package sources (`src/Ktory.Unity`), the VS Code extension (`src/Ktory.VSCode`), and the portal (`website`). The extension bundles the same WASM core and Reader frontend for offline use; its TextMate grammar is also used by the portal. Generated packages and deployed sites are distribution artifacts, not independently maintained core implementations.
+
+Unity's generated package is `com.ktory.unity`, available through `https://github.com/Kutinana/Ktory.git#upm`. For reproducible integration, pin a generated package commit or immutable release tag and record its source commit; the main branch's Core directory is not itself a UPM package.

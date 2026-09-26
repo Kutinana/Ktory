@@ -57,6 +57,7 @@ artifacts/
 
 # AI
 AGENT.md
+AGENTS.md
 
 ### Unity
 *.meta
@@ -70,4 +71,4 @@ UserSettings/
 MemoryCaptures/
 Recordings/
 src/Ktory.Unity/Runtime/Core/
-
+
