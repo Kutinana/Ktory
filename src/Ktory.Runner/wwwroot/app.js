@@ -723,6 +723,7 @@ function updateState(serverState, isLanguageSwitch = false) {
   state.visitedItems = serverState.visitedItems || [];
   state.callStackDepth = serverState.callStackDepth || 0;
   state.recentTags = serverState.recentTags || [];
+  state.autoPolicy = serverState.autoPolicy || serverState.payload?.autoPolicy || null;
 
   if (el.dockLocaleTag) el.dockLocaleTag.textContent = (serverState.payload?.actualLanguage || state.requestedLocale || 'ZH').toUpperCase();
 
@@ -952,12 +953,23 @@ function tokenizeHtml(html) {
   return tokens;
 }
 
+function estimateReadingTime(text, lang = 'zh') {
+  if (!text) return 1.0;
+  const l = (lang || '').toLowerCase();
+  if (l.startsWith('zh') || l.startsWith('ja')) {
+    return Math.max(1.0, text.length / 7.0);
+  }
+  const words = text.trim().split(/\s+/).length;
+  return Math.max(1.0, words / 3.5);
+}
+
 // ==========================================================================
-// Hold & Auto-Advance Timer (.next / .wait)
+// Hold & Auto-Advance Timer (.next / .wait / #AUTO)
 // ==========================================================================
 function setupHoldTimer(tags, defaultHoldSec = 0) {
   const nextTag = tags.find(t => t.name.toLowerCase() === 'next');
   const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
+  const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
 
   let holdSec = defaultHoldSec;
   state.allowClickInterrupt = true;
@@ -970,11 +982,29 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
   } else if (waitTag) {
     hasAutoTimer = true;
     state.allowClickInterrupt = false; // .wait(t): cannot skip early
-    holdSec = waitTag.positionalArgs.length > 0 ? Number(waitTag.positionalArgs[0]) : 2.5;
+    holdSec = waitTag.positionalArgs.length > 0 
+      ? Number(waitTag.positionalArgs[0]) 
+      : estimateReadingTime(state.payload?.content || '', state.payload?.actualLanguage || state.requestedLocale);
+  } else if (autoPolicy && autoPolicy.enabled) {
+    hasAutoTimer = true;
+    state.allowClickInterrupt = true; // In AUTO mode, clicking can immediately advance
+    if (autoPolicy.useEstimatedReadingTime && state.payload?.stepType === 0) { // StepType.Text is 0
+      holdSec = estimateReadingTime(state.payload?.content || '', state.payload?.actualLanguage || state.requestedLocale);
+    } else {
+      holdSec = Number(autoPolicy.defaultWaitSeconds) || 0;
+    }
   } else if (state.autoPlay) {
     hasAutoTimer = true;
     state.allowClickInterrupt = true;
     holdSec = 2.2;
+  }
+
+  if (hasAutoTimer && holdSec <= 0) {
+    // Immediate auto advance per specification
+    state.isHolding = false;
+    el.dockProgressBar.style.width = '0%';
+    stepSession();
+    return;
   }
 
   if (hasAutoTimer && holdSec > 0) {
@@ -983,8 +1013,9 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     state.holdElapsed = 0;
 
     el.dockProgressBar.style.width = '0%';
+    const autoPrefix = autoPolicy ? '[AUTO] ' : '';
     el.dockStepHint.textContent = state.allowClickInterrupt
-      ? `自动推进倒计时 (${holdSec.toFixed(1)}s)... 点击即刻推进`
+      ? `${autoPrefix}自动推进倒计时 (${holdSec.toFixed(1)}s)... 点击即刻推进`
       : `强制停留中 (${holdSec.toFixed(1)}s)...`;
 
     const intervalMs = 25;

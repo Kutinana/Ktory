@@ -567,17 +567,27 @@ namespace Ktory.Core.Parser
 
         private static void ExtractTrailingTags(ref string content, List<TagData> targetTags)
         {
-            // Simple check: if content contains " ." followed by letters, split trailing tags
-            int dotIdx = content.LastIndexOf(" .", StringComparison.Ordinal);
-            if (dotIdx >= 0)
+            var extracted = new List<TagData>();
+            while (true)
             {
-                string tagPart = content.Substring(dotIdx + 1);
+                int dotIdx = content.LastIndexOf(" .", StringComparison.Ordinal);
+                if (dotIdx < 0) break;
+
+                string tagPart = content.Substring(dotIdx + 1).Trim();
                 var tags = TagParser.ParseTags(tagPart);
                 if (tags.Count > 0)
                 {
-                    targetTags.AddRange(tags);
+                    extracted.InsertRange(0, tags);
                     content = content.Substring(0, dotIdx).Trim();
                 }
+                else
+                {
+                    break;
+                }
+            }
+            if (extracted.Count > 0)
+            {
+                targetTags.AddRange(extracted);
             }
         }
 

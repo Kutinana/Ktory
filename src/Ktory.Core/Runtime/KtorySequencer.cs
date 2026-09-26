@@ -14,6 +14,7 @@ namespace Ktory.Core.Runtime
         public ExecutionStatus Status { get; private set; } = ExecutionStatus.Ready;
         public TextPayload? CurrentPayload { get; private set; }
         public ChoicePayload? CurrentChoice { get; private set; }
+        public AutoPolicy? ActiveAutoPolicy { get; private set; }
 
         public IExpressionEvaluator Evaluator { get; set; } = new DefaultExpressionEvaluator();
 
@@ -59,6 +60,7 @@ namespace Ktory.Core.Runtime
             VisitedItemIds.Clear();
             CallStack.Clear();
             _activeLoops.Clear();
+            ActiveAutoPolicy = null;
             CurrentPayload = null;
             CurrentChoice = null;
 
@@ -187,7 +189,8 @@ namespace Ktory.Core.Runtime
                 var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.InlineBranch)
                 {
                     SourceContainer = sourceContainer,
-                    ReturnToContainer = isLoop
+                    ReturnToContainer = isLoop,
+                    SavedAutoPolicy = ActiveAutoPolicy
                 };
                 CallStack.Push(resumeFrame);
 
@@ -251,6 +254,29 @@ namespace Ktory.Core.Runtime
 
             while (true)
             {
+                // Check if currently looping a non-container step (TextStep or DirectiveStep)
+                if (_activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode is not ContainerStep)
+                {
+                    var currentLoop = _activeLoops.Peek().Loop;
+                    currentLoop.IterationCount++;
+                    if (currentLoop.CanLoopAgain())
+                    {
+                        // Re-enter the node: re-emit content and re-execute modifiers
+                        _currentStep = currentLoop.TargetNode;
+                        ProcessBeatStep(_currentStep);
+                        return;
+                    }
+                    else
+                    {
+                        // Loop limit reached, break and unwind
+                        var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
+                        while (CallStack.Count > loopBoundaryDepth)
+                        {
+                            CallStack.Pop();
+                        }
+                    }
+                }
+
                 // If we've reached the end of the current step list
                 if (_currentStepIndex >= _currentSteps.Count)
                 {
@@ -261,6 +287,7 @@ namespace Ktory.Core.Runtime
                         _currentBlock = frame.Block;
                         _currentSteps = frame.Steps;
                         _currentStepIndex = frame.StepIndex;
+                        ActiveAutoPolicy = frame.SavedAutoPolicy;
 
                         if (frame.ReturnToContainer && frame.SourceContainer != null)
                         {
@@ -278,6 +305,7 @@ namespace Ktory.Core.Runtime
                         ClearActiveLoopsForBlock(_currentBlock);
                         CallStack.Clear();
                         _activeLoops.Clear();
+                        ActiveAutoPolicy = null;
 
                         if (ResumeRootSectionAfter(_currentBlock))
                         {
@@ -290,6 +318,7 @@ namespace Ktory.Core.Runtime
                     // Case 3: Root block ended
                     CallStack.Clear();
                     _activeLoops.Clear();
+                    ActiveAutoPolicy = null;
                     Status = ExecutionStatus.Completed;
                     return;
                 }
@@ -311,48 +340,62 @@ namespace Ktory.Core.Runtime
                 {
                     case TextStep textStep:
                     {
-                        // Dispatch tags
-                        if (textStep.Tags.Count > 0)
+                        if (textStep.IsLoop)
                         {
-                            OnTagsDispatched?.Invoke(textStep.Tags);
+                            EnsureLoopContext(textStep);
                         }
 
-                        var content = textStep.GetText(RequestedLanguage, DefaultLanguage, out var actualLang);
-                        var resolvedSpeaker = File.ResolveSpeaker(textStep.Speaker, RequestedLanguage, DefaultLanguage);
-                        CurrentPayload = new TextPayload
-                        {
-                            StepType = StepType.Text,
-                            LineNumber = textStep.LineNumber,
-                            Speaker = resolvedSpeaker,
-                            Content = content,
-                            ActualLanguage = actualLang,
-                            RequestedLanguage = RequestedLanguage,
-                            Tags = textStep.Tags
-                        };
-
-                        Status = ExecutionStatus.SuspendedAtBeat;
+                        ProcessBeatStep(textStep);
                         return;
                     }
 
                     case DirectiveStep directiveStep:
                     {
-                        if (directiveStep.Tags.Count > 0)
+                        // Handle #AUTO macro directive (enters auto scope without observable pause)
+                        if (string.Equals(directiveStep.Name, "AUTO", StringComparison.OrdinalIgnoreCase))
                         {
-                            OnTagsDispatched?.Invoke(directiveStep.Tags);
+                            if (directiveStep.Tags.Count > 0)
+                            {
+                                OnTagsDispatched?.Invoke(directiveStep.Tags);
+                            }
+
+                            var waitTag = directiveStep.GetTag("wait");
+                            bool useEstimated = false;
+                            double defaultWait = 0;
+                            if (waitTag != null)
+                            {
+                                if (waitTag.PositionalArgs.Count > 0)
+                                {
+                                    defaultWait = waitTag.GetPositional<double>(0, 0);
+                                    useEstimated = false;
+                                }
+                                else
+                                {
+                                    useEstimated = true;
+                                }
+                            }
+                            ActiveAutoPolicy = new AutoPolicy(_currentBlock, useEstimated, defaultWait);
+                            continue;
                         }
 
-                        CurrentPayload = new TextPayload
+                        // Handle #AUTO_END macro directive (leaves auto scope without extra pause)
+                        if (string.Equals(directiveStep.Name, "AUTO_END", StringComparison.OrdinalIgnoreCase))
                         {
-                            StepType = StepType.Directive,
-                            LineNumber = directiveStep.LineNumber,
-                            Speaker = null,
-                            Content = directiveStep.Name,
-                            ActualLanguage = RequestedLanguage,
-                            RequestedLanguage = RequestedLanguage,
-                            Tags = directiveStep.Tags
-                        };
+                            if (directiveStep.Tags.Count > 0)
+                            {
+                                OnTagsDispatched?.Invoke(directiveStep.Tags);
+                            }
 
-                        Status = ExecutionStatus.SuspendedAtBeat;
+                            ActiveAutoPolicy = null;
+                            continue;
+                        }
+
+                        if (directiveStep.IsLoop)
+                        {
+                            EnsureLoopContext(directiveStep);
+                        }
+
+                        ProcessBeatStep(directiveStep);
                         return;
                     }
 
@@ -386,7 +429,7 @@ namespace Ktory.Core.Runtime
                         // If zero selectable options, smoothly skip over container!
                         if (choicePayload.SelectableCount == 0)
                         {
-                            if (containerStep.IsLoop && _activeLoops.Count > 0 && _activeLoops.Peek().Loop.Container == containerStep)
+                            if (containerStep.IsLoop && _activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode == containerStep)
                             {
                                 var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
                                 while (CallStack.Count > loopBoundaryDepth)
@@ -415,9 +458,57 @@ namespace Ktory.Core.Runtime
             }
         }
 
-        private void EnsureLoopContext(ContainerStep containerStep)
+        private void ProcessBeatStep(StepNode step)
         {
-            if (_activeLoops.Count > 0 && _activeLoops.Peek().Loop.Container == containerStep)
+            if (step is TextStep textStep)
+            {
+                if (textStep.Tags.Count > 0)
+                {
+                    OnTagsDispatched?.Invoke(textStep.Tags);
+                }
+
+                var content = textStep.GetText(RequestedLanguage, DefaultLanguage, out var actualLang);
+                var resolvedSpeaker = File.ResolveSpeaker(textStep.Speaker, RequestedLanguage, DefaultLanguage);
+                CurrentPayload = new TextPayload
+                {
+                    StepType = StepType.Text,
+                    LineNumber = textStep.LineNumber,
+                    Speaker = resolvedSpeaker,
+                    Content = content,
+                    ActualLanguage = actualLang,
+                    RequestedLanguage = RequestedLanguage,
+                    Tags = textStep.Tags,
+                    AutoPolicy = ActiveAutoPolicy
+                };
+
+                Status = ExecutionStatus.SuspendedAtBeat;
+            }
+            else if (step is DirectiveStep directiveStep)
+            {
+                if (directiveStep.Tags.Count > 0)
+                {
+                    OnTagsDispatched?.Invoke(directiveStep.Tags);
+                }
+
+                CurrentPayload = new TextPayload
+                {
+                    StepType = StepType.Directive,
+                    LineNumber = directiveStep.LineNumber,
+                    Speaker = null,
+                    Content = directiveStep.Name,
+                    ActualLanguage = RequestedLanguage,
+                    RequestedLanguage = RequestedLanguage,
+                    Tags = directiveStep.Tags,
+                    AutoPolicy = ActiveAutoPolicy
+                };
+
+                Status = ExecutionStatus.SuspendedAtBeat;
+            }
+        }
+
+        private void EnsureLoopContext(StepNode node)
+        {
+            if (_activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode == node)
             {
                 // Increment iteration
                 _activeLoops.Peek().Loop.IterationCount++;
@@ -425,7 +516,7 @@ namespace Ktory.Core.Runtime
             }
 
             // Create new loop context
-            var loop = new LoopContext(containerStep);
+            var loop = new LoopContext(node);
             var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps);
             int callStackDepth = CallStack.Count;
             _activeLoops.Push((loop, resumeFrame, callStackDepth));
@@ -462,6 +553,7 @@ namespace Ktory.Core.Runtime
                 {
                     CallStack.Clear();
                     _activeLoops.Clear();
+                    ActiveAutoPolicy = null;
                     if (!File.TryGetBlock(cf.TargetLabel!, out var targetBlock))
                     {
                         throw new KtoryException($"Jump target block '=== {cf.TargetLabel} ===' not found.");
@@ -483,9 +575,13 @@ namespace Ktory.Core.Runtime
                     var returnFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.SectionCall)
                     {
                         SourceContainer = sourceContainer,
-                        ReturnToContainer = returnToContainer
+                        ReturnToContainer = returnToContainer,
+                        SavedAutoPolicy = ActiveAutoPolicy
                     };
                     CallStack.Push(returnFrame);
+
+                    // AUTO policy does not inherit into external subroutines per Specification §2.7
+                    ActiveAutoPolicy = null;
 
                     _currentBlock = targetBlock;
                     _currentSteps = targetBlock.Steps;
@@ -515,6 +611,7 @@ namespace Ktory.Core.Runtime
                     _currentBlock = callFrame.Block;
                     _currentSteps = callFrame.Steps;
                     _currentStepIndex = callFrame.StepIndex;
+                    ActiveAutoPolicy = callFrame.SavedAutoPolicy;
 
                     if (callFrame.ReturnToContainer && callFrame.SourceContainer != null)
                     {
@@ -534,6 +631,7 @@ namespace Ktory.Core.Runtime
                 {
                     CallStack.Clear();
                     _activeLoops.Clear();
+                    ActiveAutoPolicy = null;
                     if (!_currentBlock.IsRoot)
                     {
                         if (ResumeRootSectionAfter(_currentBlock))

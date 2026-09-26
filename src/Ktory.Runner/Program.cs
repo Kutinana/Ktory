@@ -116,6 +116,7 @@ public class RunnerSessionState
     public List<string> VisitedItems { get; set; } = new List<string>();
     public int CallStackDepth { get; set; }
     public List<TagData> RecentTags { get; set; } = new List<TagData>();
+    public AutoPolicy? AutoPolicy { get; set; }
     public string? ErrorMessage { get; set; }
 }
 
@@ -183,7 +184,8 @@ public class RunnerSessionService
             DefaultLanguage = _sequencer.DefaultLanguage,
             VisitedItems = new List<string>(_sequencer.VisitedItemIds),
             CallStackDepth = _sequencer.CallStack.Count,
-            RecentTags = new List<TagData>(_recentTags)
+            RecentTags = new List<TagData>(_recentTags),
+            AutoPolicy = _sequencer.ActiveAutoPolicy
         };
     }
 }

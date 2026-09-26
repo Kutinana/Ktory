@@ -89,7 +89,8 @@ public class KtoryWasmBridge
             defaultLanguage = _sequencer.DefaultLanguage,
             visitedItems = new List<string>(_sequencer.VisitedItemIds),
             callStackDepth = _sequencer.CallStack.Count,
-            recentTags = new List<TagData>(_recentTags)
+            recentTags = new List<TagData>(_recentTags),
+            autoPolicy = _sequencer.ActiveAutoPolicy
         };
         return JsonSerializer.Serialize(snapshot, JsonOptions);
     }

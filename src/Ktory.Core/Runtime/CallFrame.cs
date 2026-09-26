@@ -21,6 +21,7 @@ namespace Ktory.Core.Runtime
         /// </summary>
         public ContainerStep? SourceContainer { get; set; }
         public bool ReturnToContainer { get; set; }
+        public AutoPolicy? SavedAutoPolicy { get; set; }
 
         public CallFrame(KtoryBlock block, int stepIndex, List<StepNode>? steps = null, CallFrameType frameType = CallFrameType.SectionCall)
         {
@@ -33,20 +34,26 @@ namespace Ktory.Core.Runtime
 
     public class LoopContext
     {
-        public ContainerStep Container { get; }
+        public StepNode TargetNode { get; }
         public int IterationCount { get; set; }
-        public int MaxIterations { get; } // 0 = infinite
+        public int MaxIterations { get; } // -1 = infinite, >0 = fixed limit
+        public bool IsInfinite => MaxIterations <= 0;
 
-        public LoopContext(ContainerStep container)
+        /// <summary>
+        /// Backward compatibility property for choice loop containers.
+        /// </summary>
+        public ContainerStep? Container => TargetNode as ContainerStep;
+
+        public LoopContext(StepNode node)
         {
-            Container = container;
-            MaxIterations = container.GetLoopLimit();
+            TargetNode = node;
+            MaxIterations = node.GetLoopLimit();
             IterationCount = 1;
         }
 
         public bool CanLoopAgain()
         {
-            if (MaxIterations <= 0) return true; // infinite loop
+            if (IsInfinite) return true;
             return IterationCount <= MaxIterations;
         }
     }

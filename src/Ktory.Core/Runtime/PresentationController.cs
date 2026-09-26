@@ -55,6 +55,10 @@ namespace Ktory.Core.Runtime
             if (payload.StepType == StepType.Directive)
             {
                 SetupHoldPhase(payload);
+                if (AutoAdvanceOnHoldEnd && HoldDuration <= 0)
+                {
+                    TriggerAdvance();
+                }
                 return;
             }
 
@@ -99,8 +103,9 @@ namespace Ktory.Core.Runtime
                 Phase = PresentationPhase.Holding;
             }
 
-            // If a click was queued during printing or wait, advance now if allowed
-            if (QueuedAdvance)
+            // If a click was queued during printing or wait, advance now if allowed,
+            // or if auto-advance is active with zero hold duration (e.g. standard #AUTO).
+            if (QueuedAdvance || (AutoAdvanceOnHoldEnd && HoldDuration <= 0))
             {
                 TriggerAdvance();
             }
@@ -129,7 +134,7 @@ namespace Ktory.Core.Runtime
             {
                 if (AllowClickInterruptHold)
                 {
-                    // .next(t): click immediately triggers advance and cancels remaining hold timer
+                    // .next(t) / AUTO: click immediately triggers advance and cancels remaining hold timer
                     TriggerAdvance();
                 }
                 else
@@ -189,6 +194,21 @@ namespace Ktory.Core.Runtime
                 {
                     // Estimate reading time from text length
                     HoldDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
+                }
+            }
+            else if (_sequencer.ActiveAutoPolicy != null && _sequencer.ActiveAutoPolicy.Enabled)
+            {
+                var autoPolicy = _sequencer.ActiveAutoPolicy;
+                AutoAdvanceOnHoldEnd = true;
+                AllowClickInterruptHold = true; // In AUTO mode, clicks can advance immediately
+
+                if (autoPolicy.UseEstimatedReadingTime && payload.StepType == StepType.Text)
+                {
+                    HoldDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
+                }
+                else
+                {
+                    HoldDuration = autoPolicy.DefaultWaitSeconds;
                 }
             }
             else
