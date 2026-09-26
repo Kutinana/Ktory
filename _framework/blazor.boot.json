@@ -1,10 +1,10 @@
 {
   "mainAssemblyName": "Ktory.Web",
   "resources": {
-    "hash": "sha256-dx+DfTPUZ0/JOOY3qY4ZQuYKiatqdPqmlcgwekr1YQA=",
+    "hash": "sha256-YQY0HJ3fFdKCjmPdpnRS0c5G7EKBrTfdpJ55q3pj6q8=",
     "fingerprinting": {
-      "Ktory.Core.11jlwylyhq.wasm": "Ktory.Core.wasm",
-      "Ktory.Web.othz80k2hk.wasm": "Ktory.Web.wasm",
+      "Ktory.Core.wzv82zj1k5.wasm": "Ktory.Core.wasm",
+      "Ktory.Web.62quukobn8.wasm": "Ktory.Web.wasm",
       "Microsoft.AspNetCore.Components.Web.hqv8ipcmkr.wasm": "Microsoft.AspNetCore.Components.Web.wasm",
       "Microsoft.AspNetCore.Components.WebAssembly.evkvdyhfs8.wasm": "Microsoft.AspNetCore.Components.WebAssembly.wasm",
       "Microsoft.AspNetCore.Components.uc8w2uez5s.wasm": "Microsoft.AspNetCore.Components.wasm",
@@ -34,7 +34,7 @@
       "System.Text.Encodings.Web.w4ahmnlwwg.wasm": "System.Text.Encodings.Web.wasm",
       "System.Text.Json.asdxhsmuys.wasm": "System.Text.Json.wasm",
       "System.Text.RegularExpressions.kepapcm0l7.wasm": "System.Text.RegularExpressions.wasm",
-      "netstandard.29tvw6wci3.wasm": "netstandard.wasm",
+      "netstandard.dyw7fckx10.wasm": "netstandard.wasm",
       "dotnet.js": "dotnet.js",
       "dotnet.native.6sals8nuk0.js": "dotnet.native.js",
       "dotnet.native.zzmgzj9wb3.wasm": "dotnet.native.wasm",
@@ -62,8 +62,8 @@
       "System.Runtime.InteropServices.JavaScript.fge8107jim.wasm": "sha256-0TP+6/akHFjrHZGDv0NE7pmpxdrqqqaTLUUOURYuq9Y="
     },
     "assembly": {
-      "Ktory.Core.11jlwylyhq.wasm": "sha256-a/RYK8E6EjmYKDWBKnFVUSqaLFy7h8LYBt9owLMwJIg=",
-      "Ktory.Web.othz80k2hk.wasm": "sha256-BPMOfU2IVrGQCuhrJxR7mqfiF6h+D8Mc1mZ6VTFWSYA=",
+      "Ktory.Core.wzv82zj1k5.wasm": "sha256-/HGyoVqOPicwvLtVSw0Lu8J07aCrEIYecpaRgtrVlNQ=",
+      "Ktory.Web.62quukobn8.wasm": "sha256-kjI3rzkP6JCZZdt4wLU6olKx56gEWi5Lt8EBigLoKFM=",
       "Microsoft.AspNetCore.Components.Web.hqv8ipcmkr.wasm": "sha256-VxdkDhYqIQmV0nrf/q+fI0M0wx49jJKwwXCdx3aU+PQ=",
       "Microsoft.AspNetCore.Components.WebAssembly.evkvdyhfs8.wasm": "sha256-akCfLULWXfI/PgBz6B6kGxEkZvWtbcZr05ezhsbJUgo=",
       "Microsoft.AspNetCore.Components.uc8w2uez5s.wasm": "sha256-svP73WpXSbSca+wZCdElBR7xPtr/y0Xp/GsoqVmNDuc=",
@@ -91,7 +91,7 @@
       "System.Text.Encodings.Web.w4ahmnlwwg.wasm": "sha256-cNAGT2nAYAWlx5A5GXwt38LXCDVCdS1Ut4vxkizlpAg=",
       "System.Text.Json.asdxhsmuys.wasm": "sha256-CkXuD/CphPdj8Suw2ax43rgsg5QJNmOo81Wei7j5454=",
       "System.Text.RegularExpressions.kepapcm0l7.wasm": "sha256-5JerUqKLd825hmb7KFJgcGjeqeNqO6DrvstjSqXfRJg=",
-      "netstandard.29tvw6wci3.wasm": "sha256-1p3VxNInB4gVG3vBG3KZk4oMQ/2Ss6mon4reCoPjIMk="
+      "netstandard.dyw7fckx10.wasm": "sha256-a77F/SG2nevLpWS0agQH2VVVX6ZRGXW552Q+pxLGL2s="
     }
   },
   "cacheBootResources": true,
