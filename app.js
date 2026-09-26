@@ -96,6 +96,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupDrawerResizer();
   setupCustomSampleSelect();
   setupCustomSectionSelect();
+  if (window.ktoryReaderHost) {
+    window.ktoryReaderHost.onDomReady();
+    return;
+  }
   await loadSamples();
 
   // Start with first catalog sample
@@ -130,6 +134,7 @@ function setupEventListeners() {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
       return;
     }
+    if (e.target.closest('button, a, [role="button"]')) return;
 
     if (e.code === 'Space' || e.code === 'Enter') {
       e.preventDefault();
@@ -630,6 +635,11 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
   };
   console.log('[Ktory] WebAssembly in-browser engine is ready.');
 
+  if (window.ktoryReaderHost) {
+    window.ktoryReaderHost.onRuntimeReady();
+    return;
+  }
+
   // If page loaded before WASM booted, load samples and kick off session
   if (Object.keys(state.samples).length === 0) {
     loadSamples().then(() => {
@@ -716,6 +726,12 @@ function enqueueSessionOp(opFn) {
 async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
   clearTimers();
   resetStoryStream();
+  state.status = 'Loading';
+  state.payload = null;
+  state.choice = null;
+  state.currentPresentationId = 0;
+  state.currentActiveChoiceEl = null;
+  state.requestedLocale = requestedLocale;
   currentSessionEpoch++;
   const sessionEpoch = currentSessionEpoch;
 
@@ -742,7 +758,7 @@ async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
           data = await res.json();
         } else {
           const err = await res.json();
-          alert(`解析错误: ${err.error}`);
+          reportSessionError(`解析错误: ${err.error}`);
           return;
         }
       }
@@ -753,7 +769,7 @@ async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
     } catch (err) {
       if (sessionEpoch !== currentSessionEpoch) return;
       console.error('Failed to start session:', err);
-      alert(`解析错误: ${err.message || err}`);
+      reportSessionError(`解析错误: ${err.message || err}`);
     }
   });
 }
@@ -762,14 +778,14 @@ async function stepSession(expectedPresentationId = null) {
   if (expectedPresentationId && expectedPresentationId !== state.currentPresentationId) {
     return;
   }
-  if (state.status === 'Completed' || state.status === 'AwaitingChoice') return;
+  if (state.status !== 'SuspendedAtBeat') return;
 
   const targetPresentationId = expectedPresentationId || state.currentPresentationId;
   const sessionEpoch = currentSessionEpoch;
 
   return enqueueSessionOp(async (opEpoch) => {
     if (opEpoch !== currentSessionEpoch) return;
-    if (state.status === 'Completed' || state.status === 'AwaitingChoice') return;
+    if (state.status !== 'SuspendedAtBeat') return;
     if (targetPresentationId && targetPresentationId !== state.currentPresentationId) return;
 
     clearTimers();
@@ -796,6 +812,7 @@ async function stepSession(expectedPresentationId = null) {
     } catch (err) {
       if (opEpoch !== currentSessionEpoch) return;
       console.error('Failed to step session:', err);
+      reportSessionError(err.message || String(err));
     }
   });
 }
@@ -841,6 +858,7 @@ async function submitChoice(choiceId, expectedPresentationId = null) {
     } catch (err) {
       if (opEpoch !== currentSessionEpoch) return;
       console.error('Failed to submit choice:', err);
+      reportSessionError(err.message || String(err));
     }
   });
 }
@@ -850,6 +868,7 @@ async function changeLanguage(locale) {
   el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.locale === locale);
   });
+  if (state.status === 'Error' || state.status === 'Loading' || state.status === 'Ready') return;
 
   const sessionEpoch = currentSessionEpoch;
 
@@ -878,6 +897,7 @@ async function changeLanguage(locale) {
     } catch (err) {
       if (opEpoch !== currentSessionEpoch) return;
       console.error('Failed to change language:', err);
+      reportSessionError(err.message || String(err));
     }
   });
 }
@@ -909,6 +929,12 @@ function syncSampleSelect(sampleKey) {
 }
 
 function updateState(serverState, isLanguageSwitch = false) {
+  window.ktoryReaderHost?.onState(serverState);
+  if (window.ktoryReaderHost?.sanitizeHtml && serverState.payload &&
+      serverState.payload.stepType !== 1 && serverState.payload.stepType !== 'Directive') {
+    serverState = { ...serverState, payload: { ...serverState.payload,
+      content: window.ktoryReaderHost.sanitizeHtml(serverState.payload.content || '') } };
+  }
   state.status = serverState.status;
   state.payload = serverState.payload;
   state.choice = serverState.choice;
@@ -1364,7 +1390,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
 
 // Stage / Viewport Advance Trigger
 function handleAdvanceAction() {
-  if (state.status === 'AwaitingChoice') {
+  if (state.status !== 'SuspendedAtBeat') {
     return; // Player must select an option
   }
 
@@ -1500,6 +1526,15 @@ function updateDockStatus(status) {
 }
 
 // Helpers
+function reportSessionError(message) {
+  clearTimers();
+  state.status = 'Error';
+  state.choice = null;
+  updateDockStatus('Error');
+  if (window.ktoryReaderHost) window.ktoryReaderHost.onError(message);
+  else alert(message);
+}
+
 function scrollToBottom() {
   requestAnimationFrame(() => {
     el.readerViewport.scrollTop = el.readerViewport.scrollHeight;
