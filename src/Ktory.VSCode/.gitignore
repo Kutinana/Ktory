@@ -1,3 +1,4 @@
 node_modules/
+# Legacy generated directories; current outputs live in artifacts/vscode/.
 reader/
 .vscode-test/

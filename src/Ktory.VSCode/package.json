@@ -2,10 +2,10 @@
   "name": "ktory",
   "displayName": "Ktory — Script & Preview",
   "description": "Ktory syntax highlighting and offline, in-editor reading powered by the shared C# core.",
-  "version": "0.1.0-preview.1",
-  "publisher": "Kutinana",
+  "version": "0.1.0",
+  "publisher": "ktory",
   "icon": "icon.png",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
     "url": "https://github.com/Kutinana/Ktory.git",
@@ -91,7 +91,7 @@
   },
   "scripts": {
     "build": "node scripts/build.cjs",
-    "vscode:prepublish": "pnpm build",
+    "clean": "node scripts/clean.cjs",
     "package": "node scripts/package.cjs",
     "test": "node --test test/unit.test.cjs",
     "test:integration": "node test/run-integration.cjs",

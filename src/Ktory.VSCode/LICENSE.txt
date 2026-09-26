@@ -1,0 +1,51 @@
+Ktory for VS Code — Proprietary License
+Version 1.0, 2026-09-26
+
+1. Scope
+
+This license applies to the Ktory-owned code, documentation and assets supplied
+in the Ktory for VS Code extension, including the Ktory Core and Reader components
+bundled for use within the extension (the "Software"). The applicable copyright
+holders retain ownership of the Software. This is not an open-source license.
+It does not license other Ktory distributions, including standalone Core or Unity
+packages, or grant a right to extract and redistribute the bundled runtime.
+
+2. Permitted use
+
+You may install and use the unmodified Software for personal, professional and
+commercial purposes, including authoring and previewing scripts for commercial
+games. You may make copies necessary for your own installation and backup.
+These permissions are non-exclusive and subject to the terms below.
+
+3. Restrictions
+
+Without separate written permission from the applicable copyright holders, you
+may not modify, adapt or create derivative versions of the Software, or distribute,
+redistribute, sublicense, sell, rent, publish or otherwise provide copies of the
+Software or its Ktory-owned components to others. These restrictions apply to
+source and binary forms, whether provided free of charge or for payment.
+Retain all copyright, license and attribution notices in permitted copies.
+Rights not expressly granted are reserved. Nothing in this license limits rights
+that applicable law makes non-waivable.
+
+4. Your content
+
+The restrictions on the Software do not apply to scripts, translations or other
+original content you create using it. This license does not claim ownership of
+that content or restrict your modification, distribution or commercial use of it.
+Distributing a game that includes Ktory runtime code requires permission under
+the license applicable to that runtime distribution; use of this editor extension
+alone does not grant runtime redistribution rights.
+
+5. Third-party components
+
+Third-party components remain subject to their own licenses, which take
+precedence for those components. This license does not reduce the permissions
+those licenses grant. The bundled runtime's licenses and notices are provided
+under reader/notices/ in the extension package.
+
+6. Warranty
+
+To the extent permitted by applicable law, the Software is provided "AS IS",
+without warranties of any kind, express or implied, including warranties of
+merchantability, fitness for a particular purpose and non-infringement.

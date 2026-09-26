@@ -43,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ktory-vscode-vsix-${{ github.sha }}
-          path: artifacts/vscode/ktory-vscode-*.vsix
+          path: artifacts/vscode/packages/ktory-vscode-*.vsix
           if-no-files-found: error

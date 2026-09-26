@@ -1,21 +1,25 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { version } = require('../package.json');
-
-// One version source and one path shared by packaging and installed-VSIX tests.
-const extensionRoot = path.resolve(__dirname, '..');
-const packagePath = path.resolve(extensionRoot, '../../artifacts/vscode', `ktory-vscode-${version}.vsix`);
+const { build } = require('./build.cjs');
+const { extensionRoot, packagesRoot, packagePath } = require('./paths.cjs');
 module.exports = { packagePath };
 
-if (require.main === module) {
-  fs.mkdirSync(path.dirname(packagePath), { recursive: true });
-  require('@vscode/vsce').createVSIX({
-    cwd: extensionRoot,
-    packagePath,
-    dependencies: false,
-    skipLicense: true
-  }).catch(error => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+async function packageExtension() {
+  await build();
+  fs.mkdirSync(packagesRoot, { recursive: true });
+  const temporaryPackage = path.join(packagesRoot, `.${path.basename(packagePath)}`);
+  try {
+    await require('@vscode/vsce').createVSIX({
+      cwd: extensionRoot,
+      packagePath: temporaryPackage,
+      dependencies: false,
+      preRelease: true
+    });
+    fs.renameSync(temporaryPackage, packagePath);
+    console.log(`VSIX ready: ${packagePath}`);
+  } finally {
+    fs.rmSync(temporaryPackage, { force: true });
+  }
 }
+
+if (require.main === module) packageExtension().catch(error => { console.error(error); process.exitCode = 1; });

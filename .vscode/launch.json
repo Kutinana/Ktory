@@ -4,7 +4,7 @@
     "name": "Ktory VS Code Extension",
     "type": "extensionHost",
     "request": "launch",
-    "args": ["--extensionDevelopmentPath=${workspaceFolder}/src/Ktory.VSCode"],
+    "args": ["--extensionDevelopmentPath=${workspaceFolder}/artifacts/vscode/extension"],
     "preLaunchTask": "Build Ktory VS Code extension"
   }]
 }

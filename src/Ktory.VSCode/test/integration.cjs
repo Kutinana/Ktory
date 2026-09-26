@@ -1,9 +1,10 @@
 const vscode = require('vscode');
 const assert = require('node:assert/strict');
+const { publisher, name } = require('../package.json');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 exports.run = async () => {
-  const extension = vscode.extensions.getExtension('Kutinana.ktory');
+  const extension = vscode.extensions.getExtension(`${publisher}.${name}`);
   assert.ok(extension, 'Extension discovered');
   const api = await extension.activate();
   const source = `@defaultLang: zh

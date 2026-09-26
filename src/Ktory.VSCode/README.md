@@ -1,6 +1,6 @@
 # Ktory for VS Code
 
-`.ktr` / `.ktory` syntax highlighting and an offline reading panel powered by the same C# core as Ktory's Web Reader. Ktory is a dialogue-first, host-driven narrative language and runtime; the preview does not simulate your game's world state or presentation resources.
+`.ktr` / `.ktory` syntax highlighting and an offline reading panel powered by the same C# core as Ktory's Web Reader. Ktory is an authoring and integration system for dialogue-driven games; its current runtime uses host-driven beats. Shared presentation defaults, configurable bindings and explicit signal dependencies are pending goals, not current preview features. The preview does not simulate your game's world state or presentation resources; see the [design charter](../../docs/ktory-design-charter.md).
 
 ## Install and read
 
@@ -18,7 +18,13 @@ The preview ignores unknown external choice conditions and skips unknown present
 
 ## Development
 
+Run `pnpm package` to build a VSIX in `artifacts/vscode/packages/` at the repository root. The complete development extension is generated in `artifacts/vscode/extension/`; source files stay in this directory. `pnpm clean` removes all extension build outputs and packages.
+
 Build, verification, packaging and maintenance instructions are maintained in the [repository workflow](https://github.com/Kutinana/Ktory/blob/main/docs/ktory-workflow.md#vs-code-扩展开发与验证).
+
+## License
+
+This extension is proprietary software. The [license](LICENSE.txt) permits personal and commercial use, including authoring scripts for commercial games. Modification and redistribution of the extension require separate written permission. Your own scripts and other original content are not subject to these restrictions. Bundled third-party components retain their own licenses; see `reader/notices/` in the installed extension. This license does not grant redistribution rights for standalone Ktory Core or Unity runtime packages.
 
 ## Troubleshooting
 

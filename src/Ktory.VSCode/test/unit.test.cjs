@@ -5,6 +5,7 @@ const path = require('node:path');
 const tm = require('vscode-textmate');
 const onig = require('vscode-oniguruma');
 const root = path.resolve(__dirname, '..');
+const { extensionRoot, readerRoot, buildRoot } = require('../scripts/paths.cjs');
 
 test('the contributed TextMate grammar highlights a representative .ktr document', async () => {
   const wasm = fs.readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
@@ -50,14 +51,28 @@ test('the portal consumes the extension grammar instead of maintaining another c
 });
 
 test('the offline bundle contains Core and the real WASM host', () => {
-  const framework = fs.readdirSync(path.join(root, 'reader/_framework'));
+  const framework = fs.readdirSync(path.join(readerRoot, '_framework'));
   assert.ok(framework.some(name => /^Ktory.Core.*\.wasm$/.test(name)));
   assert.ok(framework.some(name => /^Ktory.Web.*\.wasm$/.test(name)));
   assert.ok(framework.includes('blazor.webassembly.js'));
-  assert.ok(fs.existsSync(path.join(root, 'reader/notices/microsoft.netcore.app.runtime.mono.browser-wasm')));
-  assert.equal(fs.readFileSync(path.join(root, 'reader/app.js'), 'utf8'),
+  assert.ok(fs.existsSync(path.join(readerRoot, 'notices/microsoft.netcore.app.runtime.mono.browser-wasm')));
+  assert.equal(fs.readFileSync(path.join(readerRoot, 'app.js'), 'utf8'),
     fs.readFileSync(path.resolve(root, '../Ktory.Runner/wwwroot/app.js'), 'utf8'));
-  assert.match(JSON.parse(fs.readFileSync(path.join(root, 'reader/build-info.json'), 'utf8')).sourceCommit, /^[a-f0-9]{40}$/);
+  assert.match(JSON.parse(fs.readFileSync(path.join(readerRoot, 'build-info.json'), 'utf8')).sourceCommit, /^[a-f0-9]{40}$/);
+});
+
+test('the staged extension includes current runtime sources and no build tooling', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
+  assert.equal(manifest.scripts, undefined);
+  assert.equal(manifest.devDependencies, undefined);
+  for (const file of ['extension.js', 'webview.js', 'webview.css', 'LICENSE.txt', 'syntaxes/ktory.tmLanguage.json']) {
+    assert.equal(fs.readFileSync(path.join(extensionRoot, file), 'utf8'), fs.readFileSync(path.join(root, file), 'utf8'));
+  }
+  for (const directory of ['node_modules', 'scripts', 'test']) {
+    assert.equal(fs.existsSync(path.join(extensionRoot, directory)), false);
+  }
+  assert.equal(fs.existsSync(buildRoot), false, 'temporary publish output is cleaned after building');
+  assert.equal(fs.existsSync(path.join(root, 'reader')), false, 'generated Reader stays outside the source tree');
 });
 
 test('the package manifest declares an icon file that exists on disk', () => {
