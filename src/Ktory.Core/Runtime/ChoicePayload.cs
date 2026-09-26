@@ -22,6 +22,7 @@ namespace Ktory.Core.Runtime
 
     public class ChoicePayload
     {
+        public long PresentationId { get; set; }
         public string ContainerName { get; set; } = "choice";
         public bool IsLoop { get; set; }
         public IReadOnlyList<TagData> Tags { get; set; } = Array.Empty<TagData>();

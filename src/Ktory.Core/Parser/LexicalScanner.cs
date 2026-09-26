@@ -12,7 +12,7 @@ namespace Ktory.Core.Parser
     {
         /// <summary>
         /// Strips line comments (//) from a source line while preserving:
-        /// 1. // within single or double quotes
+        /// 1. // within double quotes
         /// 2. // in URI schemes (e.g. https://, http://, file://)
         /// 3. Escaped slashes (\//)
         /// </summary>
@@ -21,7 +21,6 @@ namespace Ktory.Core.Parser
             if (string.IsNullOrEmpty(line)) return string.Empty;
 
             bool inDoubleQuote = false;
-            bool inSingleQuote = false;
 
             for (int i = 0; i < line.Length - 1; i++)
             {
@@ -34,19 +33,14 @@ namespace Ktory.Core.Parser
                     continue;
                 }
 
-                // Quote tracking
-                if (c == '"' && !inSingleQuote)
+                // Double quote tracking
+                if (c == '"')
                 {
                     inDoubleQuote = !inDoubleQuote;
                     continue;
                 }
-                if (c == '\'' && !inDoubleQuote)
-                {
-                    inSingleQuote = !inSingleQuote;
-                    continue;
-                }
 
-                if (inDoubleQuote || inSingleQuote)
+                if (inDoubleQuote)
                 {
                     continue;
                 }
@@ -96,6 +90,7 @@ namespace Ktory.Core.Parser
         /// <summary>
         /// Safely extracts trailing decorator tags (e.g. ".wait(2) .sfx(boom)") from a dialogue/narration line.
         /// Preserves normal text such as ": 请打开 .ktr 文件。" without incorrectly stripping words following a dot.
+        /// Apostrophes in contractions (such as "I'm ready.") are not treated as code string boundaries.
         /// </summary>
         public static bool TryExtractTrailingTags(string content, out string cleanContent, out List<TagData> tags)
         {
@@ -108,7 +103,6 @@ namespace Ktory.Core.Parser
             }
 
             bool inDoubleQuote = false;
-            bool inSingleQuote = false;
             int bracketDepth = 0;
             int braceDepth = 0;
 
@@ -122,18 +116,13 @@ namespace Ktory.Core.Parser
                     continue;
                 }
 
-                if (c == '"' && !inSingleQuote)
+                if (c == '"')
                 {
                     inDoubleQuote = !inDoubleQuote;
                     continue;
                 }
-                if (c == '\'' && !inDoubleQuote)
-                {
-                    inSingleQuote = !inSingleQuote;
-                    continue;
-                }
 
-                if (inDoubleQuote || inSingleQuote)
+                if (inDoubleQuote)
                 {
                     continue;
                 }

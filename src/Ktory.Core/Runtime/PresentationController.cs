@@ -43,12 +43,41 @@ namespace Ktory.Core.Runtime
         /// </summary>
         public bool HasDeferredAdvance => _hasDeferredAdvance;
 
+        /// <summary>
+        /// If true (default), PresentationController advances the sequencer automatically upon advance.
+        /// If false, PresentationController only emits OnAdvanceRequested, and the host is responsible
+        /// for invoking sequencer.Step() and calling SetupForCurrentBeat().
+        /// </summary>
+        public bool AutoStepSequencer { get; set; } = true;
+
         private int _pendingAdvances = 0;
         private bool _isProcessingAdvances = false;
         private bool _hasDeferredAdvance = false;
 
+        /// <summary>
+        /// Fired when an advance is requested (by user click, timer end, or auto advance).
+        /// Note: When AutoStepSequencer is true (default), the controller will advance the sequencer automatically;
+        /// subscribers must not call sequencer.Step() directly.
+        /// When AutoStepSequencer is false, the host must queue and execute sequencer.Step().
+        /// </summary>
         public event Action? OnAdvanceRequested;
+
+        /// <summary>
+        /// Fired after a beat transition has successfully advanced the sequencer and updated beat presentation state.
+        /// </summary>
+        public event Action? OnBeatChanged;
+
+        /// <summary>
+        /// Fired when fast-forward is triggered during the printing phase.
+        /// UI should instantly reveal the full text.
+        /// Note: The controller handles transition to the holding phase; subscribers do not need to call NotifyPrintingFinished().
+        /// </summary>
         public event Action? OnFastForwardRequested;
+
+        /// <summary>
+        /// Fired when presentation language has been refreshed on the active beat via RefreshLanguage().
+        /// </summary>
+        public event Action? OnLanguageRefreshed;
 
         /// <summary>
         /// Fired when an auto-advance batch hits MaxAutoAdvancesPerBatch to report possible runaway zero-second directive loops.
@@ -64,6 +93,60 @@ namespace Ktory.Core.Runtime
         {
             ApplyBeatState();
             ProcessAdvances();
+        }
+
+        /// <summary>
+        /// Refreshes the presentation state following a language change on the active beat (via sequencer.SetLanguage),
+        /// preserving active hold timers or reading time progress without restarting the beat presentation.
+        /// </summary>
+        /// <param name="completePrintingOnLanguageSwitch">
+        /// If true (default), switching while in Printing phase immediately finishes text printing and enters the hold phase.
+        /// If false and currently Printing, preserves elapsed printing progress and adjusts fast-forward duration if needed.
+        /// </param>
+        public void RefreshLanguage(bool completePrintingOnLanguageSwitch = true)
+        {
+            if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat || _sequencer.CurrentPayload == null)
+            {
+                return;
+            }
+
+            var payload = _sequencer.CurrentPayload;
+
+            // Directives have no localized text; preserve hold state
+            if (payload.StepType == StepType.Directive)
+            {
+                OnLanguageRefreshed?.Invoke();
+                return;
+            }
+
+            if (Phase == PresentationPhase.Printing)
+            {
+                if (completePrintingOnLanguageSwitch)
+                {
+                    Phase = PresentationPhase.Holding;
+                    ElapsedInPhase = 0;
+                    SetupHoldPhase(payload);
+                }
+            }
+            else if (Phase == PresentationPhase.Holding)
+            {
+                var nextTag = FindTag(payload, "next");
+                var waitTag = FindTag(payload, "wait");
+                var autoPolicy = _sequencer.ActiveAutoPolicy;
+
+                bool isEstimated = (waitTag != null && waitTag.PositionalArgs.Count == 0) ||
+                                   (waitTag == null && nextTag == null && autoPolicy != null && autoPolicy.Enabled && autoPolicy.UseEstimatedReadingTime);
+
+                if (isEstimated)
+                {
+                    double newDuration = EstimateReadingTime(payload.Content, payload.ActualLanguage);
+                    double progressRatio = HoldDuration > 0 ? Math.Min(0.95, ElapsedInPhase / HoldDuration) : 0;
+                    HoldDuration = Math.Max(0.5, newDuration);
+                    ElapsedInPhase = progressRatio * HoldDuration;
+                }
+            }
+
+            OnLanguageRefreshed?.Invoke();
         }
 
         public void NotifyPrintingFinished()
@@ -100,8 +183,15 @@ namespace Ktory.Core.Runtime
                 // In printing phase: check if fast-forward is allowed
                 if (CanFastForward && ElapsedInPhase >= FastForwardLockDuration)
                 {
+                    long startingPresId = _sequencer.CurrentPresentationId;
                     OnFastForwardRequested?.Invoke();
-                    NotifyPrintingFinished();
+
+                    // Guard against duplicate notification: if the subscriber's UI callback already
+                    // called NotifyPrintingFinished() and advanced to a new beat, do not notify again on the new beat.
+                    if (Phase == PresentationPhase.Printing && _sequencer.CurrentPresentationId == startingPresId)
+                    {
+                        NotifyPrintingFinished();
+                    }
                 }
                 // If not allowed, click is ignored
                 return;
@@ -250,12 +340,28 @@ namespace Ktory.Core.Runtime
 
                     Phase = PresentationPhase.Completed;
                     QueuedAdvance = false;
+
+                    long presIdBefore = _sequencer.CurrentPresentationId;
                     OnAdvanceRequested?.Invoke();
 
-                    _sequencer.Step();
-                    advancesThisBatch++;
+                    if (AutoStepSequencer)
+                    {
+                        // If a subscriber to OnAdvanceRequested already invoked sequencer.Step(),
+                        // CurrentPresentationId will have changed. Do not step twice!
+                        if (_sequencer.CurrentPresentationId == presIdBefore && _sequencer.Status == ExecutionStatus.SuspendedAtBeat)
+                        {
+                            _sequencer.Step();
+                        }
+                        advancesThisBatch++;
 
-                    ApplyBeatState();
+                        ApplyBeatState();
+                        OnBeatChanged?.Invoke();
+                    }
+                    else
+                    {
+                        // Host-managed advance mode: controller emitted OnAdvanceRequested and leaves stepping to host.
+                        break;
+                    }
                 }
 
                 if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat)

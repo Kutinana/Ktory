@@ -7,6 +7,7 @@ namespace Ktory.Core.Runtime
     public class TextPayload
     {
         public string StepId { get; set; } = Guid.NewGuid().ToString("N");
+        public long PresentationId { get; set; }
         public StepType StepType { get; set; } = StepType.Text;
         public int LineNumber { get; set; }
 

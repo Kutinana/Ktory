@@ -15,6 +15,8 @@ namespace Ktory.Core.Runtime
         public TextPayload? CurrentPayload { get; private set; }
         public ChoicePayload? CurrentChoice { get; private set; }
         public AutoPolicy? ActiveAutoPolicy { get; private set; }
+        public long CurrentPresentationId { get; private set; }
+        private long _presentationCounter = 0;
 
         public IExpressionEvaluator Evaluator { get; set; } = new DefaultExpressionEvaluator();
 
@@ -72,6 +74,8 @@ namespace Ktory.Core.Runtime
             ActiveAutoPolicy = null;
             CurrentPayload = null;
             CurrentChoice = null;
+            _presentationCounter = 0;
+            CurrentPresentationId = 0;
 
             if (!string.IsNullOrEmpty(entryLabel))
             {
@@ -113,8 +117,13 @@ namespace Ktory.Core.Runtime
             Advance();
         }
 
-        public void Step()
+        public void Step(long? expectedPresentationId = null)
         {
+            if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
+            {
+                return;
+            }
+
             if (Status == ExecutionStatus.Completed)
             {
                 return;
@@ -133,8 +142,13 @@ namespace Ktory.Core.Runtime
             Advance();
         }
 
-        public void SubmitChoice(string choiceIdentifier)
+        public void SubmitChoice(string choiceIdentifier, long? expectedPresentationId = null)
         {
+            if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
+            {
+                throw new KtoryControlFlowException($"Choice submission ignored: stale presentation id {expectedPresentationId.Value}, current is {CurrentPresentationId}.");
+            }
+
             if (Status != ExecutionStatus.AwaitingChoice || CurrentChoice == null)
             {
                 throw new KtoryControlFlowException("Not currently awaiting a choice submission.");
@@ -259,8 +273,10 @@ namespace Ktory.Core.Runtime
             }
             else if (Status == ExecutionStatus.AwaitingChoice && _currentStep is ContainerStep containerStep)
             {
-                // Re-build choice payload with new language
-                CurrentChoice = BuildChoicePayload(containerStep);
+                // Re-build choice payload with new language while preserving current presentation id
+                var rebuilt = BuildChoicePayload(containerStep);
+                rebuilt.PresentationId = CurrentPresentationId;
+                CurrentChoice = rebuilt;
             }
         }
 
@@ -270,6 +286,10 @@ namespace Ktory.Core.Runtime
             {
                 return;
             }
+
+            CurrentPayload = null;
+            CurrentChoice = null;
+            CurrentPresentationId = 0;
 
             int executedInstructions = 0;
             var executionTrail = new Queue<string>();
@@ -475,6 +495,8 @@ namespace Ktory.Core.Runtime
                             continue;
                         }
 
+                        CurrentPresentationId = ++_presentationCounter;
+                        choicePayload.PresentationId = CurrentPresentationId;
                         CurrentChoice = choicePayload;
                         Status = ExecutionStatus.AwaitingChoice;
                         return;
@@ -504,8 +526,10 @@ namespace Ktory.Core.Runtime
 
                 var content = textStep.GetText(RequestedLanguage, DefaultLanguage, out var actualLang);
                 var resolvedSpeaker = File.ResolveSpeaker(textStep.Speaker, RequestedLanguage, DefaultLanguage);
+                CurrentPresentationId = ++_presentationCounter;
                 CurrentPayload = new TextPayload
                 {
+                    PresentationId = CurrentPresentationId,
                     StepType = StepType.Text,
                     LineNumber = textStep.LineNumber,
                     Speaker = resolvedSpeaker,
@@ -525,8 +549,10 @@ namespace Ktory.Core.Runtime
                     OnTagsDispatched?.Invoke(directiveStep.Tags);
                 }
 
+                CurrentPresentationId = ++_presentationCounter;
                 CurrentPayload = new TextPayload
                 {
+                    PresentationId = CurrentPresentationId,
                     StepType = StepType.Directive,
                     LineNumber = directiveStep.LineNumber,
                     Speaker = null,

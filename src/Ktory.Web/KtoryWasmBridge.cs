@@ -36,18 +36,18 @@ public class KtoryWasmBridge
     }
 
     [JSInvokable]
-    public string Step()
+    public string Step(long? expectedPresentationId = null)
     {
         if (_sequencer == null) return "{}";
-        _sequencer.Step();
+        _sequencer.Step(expectedPresentationId);
         return SerializeState();
     }
 
     [JSInvokable]
-    public string Choice(string choiceId)
+    public string Choice(string choiceId, long? expectedPresentationId = null)
     {
         if (_sequencer == null) return "{}";
-        _sequencer.SubmitChoice(choiceId);
+        _sequencer.SubmitChoice(choiceId, expectedPresentationId);
         return SerializeState();
     }
 
@@ -77,12 +77,13 @@ public class KtoryWasmBridge
     {
         if (_sequencer == null)
         {
-            return JsonSerializer.Serialize(new { status = "NotStarted" }, JsonOptions);
+            return JsonSerializer.Serialize(new { status = "NotStarted", presentationId = 0L }, JsonOptions);
         }
 
         var snapshot = new
         {
             status = _sequencer.Status.ToString(),
+            presentationId = _sequencer.CurrentPresentationId,
             payload = _sequencer.CurrentPayload,
             choice = _sequencer.CurrentChoice,
             requestedLanguage = _sequencer.RequestedLanguage,

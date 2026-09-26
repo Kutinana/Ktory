@@ -1241,6 +1241,36 @@ namespace Ktory.Core.Tests
         }
 
         [Fact]
+        public void LexicalScanner_ApostropheInContractions_DoesNotBlockTrailingTagsOrComments()
+        {
+            // Case 1: English dialogue with apostrophe and trailing decorator
+            string script1 = @"Alice: I'm ready. .emotion(smile)";
+            var file1 = KtoryParser.Parse(script1);
+            var step1 = Assert.IsType<TextStep>(file1.RootBlock.Steps[0]);
+            Assert.Equal("Alice", step1.Speaker);
+            Assert.Equal("I'm ready.", step1.TextVariants["zh"]);
+            Assert.Single(step1.Tags);
+            Assert.Equal("emotion", step1.Tags[0].Name);
+            Assert.Equal("smile", step1.Tags[0].PositionalArgs[0]);
+
+            // Case 2: Multiple contractions and multiple tags
+            string script2 = @": It's Bob's turn, don't rush. .wait(1) .sfx('chime')";
+            var file2 = KtoryParser.Parse(script2);
+            var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
+            Assert.Equal("It's Bob's turn, don't rush.", step2.TextVariants["zh"]);
+            Assert.Equal(2, step2.Tags.Count);
+            Assert.Equal("wait", step2.Tags[0].Name);
+            Assert.Equal("sfx", step2.Tags[1].Name);
+            Assert.Equal("chime", step2.Tags[1].PositionalArgs[0]);
+
+            // Case 3: Apostrophe followed by comment
+            string script3 = @"Alice: I'm ready. // ready comment";
+            var file3 = KtoryParser.Parse(script3);
+            var step3 = Assert.IsType<TextStep>(file3.RootBlock.Steps[0]);
+            Assert.Equal("I'm ready.", step3.TextVariants["zh"]);
+        }
+
+        [Fact]
         public void StaticValidator_DuplicateSections_ThrowsParseException()
         {
             string script = @"
@@ -1305,6 +1335,320 @@ namespace Ktory.Core.Tests
             var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
             Assert.Contains("Unreachable code or conflicting section boundary", ex.Message);
             Assert.Contains("Please indent the section body", ex.Message);
+        }
+
+        [Fact]
+        public void PresentationId_IncrementsMonotonically_AcrossBeatsAndChoices()
+        {
+            string script = @"
+: 第一句
+: 第二句
+#choice
+  * [选A]
+    : A的结果
+  * [选B]
+    : B的结果
+: 结束前最后一句
+-> end
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            Assert.Equal(1, sequencer.CurrentPresentationId);
+            Assert.Equal(1, sequencer.CurrentPayload!.PresentationId);
+
+            sequencer.Step();
+            Assert.Equal(2, sequencer.CurrentPresentationId);
+            Assert.Equal(2, sequencer.CurrentPayload!.PresentationId);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(3, sequencer.CurrentPresentationId);
+            Assert.Equal(3, sequencer.CurrentChoice!.PresentationId);
+
+            sequencer.SubmitChoice("选A");
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal(4, sequencer.CurrentPresentationId);
+            Assert.Equal(4, sequencer.CurrentPayload!.PresentationId);
+            Assert.Equal("A的结果", sequencer.CurrentPayload.Content);
+
+            sequencer.Step();
+            Assert.Equal(5, sequencer.CurrentPresentationId);
+            Assert.Equal(5, sequencer.CurrentPayload!.PresentationId);
+            Assert.Equal("结束前最后一句", sequencer.CurrentPayload.Content);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+            Assert.Equal(0, sequencer.CurrentPresentationId);
+            Assert.Null(sequencer.CurrentPayload);
+            Assert.Null(sequencer.CurrentChoice);
+        }
+
+        [Fact]
+        public void PresentationId_IncrementsOnLoopReplay_SameSourceLine()
+        {
+            string script = @"
+#choice.loop(2)
+  + [再次倾听]
+    : 重播台词。
+  + [离开]
+    -> end
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            long menuId1 = sequencer.CurrentPresentationId;
+            Assert.Equal(1, menuId1);
+
+            // Iteration 1 of choice
+            sequencer.SubmitChoice("再次倾听");
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            long textId1 = sequencer.CurrentPresentationId;
+            Assert.Equal(2, textId1);
+            Assert.Equal(2, sequencer.CurrentPayload!.PresentationId);
+            int lineNumber1 = sequencer.CurrentPayload.LineNumber;
+
+            // Step back to loop
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            long menuId2 = sequencer.CurrentPresentationId;
+            Assert.True(menuId2 > menuId1);
+            Assert.Equal(3, menuId2);
+
+            // Iteration 2 of choice: replays the exact same source line!
+            sequencer.SubmitChoice("再次倾听");
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            long textId2 = sequencer.CurrentPresentationId;
+            Assert.Equal(4, textId2);
+            Assert.Equal(4, sequencer.CurrentPayload!.PresentationId);
+            int lineNumber2 = sequencer.CurrentPayload.LineNumber;
+
+            // Source line number is the exact same, but PresentationId is strictly newer
+            Assert.Equal(lineNumber1, lineNumber2);
+            Assert.NotEqual(textId1, textId2);
+            Assert.True(textId2 > textId1);
+        }
+
+        [Fact]
+        public void PresentationId_StaleStepAndChoice_IgnoredOrRejected()
+        {
+            string script = @"
+: 第一句
+#choice
+  * [选项1]
+    : 选项1正文
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            long pres1 = sequencer.CurrentPresentationId;
+            Assert.Equal(1, pres1);
+
+            // Advance with stale expected presentation id -> ignored, status unchanged
+            sequencer.Step(expectedPresentationId: 999);
+            Assert.Equal(1, sequencer.CurrentPresentationId);
+            Assert.Equal("第一句", sequencer.CurrentPayload!.Content);
+
+            // Advance with correct expected presentation id -> succeeds
+            sequencer.Step(expectedPresentationId: pres1);
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            long pres2 = sequencer.CurrentPresentationId;
+            Assert.Equal(2, pres2);
+
+            // Submit choice with stale presentation id -> throws KtoryControlFlowException
+            Assert.Throws<KtoryControlFlowException>(() => sequencer.SubmitChoice("选项1", expectedPresentationId: pres1));
+
+            // Submit choice with correct presentation id -> succeeds
+            sequencer.SubmitChoice("选项1", expectedPresentationId: pres2);
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal(3, sequencer.CurrentPresentationId);
+            Assert.Equal("选项1正文", sequencer.CurrentPayload!.Content);
+        }
+
+        [Fact]
+        public void PresentationId_PreservedDuringLanguageSwitch()
+        {
+            string script = @"
+@defaultLang: zh
+@speaker alice: zh=""爱丽丝"" | en=""Alice""
+
+alice:
+  @zh: 中文台词
+  @en: English line
+
+#choice
+  * [@zh: ""选项一""] [@en: ""Option 1""]
+    : 结束
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start(requestedLocale: "zh");
+            Assert.Equal(1, sequencer.CurrentPresentationId);
+            Assert.Equal("爱丽丝", sequencer.CurrentPayload!.Speaker);
+            Assert.Equal("中文台词", sequencer.CurrentPayload.Content);
+
+            // Switch language while suspended at text beat
+            sequencer.SetLanguage("en");
+            Assert.Equal(1, sequencer.CurrentPresentationId);
+            Assert.Equal(1, sequencer.CurrentPayload!.PresentationId);
+            Assert.Equal("Alice", sequencer.CurrentPayload.Speaker);
+            Assert.Equal("English line", sequencer.CurrentPayload.Content);
+
+            // Advance to choice
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(2, sequencer.CurrentPresentationId);
+            Assert.Equal(2, sequencer.CurrentChoice!.PresentationId);
+            Assert.Equal("Option 1", sequencer.CurrentChoice.Options[0].Label);
+
+            // Switch language while awaiting choice
+            sequencer.SetLanguage("zh");
+            Assert.Equal(2, sequencer.CurrentPresentationId);
+            Assert.Equal(2, sequencer.CurrentChoice!.PresentationId);
+            Assert.Equal("选项一", sequencer.CurrentChoice.Options[0].Label);
+        }
+
+        [Fact]
+        public void PresentationController_SubscriberCallingStep_DoesNotDoubleStep()
+        {
+            string script = @"
+: 第一句
+: 第二句
+: 第三句
+-> end
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer);
+
+            // Natural subscriber pattern that previously triggered double stepping
+            controller.OnAdvanceRequested += () => sequencer.Step();
+
+            sequencer.Start();
+            controller.SetupForCurrentBeat();
+            Assert.Equal("第一句", sequencer.CurrentPayload!.Content);
+
+            // User finishes printing and clicks to advance
+            controller.NotifyPrintingFinished();
+            controller.HandleUserClick();
+
+            // Must advance to Beat 2, NOT skip to Beat 3!
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("第二句", sequencer.CurrentPayload!.Content);
+
+            // Next advance to Beat 3
+            controller.NotifyPrintingFinished();
+            controller.HandleUserClick();
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("第三句", sequencer.CurrentPayload!.Content);
+        }
+
+        [Fact]
+        public void PresentationController_HostManagedAdvance_AutoStepSequencerFalse()
+        {
+            string script = @"
+: 第一句
+: 第二句
+-> end
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer)
+            {
+                AutoStepSequencer = false
+            };
+
+            bool advanceRequested = false;
+            controller.OnAdvanceRequested += () => advanceRequested = true;
+
+            sequencer.Start();
+            controller.SetupForCurrentBeat();
+            Assert.Equal("第一句", sequencer.CurrentPayload!.Content);
+
+            // User clicks to advance
+            controller.NotifyPrintingFinished();
+            controller.HandleUserClick();
+
+            // Intent emitted, but sequencer NOT stepped yet
+            Assert.True(advanceRequested);
+            Assert.Equal("第一句", sequencer.CurrentPayload!.Content);
+
+            // Host executes step and refreshes controller
+            sequencer.Step();
+            controller.SetupForCurrentBeat();
+            Assert.Equal("第二句", sequencer.CurrentPayload!.Content);
+        }
+
+        [Fact]
+        public void PresentationController_FastForward_NotifyPrintingFinishedInCallback_DoesNotDoubleAdvanceZeroSecondAuto()
+        {
+            string script = @"
+: 第一句 .wait(0)
+: 第二句 .wait(0)
+: 第三句
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer);
+
+            // UI callback naturally calling NotifyPrintingFinished when fast-forward completes text printing
+            controller.OnFastForwardRequested += () => controller.NotifyPrintingFinished();
+
+            sequencer.Start();
+            controller.SetupForCurrentBeat();
+            Assert.Equal("第一句", sequencer.CurrentPayload!.Content);
+
+            // Trigger fast forward during printing
+            controller.HandleUserClick();
+
+            // Must advance to 第二句 and NOT skip over 第二句 to 第三句!
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("第二句", sequencer.CurrentPayload!.Content);
+        }
+
+        [Fact]
+        public void PresentationController_RefreshLanguage_PreservesProgressAndRecalculatesReadingTime()
+        {
+            string script = @"
+@defaultLang: zh
+@speaker alice: zh=""爱丽丝"" | en=""Alice""
+
+alice:
+  @zh: 中文长句子用于估算阅读时间测试。
+  @en: A much longer English sentence that will take more time to read when calculating reading time.
+  .wait
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer);
+
+            sequencer.Start(requestedLocale: "zh");
+            controller.SetupForCurrentBeat();
+            Assert.Equal(PresentationPhase.Printing, controller.Phase);
+
+            // 1. Refreshing while printing: completes printing and enters holding phase
+            sequencer.SetLanguage("en");
+            controller.RefreshLanguage(completePrintingOnLanguageSwitch: true);
+            Assert.Equal(PresentationPhase.Holding, controller.Phase);
+            double enHoldDuration = controller.HoldDuration;
+            Assert.True(enHoldDuration > 0);
+
+            // 2. Refreshing while holding: preserves elapsed progress ratio
+            controller.Update(1.0);
+            double elapsedBefore = controller.ElapsedInPhase;
+            Assert.Equal(1.0, elapsedBefore);
+
+            sequencer.SetLanguage("zh");
+            controller.RefreshLanguage();
+            Assert.Equal(PresentationPhase.Holding, controller.Phase);
+            // Elapsed is scaled proportionally with the new Chinese estimated reading time, not reset to 0
+            Assert.True(controller.ElapsedInPhase > 0);
+            Assert.True(controller.ElapsedInPhase < controller.HoldDuration);
         }
     }
 }
