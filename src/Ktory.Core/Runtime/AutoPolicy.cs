@@ -4,6 +4,7 @@ namespace Ktory.Core.Runtime
 {
     /// <summary>
     /// Represents active lexical scope automatic playback settings compliant with Ktory Specification §2.7.
+    /// Internal runtime policy keeping AST block references.
     /// </summary>
     public class AutoPolicy
     {
@@ -20,9 +21,11 @@ namespace Ktory.Core.Runtime
         public double DefaultWaitSeconds { get; set; }
 
         /// <summary>
-        /// The block where this #AUTO directive was declared.
+        /// The block where this #AUTO directive was declared. Kept internal to runtime.
         /// </summary>
         public KtoryBlock? ScopeBlock { get; set; }
+
+        public AutoPolicy() { }
 
         public AutoPolicy(KtoryBlock? scopeBlock, bool useEstimatedReadingTime = false, double defaultWaitSeconds = 0)
         {
@@ -30,6 +33,21 @@ namespace Ktory.Core.Runtime
             UseEstimatedReadingTime = useEstimatedReadingTime;
             DefaultWaitSeconds = defaultWaitSeconds;
             Enabled = true;
+        }
+
+        public AutoPolicyData ToData()
+        {
+            return new AutoPolicyData
+            {
+                Enabled = Enabled,
+                UseEstimatedReadingTime = UseEstimatedReadingTime,
+                DefaultWaitSeconds = DefaultWaitSeconds
+            };
+        }
+
+        public static implicit operator AutoPolicyData?(AutoPolicy? policy)
+        {
+            return policy?.ToData();
         }
     }
 }

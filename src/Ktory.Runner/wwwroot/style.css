@@ -982,9 +982,16 @@ rt {
   transition: all 0.2s ease;
 }
 
-.dock-mini-btn:hover {
+.dock-mini-btn:hover:not(:disabled) {
   color: #fff;
   border-color: var(--border-medium);
+}
+
+.dock-mini-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
 }
 
 /* ==========================================================================
@@ -1296,6 +1303,10 @@ body.is-resizing-drawer * {
   background: #181a22;
   border-color: rgba(212, 175, 55, 0.45);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(212, 175, 55, 0.12);
+}
+
+.custom-select-wrapper.open {
+  z-index: 130;
 }
 
 .custom-select-wrapper.open .custom-select-trigger {

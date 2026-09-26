@@ -27,7 +27,7 @@ namespace Ktory.Core.Runtime
 
         public bool IsNarration => string.IsNullOrEmpty(Speaker);
 
-        public AutoPolicy? AutoPolicy { get; set; }
+        public AutoPolicyData? AutoPolicy { get; set; }
         public bool IsAuto => AutoPolicy != null && AutoPolicy.Enabled;
 
         public override string ToString()

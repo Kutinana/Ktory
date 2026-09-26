@@ -160,6 +160,35 @@
           </div>
         </div>
 
+        <div class="drawer-form-group">
+          <div class="form-label-row">
+            <span class="label-glyph">⚑</span>
+            <label for="sectionSelect" class="form-label-title">启动入口小节</label>
+            <span class="form-label-badge">ENTRY</span>
+          </div>
+
+          <!-- Custom Section Dropdown Component -->
+          <div class="custom-select-wrapper" id="sectionSelectWrapper">
+            <select id="sectionSelect" class="sr-only-select">
+              <option value="">-- 默认入口（根节 / 主线）--</option>
+            </select>
+
+            <button type="button" class="custom-select-trigger" id="sectionSelectTrigger" aria-haspopup="listbox" aria-expanded="false">
+              <div class="trigger-label-group">
+                <span class="trigger-icon">⚑</span>
+                <span class="trigger-text" id="sectionSelectTriggerText">-- 默认入口（根节 / 主线）--</span>
+              </div>
+              <span class="trigger-chevron">▾</span>
+            </button>
+
+            <div class="custom-select-popover" id="sectionSelectPopover" role="listbox">
+              <div class="custom-select-options-list" id="sectionSelectOptionsList">
+                <!-- Dynamically populated section options -->
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="drawer-form-group flex-1">
           <label for="scriptInput">脚本源码 (.ktr):</label>
           <textarea id="scriptInput" class="drawer-textarea" spellcheck="false"></textarea>

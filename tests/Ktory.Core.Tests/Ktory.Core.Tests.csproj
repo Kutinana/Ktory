@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ktory.Core\Ktory.Core.csproj" />
+    <ProjectReference Include="..\..\src\Ktory.Web\Ktory.Web.csproj" />
   </ItemGroup>
 
 </Project>

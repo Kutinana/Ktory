@@ -90,7 +90,7 @@ public class KtoryWasmBridge
             visitedItems = new List<string>(_sequencer.VisitedItemIds),
             callStackDepth = _sequencer.CallStack.Count,
             recentTags = new List<TagData>(_recentTags),
-            autoPolicy = _sequencer.ActiveAutoPolicy
+            autoPolicy = _sequencer.ActiveAutoPolicy?.ToData()
         };
         return JsonSerializer.Serialize(snapshot, JsonOptions);
     }

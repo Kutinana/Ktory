@@ -79,6 +79,7 @@ const el = {
   drawerBackdrop: document.getElementById('drawerBackdrop'),
   btnCloseEditor: document.getElementById('btnCloseEditor'),
   sampleSelect: document.getElementById('sampleSelect'),
+  sectionSelect: document.getElementById('sectionSelect'),
   scriptInput: document.getElementById('scriptInput'),
   btnUploadScript: document.getElementById('btnUploadScript'),
   fileInputKtr: document.getElementById('fileInputKtr'),
@@ -93,6 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupDrawerResizer();
   setupCustomSampleSelect();
+  setupCustomSectionSelect();
   await loadSamples();
 
   // Start with first catalog sample
@@ -101,6 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.currentSampleKey = sampleKeys[0];
     el.scriptInput.value = state.samples[state.currentSampleKey];
     syncSampleSelect(state.currentSampleKey);
+    updateSectionSelector(state.samples[state.currentSampleKey]);
     await startSession(state.samples[state.currentSampleKey], 'zh');
   }
 });
@@ -199,8 +202,16 @@ function setupEventListeners() {
       state.currentSampleKey = selected;
       el.scriptInput.value = state.samples[selected];
       syncSampleSelect(selected);
+      updateSectionSelector(state.samples[selected]);
     }
   });
+
+  // Script editor typing updates available entry sections
+  if (el.scriptInput) {
+    el.scriptInput.addEventListener('input', () => {
+      updateSectionSelector(el.scriptInput.value);
+    });
+  }
 
   // Upload .ktr script file
   if (el.btnUploadScript && el.fileInputKtr) {
@@ -216,6 +227,7 @@ function setupEventListeners() {
       try {
         const content = await file.text();
         el.scriptInput.value = content;
+        updateSectionSelector(content);
 
         // Extract title from comment or file name
         let title = file.name.replace(/\.(ktr|ktory|txt)$/i, '');
@@ -242,7 +254,8 @@ function setupEventListeners() {
         }
 
         closeAllDrawers();
-        await startSession(content, state.requestedLocale);
+        const entryBlock = el.sectionSelect && el.sectionSelect.value ? el.sectionSelect.value : null;
+        await startSession(content, state.requestedLocale, entryBlock);
       } catch (err) {
         console.error('Failed to read uploaded script file:', err);
         alert('读取剧本文件失败: ' + err.message);
@@ -253,8 +266,9 @@ function setupEventListeners() {
   // Run Script from editor
   el.btnRunScript.addEventListener('click', async () => {
     const script = el.scriptInput.value;
+    const entryBlock = el.sectionSelect && el.sectionSelect.value ? el.sectionSelect.value : null;
     closeAllDrawers();
-    await startSession(script, state.requestedLocale);
+    await startSession(script, state.requestedLocale, entryBlock);
   });
 }
 
@@ -474,6 +488,106 @@ function setupCustomSampleSelect() {
   renderOptions();
 }
 
+function setupCustomSectionSelect() {
+  const wrapper = document.getElementById('sectionSelectWrapper');
+  const trigger = document.getElementById('sectionSelectTrigger');
+  const triggerText = document.getElementById('sectionSelectTriggerText');
+  const list = document.getElementById('sectionSelectOptionsList');
+  if (!wrapper || !trigger || !list || !el.sectionSelect) return;
+
+  function renderOptions() {
+    list.innerHTML = '';
+    const options = Array.from(el.sectionSelect.options);
+    const selectedVal = el.sectionSelect.value;
+
+    let selectedText = '-- 默认入口（根节 / 主线）--';
+
+    options.forEach(opt => {
+      const isSelected = opt.value === selectedVal;
+      if (isSelected) selectedText = opt.textContent;
+
+      const item = document.createElement('div');
+      item.className = `custom-select-option ${isSelected ? 'selected' : ''}`;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      item.dataset.value = opt.value;
+      item.innerHTML = `
+        <span class="option-check">✓</span>
+        <span class="option-title">${escapeHtml(opt.textContent)}</span>
+      `;
+
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.sectionSelect.value = opt.value;
+        wrapper.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+        renderOptions();
+      });
+
+      list.appendChild(item);
+    });
+
+    triggerText.textContent = selectedText;
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = wrapper.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!wrapper.contains(e.target)) {
+      wrapper.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && wrapper.classList.contains('open')) {
+      wrapper.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  window.refreshCustomSectionSelect = renderOptions;
+  renderOptions();
+}
+
+function updateSectionSelector(script) {
+  if (!el.sectionSelect) return;
+  const prevValue = el.sectionSelect.value;
+  el.sectionSelect.innerHTML = '<option value="">-- 默认入口（根节 / 主线）--</option>';
+
+  if (script) {
+    const sectionRegex = /^===\s*([a-zA-Z0-9_\-]+)\s*===$/gm;
+    let match;
+    const foundSections = [];
+    while ((match = sectionRegex.exec(script)) !== null) {
+      const sectionName = match[1];
+      if (!foundSections.includes(sectionName)) {
+        foundSections.push(sectionName);
+        const opt = document.createElement('option');
+        opt.value = sectionName;
+        opt.textContent = `=== ${sectionName} ===`;
+        el.sectionSelect.appendChild(opt);
+      }
+    }
+
+    if (prevValue && foundSections.includes(prevValue)) {
+      el.sectionSelect.value = prevValue;
+    } else {
+      el.sectionSelect.value = '';
+    }
+  } else {
+    el.sectionSelect.value = '';
+  }
+
+  if (window.refreshCustomSectionSelect) {
+    window.refreshCustomSectionSelect();
+  }
+}
+
 function toggleAutoPlay() {
   state.autoPlay = !state.autoPlay;
   el.btnAutoPlay.classList.toggle('active', state.autoPlay);
@@ -576,12 +690,9 @@ async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
   clearTimers();
   resetStoryStream();
 
-  // If entryBlock not provided, auto-detect first scene if script has one
+  // If entryBlock is not provided or empty, normalize to null (defaults to root block)
   if (!entryBlock) {
-    const match = script.match(/===\s*([a-zA-Z0-9_]+)\s*===/);
-    if (match) {
-      entryBlock = match[1];
-    }
+    entryBlock = null;
   }
 
   try {
@@ -690,9 +801,10 @@ async function changeLanguage(locale) {
 }
 
 async function restartSession() {
-  const script = el.scriptInput.value || (state.samples[state.currentSampleKey] || '');
+  const script = (el.scriptInput && el.scriptInput.value) || (state.samples[state.currentSampleKey] || '');
   if (script) {
-    await startSession(script, state.requestedLocale);
+    const entryBlock = el.sectionSelect && el.sectionSelect.value ? el.sectionSelect.value : null;
+    await startSession(script, state.requestedLocale, entryBlock);
   }
 }
 
@@ -883,19 +995,38 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
   cursorEl.style.display = 'inline-block';
   el.dockStepHint.textContent = '文字呈现中... 点击可快速显示全文';
 
-  // Parse .skippable(false, duration)
+  // Parse .skippable(false, [duration])
   state.canFastForward = true;
+  if (el.btnFastForward) el.btnFastForward.disabled = false;
   const skippableTag = tags.find(t => t.name.toLowerCase() === 'skippable');
   if (skippableTag) {
-    const allowed = skippableTag.positionalArgs.length > 0 ? skippableTag.positionalArgs[0] : true;
-    if (allowed === false) {
+    const rawAllowed = skippableTag.positionalArgs.length > 0 ? skippableTag.positionalArgs[0] : true;
+    const allowed = rawAllowed !== false && rawAllowed !== 'false';
+    if (!allowed) {
       state.canFastForward = false;
-      const duration = skippableTag.positionalArgs.length > 1 ? Number(skippableTag.positionalArgs[1]) : 2;
-      el.dockStepHint.textContent = `快显锁定中 (${duration}s)...`;
-      state.fastForwardLockTimer = setTimeout(() => {
-        state.canFastForward = true;
-        el.dockStepHint.textContent = '点击可快速显示全文';
-      }, duration * 1000);
+      if (el.btnFastForward) el.btnFastForward.disabled = true;
+
+      // Check if explicit duration parameter t is provided
+      const hasDuration = skippableTag.positionalArgs.length > 1 &&
+                          skippableTag.positionalArgs[1] !== null &&
+                          skippableTag.positionalArgs[1] !== '';
+      if (hasDuration) {
+        const duration = Number(skippableTag.positionalArgs[1]);
+        if (duration > 0) {
+          el.dockStepHint.textContent = `快显锁定中 (${duration}s)...`;
+          state.fastForwardLockTimer = setTimeout(() => {
+            state.canFastForward = true;
+            if (el.btnFastForward) el.btnFastForward.disabled = false;
+            el.dockStepHint.textContent = '点击可快速显示全文';
+          }, duration * 1000);
+        } else {
+          state.canFastForward = true;
+          if (el.btnFastForward) el.btnFastForward.disabled = false;
+        }
+      } else {
+        // When t is omitted, fast-forward is prohibited for the entire printing duration per Spec §2.6
+        el.dockStepHint.textContent = '文字呈现中 (禁止快显)...';
+      }
     }
   }
 
@@ -918,7 +1049,10 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
 function fastForwardTypewriter() {
   if (!state.isTyping || !state.canFastForward) return;
   clearInterval(state.typewriterTimer);
-  clearTimeout(state.fastForwardLockTimer);
+  if (state.fastForwardLockTimer) {
+    clearTimeout(state.fastForwardLockTimer);
+    state.fastForwardLockTimer = null;
+  }
 
   if (state.currentActiveTypingEl) {
     state.currentActiveTypingEl.innerHTML = state.fullTextHtml;
@@ -930,6 +1064,12 @@ function fastForwardTypewriter() {
 function finishTypewriter(cursorEl, tags) {
   clearInterval(state.typewriterTimer);
   state.isTyping = false;
+  if (state.fastForwardLockTimer) {
+    clearTimeout(state.fastForwardLockTimer);
+    state.fastForwardLockTimer = null;
+  }
+  state.canFastForward = true;
+  if (el.btnFastForward) el.btnFastForward.disabled = false;
   if (cursorEl) cursorEl.style.display = 'none';
 
   setupHoldTimer(tags);

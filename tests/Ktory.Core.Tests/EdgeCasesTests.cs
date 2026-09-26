@@ -840,5 +840,148 @@ namespace Ktory.Core.Tests
             sequencer.Step();
             Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
         }
+
+        [Fact]
+        public void Sequencer_DefaultStart_StartsAtRootSection_EvenWithSubroutineSections()
+        {
+            string script = @"
+: RootOpening
+=> Sub
+: RootEnding
+-> end
+
+=== Sub ===
+: InsideSub
+-> return
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            // Default start without entryLabel MUST start at RootOpening, NOT Sub!
+            sequencer.Start();
+            Assert.Equal("RootOpening", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step(); // calls Sub
+            Assert.Equal("InsideSub", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step(); // returns to RootEnding
+            Assert.Equal("RootEnding", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void Sequencer_DefaultStart_WhenNoRootSection_StartsAtFirstNamedSection()
+        {
+            string script = @"
+=== SectionA ===
+: In Section A
+-> end
+
+=== SectionB ===
+: In Section B
+-> end
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            // When script has no root nodes, starts at first named section
+            sequencer.Start();
+            Assert.Equal("In Section A", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+
+            // Explicitly choosing SectionB starts at SectionB
+            var sequencer2 = new KtorySequencer(file);
+            sequencer2.Start("SectionB");
+            Assert.Equal("In Section B", sequencer2.CurrentPayload!.Content);
+
+            sequencer2.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer2.Status);
+        }
+
+        [Fact]
+        public void WasmBridge_Start_WithAutoDirective_SerializesWithoutCircularReference()
+        {
+            string script = @"
+#AUTO
+: 自动播放第一句。
+#AUTO_END
+";
+            var bridge = new Ktory.Web.KtoryWasmBridge();
+            string json = bridge.Start(script, "zh", null);
+
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            Assert.Equal("SuspendedAtBeat", root.GetProperty("status").GetString());
+
+            var payload = root.GetProperty("payload");
+            Assert.Equal("自动播放第一句。", payload.GetProperty("content").GetString());
+
+            // payload.autoPolicy
+            Assert.True(payload.TryGetProperty("autoPolicy", out var payloadAutoPolicy));
+            Assert.True(payloadAutoPolicy.GetProperty("enabled").GetBoolean());
+            Assert.False(payloadAutoPolicy.GetProperty("useEstimatedReadingTime").GetBoolean());
+            Assert.Equal(0, payloadAutoPolicy.GetProperty("defaultWaitSeconds").GetDouble());
+            Assert.False(payloadAutoPolicy.TryGetProperty("scopeBlock", out _));
+
+            // top-level autoPolicy
+            Assert.True(root.TryGetProperty("autoPolicy", out var rootAutoPolicy));
+            Assert.True(rootAutoPolicy.GetProperty("enabled").GetBoolean());
+            Assert.False(rootAutoPolicy.GetProperty("useEstimatedReadingTime").GetBoolean());
+            Assert.Equal(0, rootAutoPolicy.GetProperty("defaultWaitSeconds").GetDouble());
+            Assert.False(rootAutoPolicy.TryGetProperty("scopeBlock", out _));
+
+            // Step through AUTO_END to completion
+            string stepJson = bridge.Step();
+            using var stepDoc = System.Text.Json.JsonDocument.Parse(stepJson);
+            Assert.Equal("Completed", stepDoc.RootElement.GetProperty("status").GetString());
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, stepDoc.RootElement.GetProperty("autoPolicy").ValueKind);
+        }
+
+        [Fact]
+        public void WasmBridge_AutoWait_SerializesPolicySettingsCorrectly()
+        {
+            string script = @"
+#AUTO.wait
+: 估算阅读时间。
+#AUTO.wait(3.5)
+: 固定3.5秒。
+#AUTO_END
+";
+            var bridge = new Ktory.Web.KtoryWasmBridge();
+            string json1 = bridge.Start(script, "zh", null);
+            using (var doc1 = System.Text.Json.JsonDocument.Parse(json1))
+            {
+                var payload1 = doc1.RootElement.GetProperty("payload");
+                Assert.Equal("估算阅读时间。", payload1.GetProperty("content").GetString());
+
+                var pPolicy1 = payload1.GetProperty("autoPolicy");
+                Assert.True(pPolicy1.GetProperty("enabled").GetBoolean());
+                Assert.True(pPolicy1.GetProperty("useEstimatedReadingTime").GetBoolean());
+                Assert.Equal(0, pPolicy1.GetProperty("defaultWaitSeconds").GetDouble());
+
+                var rPolicy1 = doc1.RootElement.GetProperty("autoPolicy");
+                Assert.True(rPolicy1.GetProperty("useEstimatedReadingTime").GetBoolean());
+            }
+
+            string json2 = bridge.Step();
+            using (var doc2 = System.Text.Json.JsonDocument.Parse(json2))
+            {
+                var payload2 = doc2.RootElement.GetProperty("payload");
+                Assert.Equal("固定3.5秒。", payload2.GetProperty("content").GetString());
+
+                var pPolicy2 = payload2.GetProperty("autoPolicy");
+                Assert.True(pPolicy2.GetProperty("enabled").GetBoolean());
+                Assert.False(pPolicy2.GetProperty("useEstimatedReadingTime").GetBoolean());
+                Assert.Equal(3.5, pPolicy2.GetProperty("defaultWaitSeconds").GetDouble());
+
+                var rPolicy2 = doc2.RootElement.GetProperty("autoPolicy");
+                Assert.False(rPolicy2.GetProperty("useEstimatedReadingTime").GetBoolean());
+                Assert.Equal(3.5, rPolicy2.GetProperty("defaultWaitSeconds").GetDouble());
+            }
+        }
     }
 }

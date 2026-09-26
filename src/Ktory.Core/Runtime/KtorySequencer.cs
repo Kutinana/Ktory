@@ -78,11 +78,21 @@ namespace Ktory.Core.Runtime
             }
             else
             {
-                if (File.RootBlock.Steps.Count == 0 && _sectionOrder.Count > 0)
+                if (File.RootBlock.Steps.Count == 0)
                 {
-                    _currentBlock = _sectionOrder[0];
-                    _currentSteps = _currentBlock.Steps;
-                    _currentStepIndex = 0;
+                    var firstNamed = _sectionOrder.Find(b => !b.IsRoot);
+                    if (firstNamed != null)
+                    {
+                        _currentBlock = firstNamed;
+                        _currentSteps = _currentBlock.Steps;
+                        _currentStepIndex = 0;
+                    }
+                    else
+                    {
+                        _currentBlock = File.RootBlock;
+                        _currentSteps = _currentBlock.Steps;
+                        _currentStepIndex = 0;
+                    }
                 }
                 else
                 {
