@@ -1,0 +1,108 @@
+---
+import { Globe, ChevronDown, Check } from "@lucide/astro";
+
+const currentLocale = Astro.locals.starlightRoute.locale; // undefined (root) | 'en' | 'ja'
+const pathname = Astro.url.pathname;
+
+function getLocalizedPath(targetLocale: string | undefined): string {
+  let unlocalized = pathname;
+  if (currentLocale && (unlocalized === `/${currentLocale}` || unlocalized.startsWith(`/${currentLocale}/`))) {
+    unlocalized = unlocalized.slice(currentLocale.length + 1) || '/';
+  }
+  if (!unlocalized.startsWith('/')) {
+    unlocalized = '/' + unlocalized;
+  }
+  if (!targetLocale || targetLocale === 'root') {
+    return unlocalized;
+  }
+  return `/${targetLocale}${unlocalized === '/' ? '/' : unlocalized}`;
+}
+
+const locales = [
+  { key: 'root', code: 'zh-CN', label: '简体中文', href: getLocalizedPath(undefined) },
+  { key: 'en', code: 'en', label: 'English', href: getLocalizedPath('en') },
+  { key: 'ja', code: 'ja', label: '日本語', href: getLocalizedPath('ja') },
+];
+
+const activeLocale = locales.find(l => (currentLocale ? l.key === currentLocale : l.key === 'root')) || locales[0];
+---
+
+<starlight-custom-lang-select class="relative inline-block text-left">
+  <button
+    type="button"
+    class="custom-dropdown-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] border border-[var(--color-border)] transition-colors cursor-pointer"
+    aria-expanded="false"
+    aria-label="Select Language"
+  >
+    <Globe size={13} class="opacity-80 shrink-0" />
+    <span>{activeLocale.label}</span>
+    <ChevronDown size={11} class="dropdown-chevron opacity-60 shrink-0 transition-transform duration-200" />
+  </button>
+  <div
+    class="custom-dropdown-menu hidden absolute right-0 mt-1.5 w-36 py-1 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-border)] shadow-xl z-50 animate-scale-in"
+    role="menu"
+  >
+    {locales.map((loc) => {
+      const isSelected = loc.key === (currentLocale || 'root');
+      return (
+        <a
+          href={loc.href}
+          role="menuitem"
+          class={`flex items-center justify-between px-3 py-1.5 text-xs font-mono transition-colors ${
+            isSelected
+              ? 'text-[var(--color-ink)] font-semibold bg-[var(--color-surface)]'
+              : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)]'
+          }`}
+        >
+          <span>{loc.label}</span>
+          {isSelected && <Check size={12} class="text-[var(--color-ink)] shrink-0" />}
+        </a>
+      );
+    })}
+  </div>
+</starlight-custom-lang-select>
+
+<script>
+  class StarlightCustomLangSelect extends HTMLElement {
+    connectedCallback() {
+      const btn = this.querySelector<HTMLButtonElement>('.custom-dropdown-btn');
+      const menu = this.querySelector<HTMLDivElement>('.custom-dropdown-menu');
+      const chevron = this.querySelector<SVGElement>('.dropdown-chevron');
+
+      const toggleMenu = (show?: boolean) => {
+        const isHidden = menu?.classList.contains('hidden');
+        const nextShow = typeof show === 'boolean' ? show : isHidden;
+        if (nextShow) {
+          menu?.classList.remove('hidden');
+          btn?.setAttribute('aria-expanded', 'true');
+          chevron?.classList.add('rotate-180');
+        } else {
+          menu?.classList.add('hidden');
+          btn?.setAttribute('aria-expanded', 'false');
+          chevron?.classList.remove('rotate-180');
+        }
+      };
+
+      btn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleMenu();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!this.contains(e.target as Node)) {
+          toggleMenu(false);
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          toggleMenu(false);
+        }
+      });
+    }
+  }
+
+  if (!customElements.get('starlight-custom-lang-select')) {
+    customElements.define('starlight-custom-lang-select', StarlightCustomLangSelect);
+  }
+</script>

@@ -1,0 +1,822 @@
+---
+import "../styles/custom.css";
+import { ArrowRight, BookOpen, Terminal, Sparkles, Layers, Globe, ExternalLink, Moon, Sun, RotateCcw, ChevronDown, Check } from "@lucide/astro";
+import { highlightKtoryLine } from "../lib/highlighter";
+import { translations, supportedLocales, type LocaleKey } from "../i18n/translations";
+import sampleZhRaw from "../assets/sample.ktr?raw";
+import sampleEnRaw from "../assets/sample.en.ktr?raw";
+import sampleJaRaw from "../assets/sample.ja.ktr?raw";
+
+interface Props {
+  lang: LocaleKey;
+}
+
+const { lang } = Astro.props;
+const t = translations[lang] || translations.zh;
+
+const sampleKtrRaw = lang === 'en' ? sampleEnRaw : lang === 'ja' ? sampleJaRaw : sampleZhRaw;
+const sampleLines = sampleKtrRaw.split('\n');
+
+const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLocales[0];
+---
+
+<!doctype html>
+<html lang={t.htmlLang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{t.head.title}</title>
+    <meta name="description" content={t.head.description} />
+    <link rel="icon" type="image/webp" href="/logo.webp" />
+    <script is:inline>
+      const theme = (() => {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
+          return localStorage.getItem('theme');
+        }
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme')) {
+          return localStorage.getItem('starlight-theme');
+        }
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          return 'dark';
+        }
+        return 'light';
+      })();
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+  </head>
+  <body class="min-h-screen flex flex-col bg-[var(--color-canvas)] text-[var(--color-ink)]">
+    <!-- Top Navigation Header -->
+    <header class="border-b border-[var(--color-border)] sticky top-0 z-40 bg-[var(--color-canvas)]/90 backdrop-blur-md">
+      <div class="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
+        <a href={currentLocale.href} class="flex items-center gap-3 group">
+          <img src="/logo.webp" alt="Ktory Logo" class="w-8 h-8 rounded-full border border-[var(--color-border)]" />
+          <span class="font-serif text-xl tracking-tight font-normal">Ktory</span>
+        </a>
+
+        <nav class="flex items-center gap-4 sm:gap-6">
+          <a
+            href={t.nav.docsHref}
+            class="text-xs font-mono uppercase tracking-widest text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors flex items-center gap-1.5"
+          >
+            <BookOpen size={13} />
+            <span>{t.nav.docs}</span>
+          </a>
+          <a
+            href="https://reader.ktory.ink"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-xs font-mono uppercase tracking-widest text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors hidden sm:flex items-center gap-1"
+          >
+            <span>{t.nav.reader}</span>
+            <ExternalLink size={11} class="opacity-60" />
+          </a>
+          <a
+            href="https://github.com/Kutinana/Ktory"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors p-1"
+            title="GitHub Repository"
+          >
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
+            </svg>
+          </a>
+
+          <!-- Language Dropdown -->
+          <div class="relative" id="lang-dropdown-wrapper">
+            <button
+              type="button"
+              id="lang-dropdown-btn"
+              class="custom-dropdown-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] border border-[var(--color-border)] transition-colors cursor-pointer"
+              aria-expanded="false"
+              aria-label={t.nav.language}
+            >
+              <Globe size={13} class="opacity-80 shrink-0" />
+              <span>{currentLocale.label}</span>
+              <ChevronDown size={11} class="opacity-60 shrink-0 transition-transform duration-200" id="lang-chevron" />
+            </button>
+            <div
+              id="lang-dropdown-menu"
+              class="custom-dropdown-menu hidden absolute right-0 mt-1.5 w-36 py-1 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-border)] shadow-xl z-50 animate-scale-in"
+            >
+              {supportedLocales.map((loc) => (
+                <a
+                  href={loc.href}
+                  class={`flex items-center justify-between px-3 py-1.5 text-xs font-mono transition-colors ${
+                    loc.key === lang
+                      ? 'text-[var(--color-ink)] font-semibold bg-[var(--color-surface)]'
+                      : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)]'
+                  }`}
+                >
+                  <span>{loc.label}</span>
+                  {loc.key === lang && <Check size={12} class="text-[var(--color-ink)]" />}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="theme-toggle"
+            aria-label="Toggle theme"
+            class="p-2 rounded-lg text-[var(--color-ink-faint)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] transition-colors"
+          >
+            <Sun size={14} class="hidden dark:block" />
+            <Moon size={14} class="block dark:hidden" />
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <main class="flex-1 flex flex-col">
+      <section class="relative flex-1 flex flex-col items-center justify-center py-20 md:py-28 px-6 text-center">
+        <div class="max-w-4xl mx-auto">
+          <!-- Logo presentation -->
+          <div class="inline-block mb-8 animate-fade-in">
+            <img
+              src="/logo.webp"
+              alt="Ktory Logo"
+              class="w-24 h-24 md:w-28 md:h-28 rounded-full mx-auto shadow-2xl border border-[var(--color-border)]"
+            />
+          </div>
+
+          <!-- Main Title -->
+          <h1 class="font-serif text-5xl md:text-7xl tracking-tight mb-4 animate-slide-up font-normal">
+            Ktory
+          </h1>
+
+          <!-- Monospace Slogan -->
+          <p class="text-xs md:text-sm font-mono uppercase tracking-widest text-[var(--color-ink-faint)] mb-6 animate-slide-up" style="animation-delay: 100ms;">
+            {t.hero.slogan}
+          </p>
+
+          <!-- Subtitle / Intro (with Serif font) -->
+          <p class="text-[var(--color-ink-muted)] text-base md:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-serif animate-slide-up" style="animation-delay: 200ms;">
+            {t.hero.description1}<br class="hidden sm:inline" />
+            {t.hero.description2}
+          </p>
+
+          <!-- Action Buttons -->
+          <div class="flex flex-wrap items-center justify-center gap-4 animate-slide-up" style="animation-delay: 300ms;">
+            <a
+              href={t.hero.quickstartHref}
+              class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-hover)] text-sm font-mono uppercase tracking-wider text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)] transition-all shadow-sm"
+            >
+              <Terminal size={14} />
+              <span>{t.hero.quickstart}</span>
+              <ArrowRight size={14} />
+            </a>
+
+            <a
+              href="https://reader.ktory.ink"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-[var(--color-border)] text-sm font-mono uppercase tracking-wider text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface)] transition-all"
+            >
+              <span>{t.hero.reader}</span>
+              <ExternalLink size={13} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Script & Beat Showcase -->
+      <section
+        id="sequencer-demo"
+        data-script={encodeURIComponent(sampleKtrRaw)}
+        data-i18n={encodeURIComponent(JSON.stringify(t.demo))}
+        class="py-16 px-6 border-t border-[var(--color-border)] bg-[var(--color-surface)]/20"
+      >
+        <div class="max-w-5xl mx-auto">
+          <div class="text-center mb-10">
+            <span class="text-xs font-mono uppercase tracking-widest text-[var(--color-ink-faint)]">{t.demo.eyebrow}</span>
+            <h2 class="font-serif text-3xl md:text-4xl mt-2 tracking-tight">{t.demo.title}</h2>
+            <p class="text-sm text-[var(--color-ink-muted)] max-w-xl mx-auto mt-2 font-serif leading-relaxed">
+              {t.demo.description}
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+            <!-- Left: Script Source -->
+            <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/40 dark:bg-[#0c0c0c] p-4 md:p-5 flex flex-col">
+              <div class="flex items-center justify-between pb-3 mb-2 border-b border-[var(--color-border)]">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-red-400/80 inline-block"></span>
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-400/80 inline-block"></span>
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-400/80 inline-block"></span>
+                  <span class="text-xs font-mono uppercase tracking-wider text-[var(--color-ink-faint)] ml-2">{t.demo.fileName}</span>
+                </div>
+                <span class="text-[11px] font-mono text-[var(--color-ink-faint)]">Anchor-Decorator</span>
+              </div>
+
+              <!-- Lines Container -->
+              <div class="font-mono text-xs overflow-x-auto overflow-y-auto max-h-[380px] flex-1 text-left select-all py-1" id="code-container">
+                {
+                  sampleLines.map((line, idx) => (
+                    <div
+                      class="code-line flex items-center h-6 leading-6 border-l-2 border-transparent transition-colors px-1 text-left"
+                      data-line={idx}
+                      id={`code-line-${idx}`}
+                    >
+                      <span class="code-num w-8 text-[11px] font-mono text-[var(--color-ink-faint)] select-none text-right pr-3 shrink-0 tabular-nums">
+                        {idx + 1}
+                      </span>
+                      <span class="font-mono text-xs whitespace-pre select-text" set:html={highlightKtoryLine(line)} />
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+
+            <!-- Right: Interactive Sequencer Step-Through -->
+            <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)] p-6 flex flex-col justify-between shadow-sm">
+              <div>
+                <!-- Header with status badge and beat counter -->
+                <div class="flex items-center justify-between pb-3 mb-4 border-b border-[var(--color-border)]">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-mono uppercase tracking-wider text-[var(--color-ink-faint)]">Sequencer Output Beat</span>
+                    <span id="demo-step-badge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 transition-all">
+                      {t.demo.badgeRoot}
+                    </span>
+                  </div>
+                  <span id="demo-step-num" class="text-xs font-mono text-[var(--color-ink-faint)] tabular-nums">{t.demo.beatPrefix} 1 (root)</span>
+                </div>
+
+                <!-- Beat Content Presentation -->
+                <div id="demo-content-area" class="space-y-4 my-4 min-h-[170px]">
+                  <!-- Dialogue Box -->
+                  <div id="demo-dialogue-box" class="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] transition-all">
+                    <div id="demo-speaker" class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-ink-faint)] mb-1">Speaker: </div>
+                    <div id="demo-text" class="font-serif text-lg md:text-xl text-[var(--color-ink)] leading-relaxed"></div>
+                  </div>
+
+                  <!-- Decorators Box -->
+                  <div id="demo-tags-box" class="space-y-1.5 transition-all">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-ink-faint)]">{t.demo.attachedDecorators}</div>
+                    <div id="demo-tags-container" class="flex flex-wrap gap-2"></div>
+                  </div>
+
+                  <!-- Choice Options Box -->
+                  <div id="demo-choice-box" class="hidden space-y-2 transition-all">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-purple-600 dark:text-purple-400">{t.demo.choicePrompt}</div>
+                    <div id="demo-choice-options-list" class="space-y-2"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Interactive Controls (Next / Restart) -->
+              <div class="pt-4 border-t border-[var(--color-border)] flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-restart"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs font-mono uppercase tracking-wider text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface)] transition-all"
+                  title={t.demo.restartTitle}
+                >
+                  <RotateCcw size={13} />
+                  <span>{t.demo.restartBtn}</span>
+                </button>
+
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    id="btn-next"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-hover)] text-xs font-mono uppercase tracking-wider text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span id="btn-next-label">{t.demo.nextBtn}</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 Pillars Feature Grid -->
+      <section class="py-20 px-6 max-w-5xl mx-auto w-full">
+        <div class="text-center mb-12">
+          <span class="text-xs font-mono uppercase tracking-widest text-[var(--color-ink-faint)]">{t.pillars.eyebrow}</span>
+          <h2 class="font-serif text-3xl md:text-4xl mt-2 tracking-tight">{t.pillars.title}</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Card 1 -->
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+            <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
+              <Sparkles size={16} />
+            </div>
+            <h3 class="font-serif text-xl mb-2 tracking-tight">{t.pillars.p1.title}</h3>
+            <p class="text-sm text-[var(--color-ink-muted)] leading-relaxed font-serif">
+              {t.pillars.p1.desc}
+            </p>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+            <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
+              <Layers size={16} />
+            </div>
+            <h3 class="font-serif text-xl mb-2 tracking-tight">{t.pillars.p2.title}</h3>
+            <p class="text-sm text-[var(--color-ink-muted)] leading-relaxed font-serif">
+              {t.pillars.p2.desc}
+            </p>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+            <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
+              <Terminal size={16} />
+            </div>
+            <h3 class="font-serif text-xl mb-2 tracking-tight">{t.pillars.p3.title}</h3>
+            <p class="text-sm text-[var(--color-ink-muted)] leading-relaxed font-serif">
+              {t.pillars.p3.desc}
+            </p>
+          </div>
+
+          <!-- Card 4 -->
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+            <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
+              <Globe size={16} />
+            </div>
+            <h3 class="font-serif text-xl mb-2 tracking-tight">{t.pillars.p4.title}</h3>
+            <p class="text-sm text-[var(--color-ink-muted)] leading-relaxed font-serif">
+              {t.pillars.p4.desc}
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-[var(--color-border)] mt-auto py-8 px-6 bg-[var(--color-surface)]/20">
+      <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="text-xs font-mono text-[var(--color-ink-faint)]">
+          <p>{t.footer.copyright}</p>
+          <p class="mt-0.5 font-serif">{t.footer.tagline}</p>
+        </div>
+        <div class="flex items-center gap-6 text-xs font-mono uppercase tracking-widest text-[var(--color-ink-muted)]">
+          <a href={t.nav.docsHref} class="hover:text-[var(--color-ink)] transition-colors">{t.footer.docs}</a>
+          <a href="https://reader.ktory.ink" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--color-ink)] transition-colors">{t.footer.reader}</a>
+          <a href="https://github.com/Kutinana/Ktory" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--color-ink)] transition-colors">GitHub</a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Interactive Scripts -->
+    <script is:inline>
+      // 1. Theme toggle
+      const toggle = document.getElementById('theme-toggle');
+      toggle?.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.dataset.theme === 'dark';
+        const nextTheme = isDark ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('theme', nextTheme);
+        localStorage.setItem('starlight-theme', nextTheme);
+      });
+
+      // 2. Language Dropdown toggle
+      const langBtn = document.getElementById('lang-dropdown-btn');
+      const langMenu = document.getElementById('lang-dropdown-menu');
+      const langChevron = document.getElementById('lang-chevron');
+
+      function toggleLangMenu(show) {
+        const isHidden = langMenu?.classList.contains('hidden');
+        const nextShow = typeof show === 'boolean' ? show : isHidden;
+        if (nextShow) {
+          langMenu?.classList.remove('hidden');
+          langBtn?.setAttribute('aria-expanded', 'true');
+          langChevron?.classList.add('rotate-180');
+        } else {
+          langMenu?.classList.add('hidden');
+          langBtn?.setAttribute('aria-expanded', 'false');
+          langChevron?.classList.remove('rotate-180');
+        }
+      }
+
+      langBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleLangMenu();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!langMenu?.contains(e.target) && !langBtn?.contains(e.target)) {
+          toggleLangMenu(false);
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          toggleLangMenu(false);
+        }
+      });
+
+      // 3. Dynamic Ktory Parser (Runtime simulator)
+      const demoContainer = document.getElementById('sequencer-demo');
+      const rawScript = decodeURIComponent(demoContainer?.dataset.script || '');
+      const i18n = JSON.parse(decodeURIComponent(demoContainer?.dataset.i18n || '{}'));
+
+      function parseKtory(text) {
+        const lines = text.split('\n');
+        const sections = {};
+        let currentSection = 'root';
+        sections[currentSection] = [];
+
+        let i = 0;
+        while (i < lines.length) {
+          const rawLine = lines[i];
+          const trimmed = rawLine.trim();
+
+          // Skip comments and empty lines
+          if (!trimmed || trimmed.startsWith('//')) {
+            i++;
+            continue;
+          }
+
+          // Section header: === SectionName ===
+          const secMatch = trimmed.match(/^===\s*([a-zA-Z0-9_]+)\s*===$/);
+          if (secMatch) {
+            currentSection = secMatch[1];
+            sections[currentSection] = [];
+            i++;
+            continue;
+          }
+
+          // Jump / Return / End: -> Label or => Label
+          const jumpMatch = trimmed.match(/^(->|=>)\s*([a-zA-Z0-9_]+)$/);
+          if (jumpMatch) {
+            sections[currentSection].push({
+              type: 'jump',
+              operator: jumpMatch[1],
+              target: jumpMatch[2],
+              lineIndices: [i],
+            });
+            i++;
+            continue;
+          }
+
+          // Choice container: #choice or #choice.loop
+          if (trimmed.startsWith('#choice')) {
+            const isLoop = trimmed.includes('.loop');
+            const options = [];
+            const lineIndices = [i];
+            i++;
+            while (i < lines.length) {
+              const optLine = lines[i];
+              const optTrimmed = optLine.trim();
+              const optMatch = optTrimmed.match(/^([*+])\s*\[(.*?)\](?:\s*(?:->|=>)\s*([a-zA-Z0-9_]+))?$/);
+              if (optMatch) {
+                options.push({
+                  type: optMatch[1],
+                  text: optMatch[2],
+                  target: optMatch[3] || null,
+                  lineIndex: i,
+                });
+                lineIndices.push(i);
+                i++;
+              } else if (!optTrimmed || optTrimmed.startsWith('//')) {
+                i++;
+              } else {
+                break;
+              }
+            }
+            sections[currentSection].push({
+              type: 'choice',
+              isLoop,
+              options,
+              lineIndices,
+            });
+            continue;
+          }
+
+          // Dialogue or Narration
+          let speaker = null;
+          let textContent = '';
+          const lineIndices = [i];
+          const colonIdx = trimmed.indexOf(':');
+          if (colonIdx > 0 && !trimmed.startsWith('.')) {
+            speaker = trimmed.slice(0, colonIdx).trim();
+            textContent = trimmed.slice(colonIdx + 1).trim();
+          } else {
+            speaker = i18n.narratorDefault || '旁白';
+            textContent = trimmed.startsWith(':') ? trimmed.slice(1).trim() : trimmed;
+          }
+          i++;
+
+          // Attached decorators (.tag(args))
+          const tags = [];
+          while (i < lines.length) {
+            const nextLine = lines[i];
+            const nextTrimmed = nextLine.trim();
+            if (nextTrimmed.startsWith('.')) {
+              const tagMatch = nextTrimmed.match(/^\.([a-zA-Z0-9_]+)(?:\((.*?)\))?$/);
+              if (tagMatch) {
+                tags.push({
+                  name: tagMatch[1],
+                  args: tagMatch[2] || '',
+                  raw: nextTrimmed,
+                });
+                lineIndices.push(i);
+              }
+              i++;
+            } else {
+              break;
+            }
+          }
+
+          sections[currentSection].push({
+            type: 'beat',
+            speaker,
+            text: textContent,
+            tags,
+            lineIndices,
+          });
+        }
+
+        return sections;
+      }
+
+      // Initialize runtime state
+      const sections = parseKtory(rawScript);
+
+      let currentSection = 'root';
+      let currentStepIndex = 0;
+      let isCompleted = false;
+      const visitedChoices = new Set();
+      let callStack = [];
+      let isReturnedFromReturn = false;
+
+      const badgeEl = document.getElementById('demo-step-badge');
+      const stepNumEl = document.getElementById('demo-step-num');
+      const speakerEl = document.getElementById('demo-speaker');
+      const textEl = document.getElementById('demo-text');
+      const tagsBoxEl = document.getElementById('demo-tags-box');
+      const tagsContainerEl = document.getElementById('demo-tags-container');
+      const choiceBoxEl = document.getElementById('demo-choice-box');
+      const choiceListEl = document.getElementById('demo-choice-options-list');
+      const btnNext = document.getElementById('btn-next');
+      const btnNextLabel = document.getElementById('btn-next-label');
+      const btnRestart = document.getElementById('btn-restart');
+
+      function highlightCodeLines(lineIndices) {
+        document.querySelectorAll('.code-line').forEach(el => {
+          el.classList.remove('bg-[var(--color-surface)]', 'border-[var(--color-ink)]');
+          el.classList.add('border-transparent');
+          const num = el.querySelector('.code-num');
+          if (num) {
+            num.classList.remove('text-[var(--color-ink)]', 'font-semibold');
+            num.classList.add('text-[var(--color-ink-faint)]');
+          }
+        });
+
+        lineIndices.forEach(idx => {
+          const el = document.getElementById(`code-line-${idx}`);
+          if (el) {
+            el.classList.remove('border-transparent');
+            el.classList.add('bg-[var(--color-surface)]', 'border-[var(--color-ink)]');
+            const num = el.querySelector('.code-num');
+            if (num) {
+              num.classList.remove('text-[var(--color-ink-faint)]');
+              num.classList.add('text-[var(--color-ink)]', 'font-semibold');
+            }
+          }
+        });
+
+        if (lineIndices.length > 0) {
+          const firstEl = document.getElementById(`code-line-${lineIndices[0]}`);
+          firstEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+
+      function updateUI() {
+        if (isCompleted) {
+          highlightCodeLines([]);
+          if (badgeEl) {
+            badgeEl.textContent = i18n.badgeCompleted || 'Completed';
+            badgeEl.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border transition-all bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+          }
+          if (stepNumEl) stepNumEl.textContent = i18n.endOfFlow || 'End of Flow';
+          if (speakerEl) speakerEl.textContent = 'Sequencer State';
+          if (textEl) textEl.textContent = i18n.scriptCompleted || 'Script Completed';
+          if (tagsContainerEl) {
+            tagsContainerEl.innerHTML = `
+              <span class="px-2 py-1 rounded text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-ink-muted)]">
+                SequencerState.Completed
+              </span>
+              <span class="px-2 py-1 rounded text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-ink-muted)]">
+                CallStack.Empty
+              </span>
+            `;
+          }
+          if (tagsBoxEl) tagsBoxEl.classList.remove('hidden');
+          if (choiceBoxEl) choiceBoxEl.classList.add('hidden');
+          if (btnNextLabel) btnNextLabel.textContent = i18n.reachedEnd || 'Reached End';
+          if (btnNext) btnNext.disabled = true;
+          return;
+        }
+
+        const secSteps = sections[currentSection] || [];
+        const step = secSteps[currentStepIndex];
+
+        if (!step) {
+          isCompleted = true;
+          updateUI();
+          return;
+        }
+
+        highlightCodeLines(step.lineIndices);
+
+        if (step.type === 'beat') {
+          if (badgeEl) {
+            const isRoot = currentSection === 'root';
+            badgeEl.textContent = isRoot ? (i18n.badgeRoot || 'SuspendedAtBeat') : (i18n.badgeBranch || 'BranchSuspension');
+            badgeEl.className = isRoot
+              ? 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+              : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border transition-all bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
+          }
+          if (stepNumEl) {
+            stepNumEl.textContent = `${i18n.beatPrefix || 'Beat'} ${currentStepIndex + 1} (${currentSection})`;
+          }
+          if (speakerEl) speakerEl.textContent = `${i18n.speakerPrefix || 'Speaker: '}${step.speaker}`;
+          if (textEl) textEl.textContent = `“${step.text}”`;
+
+          if (tagsContainerEl) {
+            tagsContainerEl.innerHTML = '';
+            if (step.tags.length === 0) {
+              tagsContainerEl.innerHTML = `<span class="text-xs font-mono text-[var(--color-ink-faint)]">${i18n.noTags || '(None)'}</span>`;
+            } else {
+              step.tags.forEach(t => {
+                const span = document.createElement('span');
+                span.className = 'px-2 py-1 rounded text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-ink-muted)] animate-scale-in';
+                span.textContent = t.args ? `.${t.name}("${t.args}")` : `.${t.name}`;
+                tagsContainerEl.appendChild(span);
+              });
+            }
+          }
+
+          if (tagsBoxEl) tagsBoxEl.classList.remove('hidden');
+          if (choiceBoxEl) choiceBoxEl.classList.add('hidden');
+          if (btnNextLabel) btnNextLabel.textContent = i18n.nextBtn || 'Next';
+          if (btnNext) btnNext.disabled = false;
+        } else if (step.type === 'choice') {
+          const containerName = step.isLoop ? '#choice.loop' : '#choice';
+          if (badgeEl) {
+            if (isReturnedFromReturn) {
+              badgeEl.textContent = i18n.badgeLoopReturn || 'ReturnedToLoop';
+              badgeEl.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border transition-all bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30';
+            } else {
+              badgeEl.textContent = i18n.badgeChoiceWait || 'WaitingForChoice';
+              badgeEl.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border transition-all bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+            }
+          }
+          if (stepNumEl) stepNumEl.textContent = `${i18n.beatPrefix || 'Beat'} ${currentStepIndex + 1} (${containerName})`;
+          if (speakerEl) {
+            speakerEl.textContent = `Container: ${containerName}`;
+          }
+          if (textEl) {
+            textEl.textContent = isReturnedFromReturn
+              ? (i18n.returnedToLoopPrompt || 'Returned to loop container:')
+              : (i18n.choiceDetectedPrompt || 'Choice container waiting for user input:');
+          }
+          isReturnedFromReturn = false;
+
+          if (choiceListEl) {
+            choiceListEl.innerHTML = '';
+            step.options.forEach((opt, idx) => {
+              const isVisited = visitedChoices.has(`${currentSection}_${opt.text}`);
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = `w-full text-left p-3 rounded-lg border transition-all group ${
+                isVisited
+                  ? 'border-[var(--color-border)] opacity-50 cursor-not-allowed bg-[var(--color-surface)]/40'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-border-hover)]'
+              }`;
+
+              const tagLabel = opt.type === '*' ? (i18n.oneTimeTag || '* One-time') : (i18n.stickyTag || '+ Sticky');
+
+              btn.innerHTML = `
+                <div class="flex items-center justify-between">
+                  <span class="font-serif text-sm text-[var(--color-ink)] group-hover:translate-x-1 transition-transform">
+                    ${idx + 1}. [${opt.text}]
+                  </span>
+                  <span class="text-[10px] font-mono text-[var(--color-ink-faint)] uppercase">
+                    ${tagLabel} ──> ${opt.target || 'Next'}
+                  </span>
+                </div>
+              `;
+
+              if (!isVisited) {
+                btn.addEventListener('click', () => {
+                  if (opt.type === '*') {
+                    visitedChoices.add(`${currentSection}_${opt.text}`);
+                  }
+                  if (opt.target && sections[opt.target]) {
+                    callStack.push({
+                      section: currentSection,
+                      stepIndex: currentStepIndex,
+                    });
+                    currentSection = opt.target;
+                    currentStepIndex = 0;
+                  } else {
+                    currentStepIndex++;
+                  }
+                  updateUI();
+                });
+              }
+
+              choiceListEl.appendChild(btn);
+            });
+          }
+
+          if (tagsBoxEl) tagsBoxEl.classList.add('hidden');
+          if (choiceBoxEl) choiceBoxEl.classList.remove('hidden');
+          if (btnNextLabel) btnNextLabel.textContent = i18n.nextSelectPrompt || 'Please click an option';
+          if (btnNext) btnNext.disabled = true;
+        }
+      }
+
+      function handleNext() {
+        if (isCompleted) return;
+
+        const secSteps = sections[currentSection] || [];
+        const nextIdx = currentStepIndex + 1;
+
+        if (nextIdx < secSteps.length) {
+          const nextStep = secSteps[nextIdx];
+          if (nextStep.type === 'jump') {
+            if (nextStep.target === 'end') {
+              isCompleted = true;
+              callStack = [];
+              updateUI();
+              return;
+            } else if (nextStep.target === 'return') {
+              if (callStack.length > 0) {
+                const frame = callStack.pop();
+                currentSection = frame.section;
+                currentStepIndex = frame.stepIndex;
+                isReturnedFromReturn = true;
+                updateUI();
+                return;
+              } else {
+                currentSection = 'root';
+                currentStepIndex = 0;
+                isReturnedFromReturn = true;
+                updateUI();
+                return;
+              }
+            } else if (sections[nextStep.target]) {
+              currentSection = nextStep.target;
+              currentStepIndex = 0;
+              updateUI();
+              return;
+            }
+          }
+          currentStepIndex = nextIdx;
+          updateUI();
+        } else {
+          if (callStack.length > 0) {
+            const frame = callStack.pop();
+            currentSection = frame.section;
+            currentStepIndex = frame.stepIndex;
+            isReturnedFromReturn = true;
+            updateUI();
+            return;
+          }
+          isCompleted = true;
+          updateUI();
+        }
+      }
+
+      function handleRestart() {
+        currentSection = 'root';
+        currentStepIndex = 0;
+        isCompleted = false;
+        callStack = [];
+        visitedChoices.clear();
+        isReturnedFromReturn = false;
+        updateUI();
+      }
+
+      btnNext?.addEventListener('click', handleNext);
+      btnRestart?.addEventListener('click', handleRestart);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && e.target === document.body) {
+          e.preventDefault();
+          if (btnNext && !btnNext.disabled) {
+            handleNext();
+          }
+        }
+      });
+
+      updateUI();
+    </script>
+  </body>
+</html>

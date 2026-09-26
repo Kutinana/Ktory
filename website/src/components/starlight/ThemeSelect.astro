@@ -1,0 +1,34 @@
+---
+import { Sun, Moon } from "@lucide/astro";
+---
+
+<starlight-custom-theme-toggle class="flex items-center">
+  <button
+    type="button"
+    aria-label="Toggle theme"
+    class="theme-toggle-btn p-2 rounded-lg text-[var(--color-ink-faint)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer flex items-center justify-center"
+  >
+    <Sun size={14} class="hidden dark:block" />
+    <Moon size={14} class="block dark:hidden" />
+  </button>
+</starlight-custom-theme-toggle>
+
+<script>
+  class StarlightCustomThemeToggle extends HTMLElement {
+    connectedCallback() {
+      const btn = this.querySelector<HTMLButtonElement>('.theme-toggle-btn');
+      btn?.addEventListener('click', () => {
+        const isDark = document.documentElement.dataset.theme === 'dark' || document.documentElement.getAttribute('data-theme') === 'dark';
+        const nextTheme = isDark ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        localStorage.setItem('starlight-theme', nextTheme);
+        localStorage.setItem('theme', nextTheme);
+      });
+    }
+  }
+
+  if (!customElements.get('starlight-custom-theme-toggle')) {
+    customElements.define('starlight-custom-theme-toggle', StarlightCustomThemeToggle);
+  }
+</script>

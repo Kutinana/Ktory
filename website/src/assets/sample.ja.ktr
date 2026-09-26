@@ -1,0 +1,25 @@
+// Title: プロローグ：旅立ち
+アリス: 今日の風は、どこかいつもと違うみたい。
+    .expression(pensive)
+    .wait(400)
+
+窓の外で落ち葉が渦を巻き、時計塔の鐘が三度鳴り響く。
+
+アリス: 準備はいい？ もうすぐ出発するよ。
+    .voice(alice_03_ready)
+
+#choice.loop
+    * [準備はできた] -> Proceed
+    + [もう少し待って] => WaitMore
+
+=== Proceed ===
+  アリス: じゃあ私の手をしっかり握って、離さないでね。
+      .expression(smile)
+      .sfx(dash)
+  -> end
+
+=== WaitMore ===
+  アリス: わかった、装備を整えるのにあと3分あげる。ここで待ってるから。
+      .expression(neutral)
+      .wait(180)
+  -> return

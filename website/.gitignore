@@ -1,0 +1,14 @@
+# Build output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.production
+.env.development
+.env.*.local
+
+# Package manager lock files if needed, or keep pnpm-lock.yaml

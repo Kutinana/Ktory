@@ -1,0 +1,25 @@
+// Title: Prologue: Departure
+Alice: The wind today seems somewhat unusual.
+    .expression(pensive)
+    .wait(400)
+
+Leaves swirl outside the window as the bell tower tolls for the third time.
+
+Alice: Are you ready? We are about to set off.
+    .voice(alice_03_ready)
+
+#choice.loop
+    * [I'm ready] -> Proceed
+    + [Need a bit more time] => WaitMore
+
+=== Proceed ===
+  Alice: Then hold my hand tight and stay close, don't let go.
+      .expression(smile)
+      .sfx(dash)
+  -> end
+
+=== WaitMore ===
+  Alice: All right, three more minutes to pack your gear. We'll wait right here.
+      .expression(neutral)
+      .wait(180)
+  -> return

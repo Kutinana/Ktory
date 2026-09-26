@@ -1,0 +1,25 @@
+// Title: 序章启程 (Prologue: Departure)
+爱丽丝: 今天的风，似乎有点不同寻常。
+    .expression(pensive)
+    .wait(400)
+
+窗外落叶卷起旋涡，钟楼敲响了第三声。
+
+爱丽丝: 准备好了吗？我们要出发了。
+    .voice(alice_03_ready)
+
+#choice.loop
+    * [已经准备好了] -> Proceed
+    + [还需要再等等] => WaitMore
+
+=== Proceed ===
+  爱丽丝: 那么抓紧我的手，跟紧我，千万不要放开。
+      .expression(smile)
+      .sfx(dash)
+  -> end
+
+=== WaitMore ===
+  爱丽丝: 好吧，再给你三分钟整理装备，我们在原地等候。
+      .expression(neutral)
+      .wait(180)
+  -> return
