@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Ktory.Core.Runtime;
 
 namespace Ktory.Core.Ast
 {
@@ -62,6 +63,79 @@ namespace Ktory.Core.Ast
         public bool TryGetBlock(string label, out KtoryBlock block)
         {
             return Blocks.TryGetValue(label, out block!);
+        }
+
+        public void BindLexicalAutoScopes()
+        {
+            BindBlockAutoScopes(RootBlock);
+            foreach (var block in Blocks.Values)
+            {
+                if (!block.IsRoot)
+                {
+                    BindBlockAutoScopes(block);
+                }
+            }
+        }
+
+        private static void BindBlockAutoScopes(KtoryBlock block)
+        {
+            BindStepsAutoScopes(block.Steps, block, initialPolicy: null);
+        }
+
+        private static void BindStepsAutoScopes(List<StepNode> steps, KtoryBlock block, AutoPolicy? initialPolicy)
+        {
+            AutoPolicy? currentPolicy = initialPolicy;
+
+            foreach (var step in steps)
+            {
+                if (step is DirectiveStep directive)
+                {
+                    if (string.Equals(directive.Name, "AUTO", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var waitTag = directive.GetTag("wait");
+                        bool useEstimated = false;
+                        double defaultWait = 0;
+                        if (waitTag != null)
+                        {
+                            if (waitTag.PositionalArgs.Count > 0)
+                            {
+                                defaultWait = waitTag.GetPositional<double>(0, 0);
+                                useEstimated = false;
+                            }
+                            else
+                            {
+                                useEstimated = true;
+                            }
+                        }
+                        currentPolicy = new AutoPolicy(block, useEstimated, defaultWait);
+                        directive.LexicalAutoPolicy = currentPolicy;
+                        continue;
+                    }
+                    else if (string.Equals(directive.Name, "AUTO_END", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentPolicy = null;
+                        directive.LexicalAutoPolicy = null;
+                        continue;
+                    }
+                }
+
+                step.LexicalAutoPolicy = currentPolicy;
+
+                if (step is ContainerStep container)
+                {
+                    foreach (var item in container.Items)
+                    {
+                        if (item.TargetJump != null)
+                        {
+                            item.TargetJump.LexicalAutoPolicy = currentPolicy;
+                        }
+                        if (item.InlineSteps != null && item.InlineSteps.Count > 0)
+                        {
+                            BindStepsAutoScopes(item.InlineSteps, block, currentPolicy);
+                        }
+                    }
+                }
+            }
         }
     }
 }

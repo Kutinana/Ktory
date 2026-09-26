@@ -24,6 +24,7 @@ namespace Ktory.Core.Runtime
 
         // Active loop stack: (LoopContext, ResumeFrame, CallStackDepthAtEntry)
         private readonly Stack<(LoopContext Loop, CallFrame ResumeFrame, int CallStackDepth)> _activeLoops = new Stack<(LoopContext, CallFrame, int)>();
+        public int ActiveLoopCount => _activeLoops.Count;
 
         // Current execution pointer
         private KtoryBlock _currentBlock;
@@ -39,6 +40,7 @@ namespace Ktory.Core.Runtime
         public KtorySequencer(KtoryFile file)
         {
             File = file ?? throw new ArgumentNullException(nameof(file));
+            File.BindLexicalAutoScopes();
             _currentBlock = file.RootBlock;
             _currentSteps = _currentBlock.Steps;
             _currentStepIndex = 0;
@@ -186,7 +188,7 @@ namespace Ktory.Core.Runtime
                 bool isLoop = sourceContainer?.IsLoop == true;
 
                 // Push return frame for after inline steps finish
-                var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.InlineBranch)
+                var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.InlineBranch, _activeLoops.Count)
                 {
                     SourceContainer = sourceContainer,
                     ReturnToContainer = isLoop,
@@ -263,6 +265,7 @@ namespace Ktory.Core.Runtime
                     {
                         // Re-enter the node: re-emit content and re-execute modifiers
                         _currentStep = currentLoop.TargetNode;
+                        ActiveAutoPolicy = _currentStep.LexicalAutoPolicy;
                         ProcessBeatStep(_currentStep);
                         return;
                     }
@@ -284,6 +287,10 @@ namespace Ktory.Core.Runtime
                     if (CallStack.Count > 0 && CallStack.Peek().FrameType == CallFrameType.InlineBranch)
                     {
                         var frame = CallStack.Pop();
+                        while (_activeLoops.Count > frame.LoopStackDepth)
+                        {
+                            _activeLoops.Pop();
+                        }
                         _currentBlock = frame.Block;
                         _currentSteps = frame.Steps;
                         _currentStepIndex = frame.StepIndex;
@@ -324,6 +331,7 @@ namespace Ktory.Core.Runtime
                 }
 
                 _currentStep = _currentSteps[_currentStepIndex++];
+                ActiveAutoPolicy = _currentStep.LexicalAutoPolicy;
 
                 // Guard evaluation
                 if (!string.IsNullOrEmpty(_currentStep.GuardCondition))
@@ -359,22 +367,7 @@ namespace Ktory.Core.Runtime
                                 OnTagsDispatched?.Invoke(directiveStep.Tags);
                             }
 
-                            var waitTag = directiveStep.GetTag("wait");
-                            bool useEstimated = false;
-                            double defaultWait = 0;
-                            if (waitTag != null)
-                            {
-                                if (waitTag.PositionalArgs.Count > 0)
-                                {
-                                    defaultWait = waitTag.GetPositional<double>(0, 0);
-                                    useEstimated = false;
-                                }
-                                else
-                                {
-                                    useEstimated = true;
-                                }
-                            }
-                            ActiveAutoPolicy = new AutoPolicy(_currentBlock, useEstimated, defaultWait);
+                            ActiveAutoPolicy = directiveStep.LexicalAutoPolicy;
                             continue;
                         }
 
@@ -517,7 +510,10 @@ namespace Ktory.Core.Runtime
 
             // Create new loop context
             var loop = new LoopContext(node);
-            var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps);
+            var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, loopStackDepth: _activeLoops.Count)
+            {
+                SavedAutoPolicy = ActiveAutoPolicy
+            };
             int callStackDepth = CallStack.Count;
             _activeLoops.Push((loop, resumeFrame, callStackDepth));
         }
@@ -541,6 +537,7 @@ namespace Ktory.Core.Runtime
             _currentBlock = resumeFrame.Block;
             _currentSteps = resumeFrame.Steps;
             _currentStepIndex = resumeFrame.StepIndex;
+            ActiveAutoPolicy = resumeFrame.SavedAutoPolicy;
             CurrentChoice = null;
             CurrentPayload = null;
         }
@@ -572,7 +569,7 @@ namespace Ktory.Core.Runtime
                     }
 
                     bool returnToContainer = sourceContainer?.IsLoop == true;
-                    var returnFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.SectionCall)
+                    var returnFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.SectionCall, _activeLoops.Count)
                     {
                         SourceContainer = sourceContainer,
                         ReturnToContainer = returnToContainer,
@@ -606,6 +603,13 @@ namespace Ktory.Core.Runtime
                     if (callFrame == null)
                     {
                         throw new KtoryControlFlowException("-> return encountered with empty call stack.");
+                    }
+
+                    // Clean up any loops created within the returned subroutine,
+                    // preserving loops that existed before entering the subroutine.
+                    while (_activeLoops.Count > callFrame.LoopStackDepth)
+                    {
+                        _activeLoops.Pop();
                     }
 
                     _currentBlock = callFrame.Block;

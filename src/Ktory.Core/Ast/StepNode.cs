@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ktory.Core.Runtime;
 
 namespace Ktory.Core.Ast
 {
@@ -7,6 +8,7 @@ namespace Ktory.Core.Ast
         public int LineNumber { get; set; }
         public string? GuardCondition { get; set; }
         public List<TagData> Tags { get; set; } = new List<TagData>();
+        public AutoPolicy? LexicalAutoPolicy { get; set; }
 
         public bool HasTag(string name)
         {

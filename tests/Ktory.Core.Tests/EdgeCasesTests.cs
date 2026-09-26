@@ -626,5 +626,219 @@ namespace Ktory.Core.Tests
             sequencer.Step();
             Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
         }
+
+        [Fact]
+        public void Sequencer_SubroutineWithLoop_CalledTwice_LoopContextResetsEachTime()
+        {
+            string script = @"
+=> Sub
+: 两次调用之间。
+=> Sub
+: 完成。
+-> end
+
+=== Sub ===
+#choice.loop(1)
+  + [返回主线] -> return
+: 不应该因为上次调用而跳过菜单。
+-> return
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            // First call to Sub: should await choice on Sub's #choice.loop(1)
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(1, sequencer.ActiveLoopCount);
+            Assert.Contains(sequencer.CurrentChoice!.Options, o => o.Label == "返回主线");
+
+            // Select option returning to main line
+            sequencer.SubmitChoice("返回主线");
+            // After return, Sub's active loop should be popped and caller resumes
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("两次调用之间。", sequencer.CurrentPayload!.Content);
+            Assert.Equal(0, sequencer.ActiveLoopCount);
+
+            // Step to second => Sub invocation
+            sequencer.Step();
+            // Second call to Sub: must NOT skip the menu! Loop context should have reset.
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(1, sequencer.ActiveLoopCount);
+            Assert.Contains(sequencer.CurrentChoice!.Options, o => o.Label == "返回主线");
+
+            // Select option again
+            sequencer.SubmitChoice("返回主线");
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("完成。", sequencer.CurrentPayload!.Content);
+            Assert.Equal(0, sequencer.ActiveLoopCount);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void Sequencer_OuterLoopCallsSubroutineWithInnerLoop_InnerReturnPreservesOuterLoop()
+        {
+            string script = @"
+#choice.loop(2)
+  + [调用子过程] => Sub
+  + [退出] -> break
+: 外部循环结束。
+-> end
+
+=== Sub ===
+#choice.loop(1)
+  + [子过程返回] -> return
+: 子过程结束。
+-> return
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            // Initially in outer loop
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(1, sequencer.ActiveLoopCount);
+
+            // 1st iteration: call Sub
+            sequencer.SubmitChoice("调用子过程");
+            // Inside Sub: inner loop is active
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(2, sequencer.ActiveLoopCount);
+
+            // Sub returns
+            sequencer.SubmitChoice("子过程返回");
+            // Returned to outer loop: inner loop released, outer loop still active!
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Equal(1, sequencer.ActiveLoopCount);
+
+            // Break from outer loop to verify caller's break targets outer loop correctly
+            sequencer.SubmitChoice("退出");
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("外部循环结束。", sequencer.CurrentPayload!.Content);
+            Assert.Equal(0, sequencer.ActiveLoopCount);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void AutoDirective_BreakFromSubroutine_RestoresCallerAutoScope()
+        {
+            string script = @"
+#AUTO
+#choice.loop
+  + [进入子过程] => Sub
+: 这里仍在 AUTO 区域内。
+#AUTO_END
+-> end
+
+=== Sub ===
+  -> break
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer);
+
+            sequencer.Start();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+
+            // Subroutine performs -> break to exit outer choice.loop
+            sequencer.SubmitChoice("进入子过程");
+
+            // Must land on '这里仍在 AUTO 区域内。' and remain in AUTO mode!
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("这里仍在 AUTO 区域内。", sequencer.CurrentPayload!.Content);
+            Assert.True(sequencer.CurrentPayload.IsAuto);
+            Assert.NotNull(sequencer.ActiveAutoPolicy);
+
+            // Verify PresentationController automatically advances in AUTO
+            controller.SetupForCurrentBeat();
+            controller.NotifyPrintingFinished();
+            Assert.True(controller.AutoAdvanceOnHoldEnd);
+            controller.Update(controller.HoldDuration);
+
+            // Automatically advances past #AUTO_END to completed
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+            Assert.Null(sequencer.ActiveAutoPolicy);
+        }
+
+        [Fact]
+        public void AutoDirective_SubroutineAuto_DoesNotLeakToCallerOnBreak()
+        {
+            string script = @"
+: 外部常规。
+#choice.loop
+  + [进入子过程] => Sub
+: 外部仍常规。
+-> end
+
+=== Sub ===
+  #AUTO
+  : 子过程自动。
+  -> break
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            Assert.Equal("外部常规。", sequencer.CurrentPayload!.Content);
+            Assert.False(sequencer.CurrentPayload.IsAuto);
+
+            sequencer.Step(); // enter choice
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+
+            sequencer.SubmitChoice("进入子过程");
+            // Inside Sub: AUTO is active
+            Assert.Equal("子过程自动。", sequencer.CurrentPayload!.Content);
+            Assert.True(sequencer.CurrentPayload.IsAuto);
+            Assert.NotNull(sequencer.ActiveAutoPolicy);
+
+            // Sub breaks back to caller
+            sequencer.Step();
+            // Lands on '外部仍常规。': caller's lexical scope is manual mode, NO leak!
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal("外部仍常规。", sequencer.CurrentPayload!.Content);
+            Assert.False(sequencer.CurrentPayload.IsAuto);
+            Assert.Null(sequencer.ActiveAutoPolicy);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void AutoDirective_SubroutineAuto_DoesNotLeakToCallerOnReturn()
+        {
+            string script = @"
+: 外部常规1。
+=> Sub
+: 外部常规2。
+-> end
+
+=== Sub ===
+  #AUTO
+  : 子过程自动。
+  -> return
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            Assert.Equal("外部常规1。", sequencer.CurrentPayload!.Content);
+            Assert.False(sequencer.CurrentPayload.IsAuto);
+
+            sequencer.Step(); // calls Sub
+            Assert.Equal("子过程自动。", sequencer.CurrentPayload!.Content);
+            Assert.True(sequencer.CurrentPayload.IsAuto);
+            Assert.NotNull(sequencer.ActiveAutoPolicy);
+
+            sequencer.Step(); // Sub returns to caller
+            Assert.Equal("外部常规2。", sequencer.CurrentPayload!.Content);
+            Assert.False(sequencer.CurrentPayload.IsAuto);
+            Assert.Null(sequencer.ActiveAutoPolicy);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
     }
 }

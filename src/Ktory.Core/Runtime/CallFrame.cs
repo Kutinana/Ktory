@@ -22,13 +22,15 @@ namespace Ktory.Core.Runtime
         public ContainerStep? SourceContainer { get; set; }
         public bool ReturnToContainer { get; set; }
         public AutoPolicy? SavedAutoPolicy { get; set; }
+        public int LoopStackDepth { get; set; }
 
-        public CallFrame(KtoryBlock block, int stepIndex, List<StepNode>? steps = null, CallFrameType frameType = CallFrameType.SectionCall)
+        public CallFrame(KtoryBlock block, int stepIndex, List<StepNode>? steps = null, CallFrameType frameType = CallFrameType.SectionCall, int loopStackDepth = 0)
         {
             Block = block;
             StepIndex = stepIndex;
             Steps = steps ?? block.Steps;
             FrameType = frameType;
+            LoopStackDepth = loopStackDepth;
         }
     }
 

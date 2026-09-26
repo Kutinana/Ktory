@@ -30,7 +30,9 @@ namespace Ktory.Core.Parser
         public static KtoryFile Parse(string source)
         {
             var parser = new KtoryParser();
-            return parser.ParseInternal(source);
+            var file = parser.ParseInternal(source);
+            file.BindLexicalAutoScopes();
+            return file;
         }
 
         private KtoryFile ParseInternal(string source)
