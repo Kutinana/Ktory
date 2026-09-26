@@ -25,12 +25,12 @@
 
 | 位置 | 职责 | 不应承担 |
 | --- | --- | --- |
-| `src/Ktory.Core/Ast, Parser, Desugar, Runtime` | 结构解析、诊断、叙事状态、语言选择、载荷与标签派发 | Unity、DOM、HTTP、资源数据库、真实时钟、外部演出等待 |
+| `src/Ktory.Core/Ast, Parser, Desugar, Runtime` | 结构解析、诊断、叙事状态、语言选择、载荷与标签派发 | Unity、DOM、HTTP、资源数据库、真实时钟、真实演出的执行与事件判定；当前不异步等待演出 |
 | `src/Ktory.Core/Runtime/PresentationController.cs` | 不依赖引擎的标准呈现策略辅助类；由接入层驱动 | 把文本门禁变成 Sequencer 的内部前置条件 |
 | `src/Ktory.Runner` | 本地 HTTP 宿主与 Reader 界面，`wwwroot` 是共用 Reader 前端源码 | 第二套分支、调用栈、循环或语言回退算法 |
 | `src/Ktory.Web` | WASM 宿主及 JS 桥接，引用 Core、复用 Reader 前端 | 重新实现脚本解释器 |
 | `src/Ktory.Unity` | 通用 Unity 导入、编辑器及接入代码的源码位置 | 特定游戏角色、剧情状态或私有资源；手工维护 Core 副本 |
-| `src/Ktory.VSCode` | VS Code 语言贡献、唯一 TextMate grammar、编辑器文档与 Webview 适配；内置同一 WASM Reader | 第二套解释器、手工修改生成的 `reader/`、把高亮当作语义验证 |
+| `src/Ktory.VSCode` | VS Code 语言贡献、唯一 TextMate grammar、编辑器文档与 Webview 适配；内置同一 WASM Reader | 第二套解释器、手工修改生成的扩展目录、把高亮当作语义验证 |
 | `website` | 门户、教程、三语说明、语法高亮与展示 | 核心语义的第二权威或可冒充真实执行的模拟器 |
 | `docs` | 产品契约、规范、工作流与历史依据 | 以实现偶然行为改写已经确认的原则 |
 | `samples` 与 `tests` | 使用样例、行为断言及回归证据 | 用测试通过自动批准新的语义 |
@@ -38,6 +38,8 @@
 | `artifacts`、`website/dist`、`upm`、`deploy-reader` | 构建或分发结果 | 独立维护、反向覆盖主线源码 |
 
 依赖从宿主与工具指向 Core；Core 不反向依赖门户或宿主。Reader 前端可以实现呈现策略，但必须按同一契约验收。目录内现有命名不意味着该层可以越界。
+
+新增目标中，`.ktr` 尽可能统一组织剧情及显式交接，演出工具制作具体过程，编辑器配置绑定资源、对象与真实节点，接入组件复用通知、推进及清理流程。共享设置的存储位置和逻辑依赖记录的承载模块待工程决定；本表不预先限定其必须在 Sequencer 内或外。世界状态与真实事件判定仍归宿主，不因绑定工具而迁入 Core。
 
 门户若声称提供真实 Ktory 试读，必须使用 Core 的 WASM/桥接或链接正式 Reader。现有首页 JS 演示只可标为示意，不作为脚本验证或核心执行证据；替换成 Core 驱动是待处理事项。语法高亮器可以近似识别 token，但无权决定运行时语义。
 
@@ -47,7 +49,7 @@
 | --- | --- | --- | --- |
 | 独立试读器 Reader | `deploy-reader.yml` / `Reader - Publish Static Site` | `artifacts/reader/wwwroot/` → `deploy-reader` 分支根目录 | Vercel `ktory`；Root Directory 留空，按静态文件托管 |
 | Unity UPM 包 | `publish-upm.yml` / `Unity - Publish UPM Package` | `upm` 分支根目录的 `com.ktory.unity` 包 | Unity Package Manager；保留现有 `#upm` 安装入口 |
-| VS Code 扩展 | `build-vscode.yml` / `VS Code - Build VSIX` | `artifacts/vscode/ktory-vscode-<version>.vsix`；Actions 下载包 `ktory-vscode-vsix-<源提交>` | VS Code 安装 VSIX；内置 Reader 的中间构建位于 `artifacts/vscode/reader/` |
+| VS Code 扩展 | `build-vscode.yml` / `VS Code - Build VSIX` | `artifacts/vscode/packages/ktory-vscode-<version>.vsix`；Actions 下载包 `ktory-vscode-vsix-<源提交>` | VS Code 安装 VSIX；完整扩展位于 `artifacts/vscode/extension/`，其中 `reader/` 是内置 Reader |
 | 门户与文档 | Vercel 从 `main` 的 `website/` 构建 | `website/dist/`；无单独的 Actions 产物分支 | Vercel `ktory-home`；Root Directory 为 `website` |
 
 VSIX 的唯一版本来源是 `src/Ktory.VSCode/package.json` 的 `version`。打包文件名由 `scripts/package.cjs` 派生，安装测试共用同一路径；常规构建不自动递增版本，发新版时显式更新 manifest 版本。Actions 下载包末尾的源提交用于区分构建，不是扩展版本号。
@@ -65,7 +67,8 @@ Vercel `ktory-home` 应仅接收门户源码分支的部署，排除 `deploy-rea
 | 为什么做、什么属于产品边界 | `docs/ktory-design-charter.md` 与 scope 的已确认决定 |
 | 某个已确认语法或执行行为应当怎样 | `docs/ktory-implementation_v1.md` |
 | 核心实际怎样执行 | `src/Ktory.Core`；其他端引用它或其构建产物 |
-| 脚本内容及译文是什么 | 作者的 `.ktr` 文件 |
+| 文本、译文及推荐工作流的剧情顺序／分支是什么 | 作者的 `.ktr` 文件；新增目标中的显式交接也在此声明，允许宿主调用分立段落 |
+| 脚本声明对应哪个资源、对象或实际演出节点 | 作者的绑定配置及宿主演出实现；新增通用配置结构尚待设计，不另存重复剧情流程 |
 | 当前背包、场景、动画状态是什么 | 实际游戏宿主；Core 不持有第二份权威副本 |
 | 某个版本验证过什么 | 绑定源提交与环境的测试／反馈记录 |
 | Unity 实际装了哪个版本 | 包提交或不可变发布标签，以及游戏的 `Packages/manifest.json`、`Packages/packages-lock.json` |
@@ -113,6 +116,35 @@ dotnet run --project src/Ktory.Runner
 
 每项能力分开记录三列：**契约状态（已确认／未决／阶段外）**、**实现状态（完整／部分／缺口）**、**验证证据（提交、环境、命令、结果）**。Core 的 Ruby 字符串测试不能证明 TMP 能渲染；导入编译成功不能证明输入和时序正确。
 
+具体时间点的评估见 [2026-09-26 v1 进度与下一阶段评估](ktory-v1-status-2026-09-26.md)。该快照列出当时的代码、已运行检查、已复现缺口与待验收项，不替代实现规格或后续版本的验证记录。
+
+### 新增目标的代表性验证场景（待落实）
+
+本轮以「分析漏洞与Ink区别」最后一轮提出的灯塔素材为代表性验收方向。以下为建议新增的用例，尚未编写或运行，不作为当前第一阶段完成门槛，也不直接采用历史灯塔脚本中的未支持语法。工程方案冻结后再形成最小 `.ktr`、配置、操作序列及可区分的断言。
+
+| 场景 | 预期收益／行为 | 核心与接入可验证部分 | Unity 实机补充 |
+| --- | --- | --- | --- |
+| 相邻对白改变表情，下一句省略 | 回退适用全局默认；无全局时不展示，不残留上句局部表情 | 默认与覆盖解析、明确的不展示输出 | 界面确实清除旧表情 |
+| 修改角色默认对话框或资源映射 | 不逐句修改正文，局部覆盖仍生效 | 共享配置引用与解析 | 对话框与资源实际显示 |
+| 新增第二段同类投影仪演出 | 增加内容和绑定，不新增专用事件分支 | 复用同一处理流程；记录新增专用代码与配置量 | 资源／对象绑定能够正确播放 |
+| 动画由五秒改成八秒 | 使用完成信号的剧情不重填等待时间 | 依据本次完成通知继续 | 信号确实来自实际结束时点 |
+| 恢复点从门把手改成门打开 | 剧本交接意图体现变化，动作细节留在演出工具 | 依赖声明与绑定对应 | 节点在正确动画时点触发 |
+| 旧演出迟到或重复报告，或另一段同名演出报告 | 不推进新的剧情位置 | 匹配本次播放、会话与位置，保持单一推进责任 | 场景切换、取消及订阅清理的真实生命周期 |
+| 无对白演出段落；独立试读缺少真实信号 | 显式交接有可说明的试读行为，不伪造事件已发生 | 冻结后检查越过／人工确认策略和标示 | 试读通过不作为演出验证 |
+
+新增一种能力可需要一次接入代码；衡量复用收益时区分能力接入、内容配置和逐场景专用代码，不把必要的资源制作或叙事节点标注算成可以消除的工作。取消、失败、点击、自动推进与跳过的组合须先作工程决定，再纳入断言；不让测试替未决协议定案。
+
+本次文档修订的状态记录：
+
+| 能力 | 契约状态 | 实现状态 | 验证证据 |
+| --- | --- | --- | --- |
+| 共享默认呈现与表情省略规则 | 产品目标与表情优先级已确认；配置／载荷未冻结 | 当前已有名字本地化；新增默认呈现及清除输出待落实 | 本轮无新能力运行证据 |
+| 编辑器绑定与显式信号依赖 | 目标已确认；引用、匹配、等待承载及输入组合未决 | 通用产品能力待落实；项目自定义处理器不等于标准交付 | 本轮无新能力运行证据；未来须分别绑定源提交 S、包提交 P 与环境 |
+| 独立试读交接策略 | 不伪造真实事件已确认；具体交互未决 | 待设计 | 不能用当前跳过未知标签的检查代替 |
+| 按情况选择剧情／交还玩家操作后继续 | 已确认需求、延期 | 不在当前冻结 API；待设计 | 无本轮验收结果 |
+
+建议先做默认呈现，再设计绑定与完成信号，之后覆盖中途节点；两项后续剧情能力继续延期。这是工程建议，现有核心回归与首阶段验收继续进行。每次交付时更新实际实现状态并记录具体提交、命令和结果，不能把本表目标写成已交付能力。
+
 ### VS Code 扩展开发与验证
 
 开发环境需要 .NET SDK 9、Node.js 20+ 和 pnpm 10。在 `src/Ktory.VSCode` 执行：
@@ -126,11 +158,26 @@ pnpm package
 pnpm test:vsix
 ```
 
+路径由 `src/Ktory.VSCode/scripts/paths.cjs` 集中定义：
+
+| 路径 | 用途与清理规则 |
+| --- | --- |
+| `artifacts/vscode/packages/` | 对外安装／上传的 VSIX，按 manifest 版本命名；同版本成功打包后替换，不同版本保留至主动清理 |
+| `artifacts/vscode/extension/` | 可直接加载的完整扩展，包含生成的 `reader/`；构建成功后整体替换，F5 和源码集成测试使用这里 |
+| `artifacts/vscode/.build/` | 临时 Reader publish 与扩展组装目录；构建结束或失败时清理 |
+| `artifacts/vscode/tests/run-*/` | 隔离的测试配置、安装目录与日志；测试成功后删除，失败时保留并打印路径 |
+
+`pnpm clean` 删除整个 `artifacts/vscode/`（包括各版本 VSIX 和失败测试日志），之后运行 `pnpm package` 可从源码重新生成。清理前关闭使用该生成目录的调试／测试实例；不要与构建或打包并发执行。源码、依赖目录、共享 .NET 的 `artifacts/bin`／`artifacts/obj` 和独立 Web Reader 的 `artifacts/reader` 不在此清理范围。旧的 `artifacts/vscode-reader`、`artifacts/vscode/reader`、根层旧 VSIX 和 `src/Ktory.VSCode/reader` 不再使用。
+
 `test:integration` 使用独立 VS Code 配置和扩展目录；`test:vsix` 将生成的 VSIX 安装到另一隔离配置，再对安装后的文件运行同一套测试。macOS 自动检测标准应用路径；其他环境可设置 `VSCODE_EXECUTABLE_PATH`，CLI 独立时另设 `VSCODE_CLI_PATH`。Linux CI 需要 `xvfb-run` 等显示环境。
 
-构建复用 Web/Runner/Core，`reader/` 是生成物。`extension.js` 管理文档与面板生命周期，`webview.js` 负责共享 Reader 的编辑器消息及本地资源适配；剧情执行仍归 Core，时序与输入归 Reader。`reader/build-info.json` 记录源提交、dirty 标记和构建时间；dirty 构建不能作为该提交的干净发布证据。
+构建复用 Web/Runner/Core，所有扩展生成物统一放在 `artifacts/vscode/`，源码目录不再生成 `reader/`。`extension.js` 管理文档与面板生命周期，`webview.js` 负责共享 Reader 的编辑器消息及本地资源适配；剧情执行仍归 Core，时序与输入归 Reader。`reader/build-info.json` 记录源提交、dirty 标记和构建时间；dirty 构建不能作为该提交的干净发布证据。
 
-`package` 生成 `artifacts/vscode/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前包声明为 `UNLICENSED`；打包不替项目决定授权方式或建立发布者账户。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。`build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
+`package` 自动先构建完整扩展，再生成 `artifacts/vscode/packages/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前发布者为 `ktory`，扩展标识为 `ktory.ktory`；版本 `0.1.0` 通过打包选项 `preRelease: true` 写入 VSIX 预发布标记，不使用版本字符串后缀。将来发布正式版时须显式调整渠道，并使用不同的三段数字版本。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。
+
+扩展使用 [专有许可证](../src/Ktory.VSCode/LICENSE.txt)，允许个人和商业使用，修改或再分发扩展须另获书面许可；用户原创剧本不受这些限制。该许可仅覆盖扩展及其包内 Ktory 组件的使用，不自动授权独立 Core／Unity 分发。第三方组件保留各自许可证，包内包含 `reader/notices/`。`package.json` 引用 `LICENSE.txt`，打包必须包含许可文件。
+
+首次上架：对准备发布的固定源码版本完成验证，在 Marketplace 发布者后台选择 `ktory`，创建 Visual Studio Code 扩展并上传已验证的 VSIX，确认显示为 Pre-release。本地 dirty 包须注明来自工作区，不能冒充干净提交的构建。`build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
 
 ### 当前优先落实的工程项
 

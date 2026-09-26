@@ -32,9 +32,9 @@ alice:
 
 Each line prefers the requested language and falls back to `defaultLang` when its translation is missing. `TextPayload.ActualLanguage` describes the actual body text; `RequestedLanguage` preserves the request. In this example, requesting English still produces `zh` for the untranslated line in the option branch. Do not label that fallback text as English.
 
-`@speaker` creates case-sensitive lookup aliases for display names. Here `alice`, `爱丽丝`, `Alice` and `アリス` refer to one name definition. Undeclared speakers are displayed literally. This does not bind portraits or audio characters.
+`@speaker` creates case-sensitive lookup aliases for display names. Here `alice`, `爱丽丝`, `Alice` and `アリス` refer to one name definition. Undeclared speakers are displayed literally. The current declaration supplies names and aliases without automatically binding portraits or audio. The product goal allows names and optional presentation defaults to be maintained separately, associated and locally overridden. Shared-definition and resource-binding syntax remains undecided; see the [design principles](/en/01-overview/03-design-principles/).
 
-The current `ChoiceOption` provides a localized `Label`, without a per-option `ActualLanguage` field. A menu label is not a replacement for the option's `Id`. Cases where default-language text is also missing must be checked against the current core and specification; ordinary fallback rules do not establish additional guarantees.
+The current `ChoiceOption` provides a localized `Label`, `RequestedLanguage` and `ActualLanguage`, reporting the actual language separately for each option. A menu label is not a replacement for the option's `Id`. Cases where default-language text is also missing must be checked against the current core and specification; ordinary fallback rules do not establish additional guarantees.
 
 ## Switching during playback
 

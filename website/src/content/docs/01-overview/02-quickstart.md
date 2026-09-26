@@ -5,15 +5,43 @@ sidebar:
   order: 2
 ---
 
-> 本页遵循 [Ktory 设计原则](/01-overview/03-design-principles/)，实现边界与长期目标以该原则及其权威文档为准。
+无需安装任何软件，您可以直接访问 <a href="https://reader.ktory.ink/" target="_blank" rel="noopener noreferrer">Ktory 在线试读器</a>，来体验 Ktory 的示例剧本。您也可以使用这一平台，直接开始编写属于您的第一个 Ktory 剧本。
 
-# 快速上手
+而接下来，本文将快速介绍如何将 Ktory 用于您自己的项目中。
 
-下面用真实 C# API 跑通对白、译文与选择。示例采用控制台手动逐拍：按回车推进，输入数字选择，不执行打字机、`.next` 或 `.wait` 的表现时序。
+正如我们在上一篇介绍中所说：**一纸 Ktory 是剧本，而你的程序就是现场导演。** 现在，让我们来写下第一幕故事，并用最简洁的 C# 代码驱动它。
 
-## 1. 引用核心
+## 编写第一幕剧本
 
-安装 .NET 9 SDK，克隆仓库，并在 `Ktory` 目录旁建立控制台项目：
+在您的电脑上创建一个名为 `prologue.ktr` 的文件，并写入以下内容：
+
+```ktory
+爱丽丝: 你醒了？感觉怎么样？
+  .expression(smile)
+
+你眨了眨眼，看着眼前陌生的女孩。
+
+#choice
+  * [你是……？]
+    女孩摇了摇头，并未作答。
+  * [先看看周围]
+    你环顾四周，这里似乎是一座古老的石塔。
+
+爱丽丝: 我们先离开这里吧。
+```
+
+对于 Ktory 来说，它致力于让写叙事脚本如写戏剧台词一样直观：
+- `爱丽丝:`：指示说话人，后文为台词。
+- `.expression(smile)`：这是一个**修饰符**，附着在台词上。你可以任意定义你喜欢的修饰符，也可以不定义修饰符。
+- 没有说话人的台词即为**旁白**。
+- `#choice`：开启一个选择支。以 `*` 列出选项，选项以 `[]` 包裹。
+- 无论玩家选择哪一项，剧情都会自然汇合到爱丽丝的最后一句台词。
+
+## 准备提词器
+
+Ktory 的核心（`Ktory.Core`）就像一位严谨冷静的**提词器**——它管理着分支走向、循环和剧情记录；而你的游戏或终端则是**现场导演**——每一次玩家按回车或点击对话框，导演给提词器一个前进信号，提词器就把下一句台词或选项交给你去展现。
+
+打开终端，创建一个最简单的控制台应用，并引用 Ktory 核心：
 
 ```bash
 dotnet new console -n KtoryDemo
@@ -21,36 +49,13 @@ cd KtoryDemo
 dotnet add reference ../Ktory/src/Ktory.Core/Ktory.Core.csproj
 ```
 
-Unity 使用生成的 `com.ktory.unity` 包，安装路径与版本固定方式见 [Unity UPM 接入](/03-integration/01-unity-upm/)。
+> **提示**：如果您正在使用 Unity 开发，无需手动引用源码，直接通过 Unity Package Manager（UPM）填入 git 地址即可安装，详情请参见 [Unity 集成指南](/03-integration/01-unity-upm/)。
 
-## 2. 编写 `prologue.ktr`
+将刚才写好的 `prologue.ktr` 文件放进 `KtoryDemo` 项目目录中。
 
-在控制台项目目录保存下面的脚本。两个分支之后会汇流至最后一句。
+## 让剧本活起来
 
-```ktory
-@defaultLang: zh
-@speaker alice: zh="爱丽丝" | en="Alice" | ja="アリス"
-
-alice:
-  @zh: 你醒了？感觉怎么样？
-  @en: You're awake. How do you feel?
-  @ja: 目が覚めた？ 気分はどう？
-  .expression(smile)
-
-#choice
-  * [@zh: "向她道谢"]
-    [@en: "Thank her"]
-    [@ja: "お礼を言う"]
-    : 谢谢你救了我。
-  + [@zh: "先看看周围"]
-    [@en: "Look around first"]
-    [@ja: "周りを見る"]
-    : 这里像是一座古老的塔。
-
-alice: 我们先出去吧。
-```
-
-## 3. 保存为 `Program.cs` 并运行
+将项目中的 `Program.cs` 替换为以下内容：
 
 ```csharp
 using System;
@@ -58,54 +63,85 @@ using System.IO;
 using Ktory.Core.Parser;
 using Ktory.Core.Runtime;
 
+// 1. 读取并解析剧本文件
 var file = KtoryParser.Parse(File.ReadAllText("prologue.ktr"));
+
+// 2. 创建调度器（提词器）
 var player = new KtorySequencer(file);
+
+// 监听修饰符派发：当剧本出现表情、音效或动作提示时通知我们
 player.OnTagsDispatched += tags =>
 {
     foreach (var tag in tags)
-        Console.WriteLine($"[tag] {tag.Name}");
+    {
+        Console.WriteLine($"  [演出标记] {tag.Name}");
+    }
 };
+
+// 以中文启动剧本（启动后提词器会自动准备好第一拍）
 player.Start(requestedLocale: "zh");
 
+// 3. 循环推进：玩家敲回车就走一步，遇到选项就输入数字
 while (player.Status != ExecutionStatus.Completed)
 {
+    // 遇到选项支：等待玩家输入选择
     if (player.Status == ExecutionStatus.AwaitingChoice)
     {
         var menu = player.CurrentChoice!;
+        Console.WriteLine("\n=== 请做出选择 ===");
         for (int i = 0; i < menu.Options.Count; i++)
         {
-            var option = menu.Options[i];
-            Console.WriteLine($"{i + 1}. {option.Label} (enabled: {option.CanSelect})");
+            var opt = menu.Options[i];
+            Console.WriteLine($"{i + 1}. {opt.Label} {(opt.CanSelect ? "" : "(已选过)")}");
         }
-        string? input = Console.ReadLine();
-        if (input is null) break;
-        if (!int.TryParse(input, out int number) ||
-            number < 1 || number > menu.Options.Count ||
-            !menu.Options[number - 1].CanSelect)
-            continue;
 
-        player.SubmitChoice(menu.Options[number - 1].Id, menu.PresentationId);
+        Console.Write("> ");
+        string? input = Console.ReadLine();
+        if (int.TryParse(input, out int choice) &&
+            choice >= 1 && choice <= menu.Options.Count &&
+            menu.Options[choice - 1].CanSelect)
+        {
+            // 提交选择：核心会自动推进到所选分支的第一拍
+            player.SubmitChoice(menu.Options[choice - 1].Id, menu.PresentationId);
+        }
         continue;
     }
 
+    // 普通的一拍（角色台词或旁白）
     var beat = player.CurrentPayload;
-    if (beat is null)
-        throw new InvalidOperationException($"Unexpected status: {player.Status}");
+    if (beat is null) break;
 
-    Console.WriteLine(beat.StepType == StepType.Text
-        ? $"[{beat.ActualLanguage}] {beat.Speaker}: {beat.Content}"
-        : $"[directive] #{beat.Content}");
-    if (Console.ReadLine() is null) break;
+    string speaker = string.IsNullOrEmpty(beat.Speaker) ? "旁白" : beat.Speaker;
+    Console.WriteLine($"[{speaker}] {beat.Content}");
+
+    // 等待玩家敲击回车，迈出下一步
+    Console.ReadLine();
     player.Step(beat.PresentationId);
 }
+
+Console.WriteLine("\n剧本播放完毕！");
 ```
+
+现在，在终端中输入：
 
 ```bash
 dotnet run
 ```
 
-`Start()` 已经输出第一拍。选择使用 `Id` 提交；`SubmitChoice()` 已推进到所选分支的第一拍，因此之后直接返回循环读取，不能为同一次选择补一次 `Step()`。`PresentationId` 关联当前输出，可帮助拒绝当前播放中的过期输入；重启会话时宿主仍须撤销旧回调。
+按下回车键。现在，您就能亲手推动爱丽丝与您的这场相遇。
 
-演出修饰符在这个例子里只被打印。游戏状态、立绘映射与计时由宿主提供，实际应用应依据 [设计原则](/01-overview/03-design-principles/) 处理这些边界。
+## 几个小细节
 
-继续阅读 [语法](/02-syntax/01-anchor-decorator/)、[语言切换](/02-syntax/04-localization/) 与 [独立 C# 接入](/03-integration/02-standalone-csharp/)。
+- **拍（Beat）**：对白或旁白的逻辑停顿点。每当你按一次回车或点击一次对话框，核心就走过一“拍”。
+- **提词器不管打字机**：核心只负责告诉游戏引擎“现在该说这句话了”，至于这句话是用打字机逐字蹦出、还是淡入淡出、还是配着语音播放，完全由游戏引擎自行决定。
+- **选择即推进**：当调用 `SubmitChoice()` 提交选项时，核心已经帮你翻到了所选分支的第一句话并停下，不需要也不应该再额外调用一次 `Step()`。
+- **防手滑的安全钥匙 (`PresentationId`)**：你可能注意到了 `player.Step(beat.PresentationId)`。这个 ID 就像一张临时门票，核心用它来确认“你推进的确实是当前展示的这句台词”，防止狂点跳过或连点时把后续剧情点乱。
+
+## 下一步
+
+现在，你已经掌握了 Ktory 最核心的交互流程！接下来你可以：
+
+- 前往 [剧本语法规范](/02-syntax/01-anchor-decorator/)，解锁循环、条件判断与自定义修饰符。
+- 探索 [多语言与国际化](/02-syntax/04-localization/)，感受无需复制多套剧本即可无缝热切语言的便利。
+- 查阅 [Unity 集成指南](/03-integration/01-unity-upm/)，将提词器接入真正的游戏画面与演出世界。
+

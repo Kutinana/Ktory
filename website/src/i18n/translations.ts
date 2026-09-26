@@ -81,8 +81,8 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
   zh: {
     htmlLang: 'zh-CN',
     head: {
-      title: 'Ktory — 对白优先、宿主驱动的按拍叙事语言',
-      description: '以结构化拍组织对白与演出意图，在同一文件维护译文，由宿主驱动推进的叙事语言与 C# 运行时。',
+      title: 'Ktory — 对白驱动游戏的叙事创作与接入',
+      description: '面向对白驱动游戏的叙事创作与接入系统，以 .ktr 组织文本与剧情，目标是减少重复呈现配置和逐场景接线。',
     },
     nav: {
       docs: '文档中心',
@@ -91,9 +91,9 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
       language: '选择语言',
     },
     hero: {
-      slogan: 'A Dialogue-First, Host-Driven Narrative Language',
-      description1: '面向独立作者的对白优先、宿主驱动的按拍叙事语言与运行时。',
-      description2: '对白、参数修饰符与同文件多语言共享剧情结构，资源与演出由宿主实现。',
+      slogan: 'Narrative Authoring & Integration',
+      description1: '面向对白驱动游戏的叙事创作与接入系统。',
+      description2: '以 .ktr 集中组织剧情；共享呈现与显式演出交接为待落实目标，旨在减少重复配置和逐场景接线。',
       quickstart: '快速上手',
       quickstartHref: '/01-overview/02-quickstart/',
       reader: '在线试读器',
@@ -155,8 +155,8 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
   en: {
     htmlLang: 'en',
     head: {
-      title: 'Ktory — A Dialogue-First, Host-Driven Narrative Language',
-      description: 'A dialogue-first narrative language and C# runtime with structured beats, same-file translations and host-driven advancement.',
+      title: 'Ktory — Narrative Authoring & Integration',
+      description: 'Authoring and integration for dialogue-driven games, keeping text and story flow in .ktr and aiming to reduce repeated settings and scene-specific wiring.',
     },
     nav: {
       docs: 'Documentation',
@@ -165,9 +165,9 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
       language: 'Language',
     },
     hero: {
-      slogan: 'A Dialogue-First, Host-Driven Narrative Language',
-      description1: 'A dialogue-first, host-driven narrative language and runtime for independent authors.',
-      description2: 'Dialogue, parameterized decorators and inline translations share a narrative structure; hosts implement resources and presentation.',
+      slogan: 'Narrative Authoring & Integration',
+      description1: 'An authoring and integration system for dialogue-driven games.',
+      description2: 'Keep story flow in .ktr. Shared defaults and explicit presentation handoffs are pending goals to reduce repeated settings and scene-specific wiring.',
       quickstart: 'Quickstart',
       quickstartHref: '/en/01-overview/02-quickstart/',
       reader: 'Online Reader',
@@ -229,8 +229,8 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
   ja: {
     htmlLang: 'ja',
     head: {
-      title: 'Ktory — 対話を中心に、ホストが拍ごとに進める物語言語',
-      description: '構造化した拍でセリフと演出意図をまとめ、同一ファイルで訳文を管理する、ホスト駆動の物語言語と C# ランタイム。',
+      title: 'Ktory — 対話を中心とするゲームの物語制作と接続',
+      description: '対話を中心とするゲームの物語制作・接続システム。.ktr で物語をまとめ、設定の繰り返しと場面ごとの接続作業の削減を目指します。',
     },
     nav: {
       docs: 'ドキュメント',
@@ -239,9 +239,9 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
       language: '言語切替',
     },
     hero: {
-      slogan: '対話を中心に、ホストが拍ごとに進める物語言語',
-      description1: '個人作者のための、対話を中心としたホスト駆動の物語言語とランタイム。',
-      description2: 'セリフ、引数付き修飾子、同一ファイルの多言語が物語構造を共有し、リソースと演出はホストが実装します。',
+      slogan: '対話を中心とする物語制作と接続',
+      description1: '対話を中心とするゲームのための物語制作・接続システム。',
+      description2: '.ktr に物語を集約。共通設定と明示的な演出の受け渡しは実装待ちの目標で、設定の繰り返しと場面ごとの接続作業を減らします。',
       quickstart: 'クイックスタート',
       quickstartHref: '/ja/01-overview/02-quickstart/',
       reader: 'オンライン試読器',

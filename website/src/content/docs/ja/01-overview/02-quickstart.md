@@ -1,19 +1,47 @@
 ---
 title: クイックスタート
-description: 5分でマスターする Ktory の基本呼び出しと最初のスクリプト作成
+description: 5分でマスターする Ktory コアの呼び出しと最初のスクリプト
 sidebar:
   order: 2
 ---
 
-> このページは [Ktory の設計原則](/ja/01-overview/03-design-principles/) に従い、現在の契約と長期目標を区別します。
+ソフトウェアをインストールすることなく、ブラウザから直接 <a href="https://reader.ktory.ink/" target="_blank" rel="noopener noreferrer">Ktory オンラインリーダー</a> にアクセスしてサンプルのスクリプトを体験できます。このプラットフォーム上で、自分だけの最初の Ktory スクリプトをその場で書き始めることも可能です。
 
-# クイックスタート
+ここでは、Ktory をご自身のプロジェクトに組み込んで動かす方法を素早く紹介します。
 
-実際の C# API でセリフ、訳文、選択肢を動かします。このコンソール例は手動で拍を進め、Enter で次の拍、数字で選択肢を決定します。タイプライターや `.next` / `.wait` の時間制御は実装しません。
+前章の紹介でも触れたように、**「一編の Ktory スクリプトは戯曲であり、あなたのプログラムは現場の舞台監督である」** と言えます。それでは、最初の物語を書き、もっともシンプルな C# コードで動かしてみましょう。
 
-## 1. コアを参照する
+## 最初のスクリプトを書く
 
-.NET 9 SDK を用意し、リポジトリを複製した `Ktory` ディレクトリの隣にコンソールプロジェクトを作ります。
+PC 上で `prologue.ktr` という名前のファイルを作成し、以下の内容を記述します：
+
+```ktory
+アリス: 目が覚めた？ 気分はどう？
+  .expression(smile)
+
+あなたはまばたきをして、目の前の見知らぬ少女を見つめた。
+
+#choice
+  * [君は……？]
+    少女は首を横に振るだけで、何も答えなかった。
+  * [周りを見てみる]
+    あたりを見渡すと、どうやらここは古い石塔のようだ。
+
+アリス: まずはここから出よう。
+```
+
+Ktory は、演劇の台本を書くかのように直感的に物語スクリプトを作成できることを目指しています：
+- `アリス:`: 発話者（話者）を指定し、コロンの後にセリフが続きます。
+- `.expression(smile)`: セリフに付随する**修飾子（Decorator）**です。好みの修飾子を自由に定義でき、修飾子を付けないことも可能です。
+- 話者が指定されていないセリフは**地の文（ナレーション）**として扱われます。
+- `#choice`: 選択肢ブロックを開始します。`*` で選択肢を並べ、内容は `[]` で囲みます。
+- プレイヤーがどちらを選んでも、物語は自然にアリスの最後のセリフへと合流します。
+
+## プロンプター（提詞器）の準備
+
+Ktory のコア（`Ktory.Core`）は、冷静かつ厳密な**プロンプター（舞台の提詞器）**のような存在です。分岐の流れやループ、セッションの進行履歴を管理します。一方、あなたのゲームや端末は**現場の舞台監督**です。プレイヤーが Enter キーを押したりダイアログをクリックするたびに、監督がプロンプターへ前進シグナルを送り、プロンプターが次のセリフや選択肢を渡して画面上に表現させます。
+
+ターミナルを開き、もっともシンプルなコンソールアプリを作成して Ktory コアを参照に追加します：
 
 ```bash
 dotnet new console -n KtoryDemo
@@ -21,36 +49,13 @@ cd KtoryDemo
 dotnet add reference ../Ktory/src/Ktory.Core/Ktory.Core.csproj
 ```
 
-Unity では生成済みの `com.ktory.unity` パッケージを使います。導入とバージョン固定は [Unity UPM 統合](/ja/03-integration/01-unity-upm/) を参照してください。
+> **ヒント**: Unity で開発している場合は、ソースコードを手動で参照する必要はありません。Unity Package Manager（UPM）に git URL を入力して直接インストールできます。詳細は [Unity 統合ガイド](/ja/03-integration/01-unity-upm/) をご覧ください。
 
-## 2. `prologue.ktr` を作る
+先ほど作成した `prologue.ktr` ファイルを `KtoryDemo` プロジェクトのディレクトリに配置します。
 
-次の脚本をコンソールプロジェクトのディレクトリに保存します。どちらの分岐も最後の一文に合流します。
+## スクリプトを動かす
 
-```ktory
-@defaultLang: ja
-@speaker alice: ja="アリス" | en="Alice" | zh="爱丽丝"
-
-alice:
-  @ja: 目が覚めた？ 気分はどう？
-  @en: You're awake. How do you feel?
-  @zh: 你醒了？感觉怎么样？
-  .expression(smile)
-
-#choice
-  * [@ja: "お礼を言う"]
-    [@en: "Thank her"]
-    [@zh: "向她道谢"]
-    : 助けてくれてありがとう。
-  + [@ja: "周りを見る"]
-    [@en: "Look around first"]
-    [@zh: "先看看周围"]
-    : 古い塔のようだ。
-
-alice: まずは外に出よう。
-```
-
-## 3. `Program.cs` に保存して実行する
+プロジェクト内の `Program.cs` を以下の内容に置き換えます：
 
 ```csharp
 using System;
@@ -58,54 +63,84 @@ using System.IO;
 using Ktory.Core.Parser;
 using Ktory.Core.Runtime;
 
+// 1. スクリプトファイルを読み込んで構文解析
 var file = KtoryParser.Parse(File.ReadAllText("prologue.ktr"));
+
+// 2. シーケンサー（プロンプター）を作成
 var player = new KtorySequencer(file);
+
+// 修飾子（タグ）の通知を購読：表情や効果音、演出指示がスクリプトに現れた際に通知
 player.OnTagsDispatched += tags =>
 {
     foreach (var tag in tags)
-        Console.WriteLine($"[tag] {tag.Name}");
+    {
+        Console.WriteLine($"  [演出タグ] {tag.Name}");
+    }
 };
+
+// 日本語でスクリプトを開始（開始時にプロンプターが自動的に最初の拍を準備します）
 player.Start(requestedLocale: "ja");
 
+// 3. ループ進行：Enter キーで一歩進み、選択肢では番号を入力
 while (player.Status != ExecutionStatus.Completed)
 {
+    // 選択肢ブロック：プレイヤーの入力を待つ
     if (player.Status == ExecutionStatus.AwaitingChoice)
     {
         var menu = player.CurrentChoice!;
+        Console.WriteLine("\n=== 選択してください ===");
         for (int i = 0; i < menu.Options.Count; i++)
         {
-            var option = menu.Options[i];
-            Console.WriteLine($"{i + 1}. {option.Label} (enabled: {option.CanSelect})");
+            var opt = menu.Options[i];
+            Console.WriteLine($"{i + 1}. {opt.Label} {(opt.CanSelect ? "" : "(選択済み)")}");
         }
-        string? input = Console.ReadLine();
-        if (input is null) break;
-        if (!int.TryParse(input, out int number) ||
-            number < 1 || number > menu.Options.Count ||
-            !menu.Options[number - 1].CanSelect)
-            continue;
 
-        player.SubmitChoice(menu.Options[number - 1].Id, menu.PresentationId);
+        Console.Write("> ");
+        string? input = Console.ReadLine();
+        if (int.TryParse(input, out int choice) &&
+            choice >= 1 && choice <= menu.Options.Count &&
+            menu.Options[choice - 1].CanSelect)
+        {
+            // 選択を送信：コアが自動的に選択した分岐の最初の拍まで進めます
+            player.SubmitChoice(menu.Options[choice - 1].Id, menu.PresentationId);
+        }
         continue;
     }
 
+    // 通常の一拍（キャラクターのセリフまたは地の文）
     var beat = player.CurrentPayload;
-    if (beat is null)
-        throw new InvalidOperationException($"Unexpected status: {player.Status}");
+    if (beat is null) break;
 
-    Console.WriteLine(beat.StepType == StepType.Text
-        ? $"[{beat.ActualLanguage}] {beat.Speaker}: {beat.Content}"
-        : $"[directive] #{beat.Content}");
-    if (Console.ReadLine() is null) break;
+    string speaker = string.IsNullOrEmpty(beat.Speaker) ? "地の文" : beat.Speaker;
+    Console.WriteLine($"[{speaker}] {beat.Content}");
+
+    // プレイヤーの Enter キー入力を待ち、次の一歩を踏み出す
+    Console.ReadLine();
     player.Step(beat.PresentationId);
 }
+
+Console.WriteLine("\nスクリプトの再生が終了しました！");
 ```
+
+ターミナルで次のコマンドを実行します：
 
 ```bash
 dotnet run
 ```
 
-`Start()` は最初の拍まで実行します。選択肢は `Id` で決定します。`SubmitChoice()` も選択先の最初の拍まで進むので、その出力を読むため直ちにループに戻り、同じ選択に追加の `Step()` を送らないでください。`PresentationId` は入力を現在の出力に対応させ、実行中の古い入力の検出に使えます。セッションを再開する際は、ホストが前のコールバックを取り消す必要があります。
+Enter キーを押せば、アリスとの出会いの物語をご自身の手で進めることができます。
 
-この例は演出修飾子を表示するだけです。ゲーム状態、立ち絵の対応付け、時間制御は [設計原則](/ja/01-overview/03-design-principles/) に従ってホストが担当します。
+## 知っておくべきポイント
 
-次は [構文](/ja/02-syntax/01-anchor-decorator/)、[言語切替](/ja/02-syntax/04-localization/)、[独立 C# 接続](/ja/03-integration/02-standalone-csharp/) を参照してください。
+- **拍（Beat）**: セリフや地の文における論理的な停止点です。Enter キーを押したりダイアログを 1 回クリックするたびに、コアは 1「拍」進みます。
+- **プロンプターはタイプライター効果に関与しない**: コアの責務はゲームエンジンに「いまこのセリフを喋る順番です」と伝えることだけです。そのセリフをタイプライターのように 1 文字ずつ表示するか、フェードインさせるか、あるいはボイス付きで再生するかは、すべてゲームエンジン側が決定します。
+- **選択即推進（選択するとそのまま進む）**: `SubmitChoice()` で選択肢を送信した時点で、コアは選択された分岐の最初のセリフまで進めて一時停止します。そのため、追加で `Step()` を呼び出す必要はなく、呼び出すべきでもありません。
+- **誤クリック防止の安全キー（`PresentationId`）**: `player.Step(beat.PresentationId)` というコードに気付いたかもしれません。この ID は一時的なチケットのようなもので、「いま進めようとしているのが、現在画面に表示されているセリフそのものであるか」をコアが検証するために使われます。連打や誤操作によって後続の物語が意図せず一気に流れてしまうのを防ぎます。
+
+## 次のステップ
+
+これで、Ktory のもっとも基本的な対話フローをマスターできました！ 次は以下のガイドをご覧ください：
+
+- [スクリプト構文仕様](/ja/02-syntax/01-anchor-decorator/) へ進み、ループ、条件分岐、カスタム修飾子の使い方を学ぶ。
+- [多言語化とローカライゼーション](/ja/02-syntax/04-localization/) を探索し、複数のスクリプトを用意することなくシームレスに言語をホットリロードできる利便性を体験する。
+- [Unity 統合ガイド](/ja/03-integration/01-unity-upm/) を確認し、プロンプターを実際のゲーム画面や演出の世界に接続する。

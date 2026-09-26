@@ -1,17 +1,15 @@
 ---
 title: What is Ktory
-description: Ktory narrative script system positioning and core philosophy
+description: Positioning and core philosophy of the Ktory narrative script system
 sidebar:
   order: 1
 ---
 
-> This page follows the [Ktory design principles](/en/01-overview/03-design-principles/), which distinguish current contracts from longer-term goals.
+**Ktory is an authoring and integration system for dialogue-driven games.** A Ktory script is like a scene in a play: it unifies text, dialogue sequence, choices, and branching, annotated with cues for music and visual performance. Meanwhile, the game engine acts as the stage director—responsible for concrete presentation, world state, and the evaluation of real in-game events.
 
-# What Is Ktory?
+Compared to traditional scripting solutions, Ktory is better suited for developing games with rich and complex narratives.
 
-**Ktory is a dialogue-first, host-driven narrative language and runtime organized around beats.** It lets independent authors keep dialogue, choices, presentation cues and inline translations in one script. The host decides how to present those cues; the core determines the next narrative output.
-
-## Organize content like a screenplay
+## Organize Content Like a Play
 
 ```ktory
 @defaultLang: en
@@ -22,19 +20,27 @@ alice:
   @zh: 今天的风，似乎有点不同寻常。
   .expression(pensive)
 
-#choice
-  * [Set off]
+#.sfx("wind.ogg").wait(1).next()
+
+#choice.loop
+  * [Depart]
     alice: Let's go.
+    -> break
   + [Look around]
     : Leaves swirl outside the window.
 ```
 
-Dialogue and narration form beats; decorators attach to them. `.expression(pensive)` expresses an intent for the host. It does not create a portrait, look up an image or establish that a resource binding exists.
+Dialogue and narration form beats, and decorators attach to these beats. It is just like writing a screenplay: every beat represents a user interaction, and every decorator adds expressive cues to that line.
 
-## One shared core, explicit host responsibilities
+## One Core, Countless Hosts
 
-`src/Ktory.Core` is the shared C# parser and runtime. It targets `netstandard2.1` with no external NuGet dependencies. The repository's standalone and WebAssembly tools use `net9.0`; the Unity publishing workflow packages the shared sources as `com.ktory.unity`.
+Ktory uses C# as its parsing and runtime core, yet it can be used across environments of all sizes. From complex, feature-rich engines like Unity and Godot, to lightweight and flexible contexts like web browsers and VS Code extensions—even the command line can read and run Ktory scripts.
 
-The core owns branches, calls, loops and session history. The host owns rendering, resources, clocks, player input and game state. Text, textless directives and choices are observable logical stopping points. The host calls `Step()` or `SubmitChoice()` and reads the resulting output.
+The C# core manages branching, calls, loops, and session history. The host environment manages presentation, resources, clocks, player input, and game state.
 
-Phase 1 focuses on visual-novel-style dialogue and lightweight branching. Standalone reading checks basic narrative flow and language; host integration validates portraits, resources and other presentation. A portable core does not imply a shipped adapter for every engine.
+Ktory is still in early development. Currently, Ktory supports the following platforms:
+- Unity: Use "Install Package from git URL" and enter `https://github.com/Kutinana/Ktory.git#upm`.
+- VS Code: [VS Code Extension](vscode:extension/ktory.ktory).
+- Web: [Web Reader](https://reader.ktory.ink/).
+
+> A portable core does not imply that ready-made adapters have been delivered for every engine. Support for additional platforms is under active development.

@@ -1,6 +1,6 @@
 ---
 title: Discrete Steps & Forward-Only Philosophy
-description: Why Ktory adheres to Forward-Only execution and complete gatekeeping delegation
+description: Current beat advancement, host responsibilities and pending explicit signal dependencies
 sidebar:
   order: 1
 ---
@@ -9,7 +9,7 @@ sidebar:
 
 # Discrete Beats and Host-Driven Execution
 
-Ktory defines an advance as execution to the next logical stopping point. “Discrete” describes the narrative protocol; it does not make the whole game run in discrete time or require audio and animation to stop at beat boundaries.
+The current Ktory runtime defines an advance as execution to the next logical stopping point. “Discrete” describes the narrative protocol; it does not make the whole game run in discrete time or require audio and animation to stop at beat boundaries.
 
 ## What an advance does
 
@@ -19,7 +19,9 @@ Jumps and calls may execute consecutively within one advance until text, a textl
 
 ## Who owns time
 
-Typewriter effects, fast-forwarding, reading holds and external presentation gates belong to the host. Although distributed in the shared C# library, `PresentationController` is an optional presentation policy helper; it does not make the Sequencer wait for animations. Ambient sound and movement may continue while the host decides when another advance is allowed.
+Currently, typewriter effects, fast-forwarding, reading holds and external presentation gates belong to the host. Although distributed in the shared C# library, `PresentationController` is an optional presentation policy helper; it does not make the Sequencer wait for animations. Ambient sound and movement may continue while the host decides when another advance is allowed.
+
+The new goals allow explicit dependencies on presentation nodes or completion signals in `.ktr`, including passages without dialogue. The host still detects actual events. Dependency storage, matching and advancement protocols remain undecided; the current no-wait boundary must not rule them out permanently. Time and signals express time and event requirements respectively. Existing `.wait/.next` rules remain unchanged, and presentations do not all block by default. See the [design principles](/en/01-overview/03-design-principles/).
 
 [Ink can also be driven line by line by a host](https://github.com/inkle/ink/blob/master/Documentation/RunningYourInk.md) and provides choices and extension interfaces. Ktory chooses to standardize beat data, parameterized decorators and inline localization contracts. Its design does not depend on other engines being unable to separate rendering.
 
