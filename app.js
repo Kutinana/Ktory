@@ -35,6 +35,12 @@ const state = {
   holdTimer: null,
   holdDuration: 0,
   holdElapsed: 0,
+  minimumHoldDuration: 0,
+  autoAdvanceDuration: 0,
+  autoAdvanceElapsed: 0,
+  autoAdvanceOnHoldEnd: false,
+  usesEstimatedWait: false,
+  usesEstimatedAuto: false,
   allowClickInterrupt: true,
 
   // Narrative Stream Data
@@ -598,6 +604,16 @@ function toggleAutoPlay() {
   state.autoPlay = !state.autoPlay;
   el.btnAutoPlay.classList.toggle('active', state.autoPlay);
 
+  if (state.status === 'SuspendedAtBeat' && state.isHolding) {
+    const hasNext = state.activeTags.some(t => t.name.toLowerCase() === 'next');
+    const autoPolicy = state.autoPolicy || state.payload?.autoPolicy;
+    if (!hasNext && !autoPolicy?.enabled) {
+      // Changing host autoplay does not restart or bypass an active minimum wait.
+      state.autoAdvanceOnHoldEnd = state.autoPlay;
+      updateHoldHint();
+    }
+  }
+
   if (state.autoPlay && state.status === 'SuspendedAtBeat' && !state.isTyping && !state.isHolding) {
     stepSession();
   }
@@ -983,10 +999,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
       // Directive beats contain no dialogue text to translate.
       // Simply preserve current hold countdown state without touching DOM or previous dialogue elements.
       if (state.isHolding) {
-        const remainingSec = Math.max(0, state.holdDuration - state.holdElapsed);
-        el.dockStepHint.textContent = state.allowClickInterrupt
-          ? `自动推进倒计时 (${remainingSec.toFixed(1)}s)... 点击即刻推进`
-          : `强制停留中 (${remainingSec.toFixed(1)}s)...`;
+        updateHoldHint();
       }
       return;
     }
@@ -1037,26 +1050,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
       // Switching while typing reveals full translation and triggers post-text policy (.wait / .next / #AUTO / manual)
       setupHoldTimer(tags);
     } else if (wasHolding) {
-      // Switching while already in hold stage preserves or recalculates remaining time
-      const nextTag = tags.find(t => t.name.toLowerCase() === 'next');
-      const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
-      const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
-
-      const isEstimated = (waitTag && waitTag.positionalArgs.length === 0) ||
-                          (!waitTag && !nextTag && autoPolicy && autoPolicy.enabled && autoPolicy.useEstimatedReadingTime);
-
-      if (isEstimated) {
-        const newDuration = estimateReadingTime(payload.content || '', payload.actualLanguage || state.requestedLocale);
-        const progressRatio = state.holdDuration > 0 ? Math.min(0.95, state.holdElapsed / state.holdDuration) : 0;
-        state.holdDuration = Math.max(0.5, newDuration);
-        state.holdElapsed = progressRatio * state.holdDuration;
-      }
-
-      const remainingSec = Math.max(0, state.holdDuration - state.holdElapsed);
-      const autoPrefix = (autoPolicy && autoPolicy.enabled && !waitTag && !nextTag) ? '[AUTO] ' : '';
-      el.dockStepHint.textContent = state.allowClickInterrupt
-        ? `${autoPrefix}自动推进倒计时 (${remainingSec.toFixed(1)}s)... 点击即刻推进`
-        : `强制停留中 (${remainingSec.toFixed(1)}s)...`;
+      refreshHoldLanguage(payload);
     } else {
       // Already finished typing and not holding (manual wait)
       el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
@@ -1306,35 +1300,32 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
   const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
   const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
 
-  let holdSec = defaultHoldSec;
-  state.allowClickInterrupt = true;
-  let hasAutoTimer = false;
-
+  const readingTime = estimateReadingTime(state.payload?.content || '', state.payload?.actualLanguage || state.requestedLocale);
+  state.usesEstimatedWait = !!waitTag && waitTag.positionalArgs.length === 0;
+  state.usesEstimatedAuto = false;
+  state.minimumHoldDuration = waitTag
+    ? (state.usesEstimatedWait ? readingTime : Math.max(0, Number(waitTag.positionalArgs[0]) || 0)) : 0;
+  state.autoAdvanceOnHoldEnd = !!nextTag || !!autoPolicy?.enabled || state.autoPlay;
   if (nextTag) {
-    hasAutoTimer = true;
-    state.allowClickInterrupt = true; // .next(t): clicking immediately skips hold
-    holdSec = nextTag.positionalArgs.length > 0 ? Number(nextTag.positionalArgs[0]) : 0;
+    state.autoAdvanceDuration = Math.max(0, Number(nextTag.positionalArgs[0]) || 0);
   } else if (waitTag) {
-    hasAutoTimer = true;
-    state.allowClickInterrupt = false; // .wait(t): cannot skip early
-    holdSec = waitTag.positionalArgs.length > 0 
-      ? Number(waitTag.positionalArgs[0]) 
-      : estimateReadingTime(state.payload?.content || '', state.payload?.actualLanguage || state.requestedLocale);
+    // A local wait replaces the automatic default delay without enabling automatic playback.
+    state.autoAdvanceDuration = 0;
   } else if (autoPolicy && autoPolicy.enabled) {
-    hasAutoTimer = true;
-    state.allowClickInterrupt = true; // In AUTO mode, clicking can immediately advance
-    if (autoPolicy.useEstimatedReadingTime && state.payload?.stepType === 0) { // StepType.Text is 0
-      holdSec = estimateReadingTime(state.payload?.content || '', state.payload?.actualLanguage || state.requestedLocale);
-    } else {
-      holdSec = Number(autoPolicy.defaultWaitSeconds) || 0;
-    }
+    state.usesEstimatedAuto = autoPolicy.useEstimatedReadingTime &&
+      (state.payload?.stepType === 0 || state.payload?.stepType === 'Text');
+    state.autoAdvanceDuration = state.usesEstimatedAuto ? readingTime : Math.max(0, Number(autoPolicy.defaultWaitSeconds) || 0);
   } else if (state.autoPlay) {
-    hasAutoTimer = true;
-    state.allowClickInterrupt = true;
-    holdSec = 2.2;
+    state.autoAdvanceDuration = 2.2;
+  } else {
+    state.autoAdvanceDuration = defaultHoldSec;
   }
+  state.holdElapsed = 0;
+  state.autoAdvanceElapsed = 0;
+  state.holdDuration = Math.max(state.minimumHoldDuration, state.autoAdvanceDuration);
+  state.allowClickInterrupt = state.minimumHoldDuration <= 0;
 
-  if (hasAutoTimer && holdSec <= 0) {
+  if (state.autoAdvanceOnHoldEnd && state.holdDuration <= 0) {
     // Immediate auto advance per specification
     state.isHolding = false;
     el.dockProgressBar.style.width = '0%';
@@ -1342,16 +1333,10 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     return;
   }
 
-  if (hasAutoTimer && holdSec > 0) {
+  if (state.holdDuration > 0 && (state.autoAdvanceOnHoldEnd || state.minimumHoldDuration > 0)) {
     state.isHolding = true;
-    state.holdDuration = holdSec;
-    state.holdElapsed = 0;
-
     el.dockProgressBar.style.width = '0%';
-    const autoPrefix = (autoPolicy && autoPolicy.enabled && !waitTag && !nextTag) ? '[AUTO] ' : '';
-    el.dockStepHint.textContent = state.allowClickInterrupt
-      ? `${autoPrefix}自动推进倒计时 (${holdSec.toFixed(1)}s)... 点击即刻推进`
-      : `强制停留中 (${holdSec.toFixed(1)}s)...`;
+    updateHoldHint();
 
     const intervalMs = 25;
     state.holdTimer = setInterval(() => {
@@ -1363,21 +1348,25 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
         return;
       }
 
-      state.holdElapsed += intervalMs / 1000;
-      const progress = Math.min(100, (state.holdElapsed / Math.max(0.1, state.holdDuration)) * 100);
+      // Keep .next's clock independent of estimated reading progress during language refresh.
+      state.holdElapsed = Math.round((state.holdElapsed + intervalMs / 1000) * 1e9) / 1e9;
+      state.autoAdvanceElapsed = Math.round((state.autoAdvanceElapsed + intervalMs / 1000) * 1e9) / 1e9;
+      state.allowClickInterrupt = state.holdElapsed >= state.minimumHoldDuration;
+      const remaining = Math.max(0, state.minimumHoldDuration - state.holdElapsed,
+        state.autoAdvanceOnHoldEnd ? state.autoAdvanceDuration - state.autoAdvanceElapsed : 0);
+      const progress = Math.min(100, (1 - remaining / Math.max(0.1, state.holdDuration)) * 100);
       el.dockProgressBar.style.width = `${progress}%`;
-
-      const remainingSec = Math.max(0, state.holdDuration - state.holdElapsed);
-      el.dockStepHint.textContent = state.allowClickInterrupt
-        ? `${autoPrefix}自动推进倒计时 (${remainingSec.toFixed(1)}s)... 点击即刻推进`
-        : `强制停留中 (${remainingSec.toFixed(1)}s)...`;
-
-      if (state.holdElapsed >= state.holdDuration) {
+      updateHoldHint();
+      if (remaining <= 0) {
         clearInterval(state.holdTimer);
         state.holdTimer = null;
         state.isHolding = false;
         el.dockProgressBar.style.width = '0%';
-        stepSession(holdPresentationId);
+        if (state.autoAdvanceOnHoldEnd) {
+          stepSession(holdPresentationId);
+        } else {
+          el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
+        }
       }
     }, intervalMs);
   } else {
@@ -1386,6 +1375,34 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     el.dockProgressBar.style.width = '0%';
     el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
   }
+}
+
+function updateHoldHint() {
+  const waitRemaining = Math.max(0, state.minimumHoldDuration - state.holdElapsed);
+  const autoRemaining = Math.max(0, state.autoAdvanceDuration - state.autoAdvanceElapsed);
+  el.dockStepHint.textContent = !state.allowClickInterrupt
+    ? `强制停留中 (${waitRemaining.toFixed(1)}s)... 点击无效`
+    : state.autoAdvanceOnHoldEnd
+      ? `自动推进倒计时 (${autoRemaining.toFixed(1)}s)... 点击即刻推进`
+      : '点击页面或按 [空格] 推进阅读 ▾';
+}
+
+function refreshHoldLanguage(payload) {
+  const duration = estimateReadingTime(payload.content || '', payload.actualLanguage || state.requestedLocale);
+  if (state.usesEstimatedWait) {
+    const progress = state.minimumHoldDuration > 0 ? Math.min(1, state.holdElapsed / state.minimumHoldDuration) : 1;
+    state.minimumHoldDuration = duration;
+    state.holdElapsed = progress * duration;
+  }
+  if (state.usesEstimatedAuto) {
+    const progress = state.autoAdvanceDuration > 0 ? Math.min(1, state.autoAdvanceElapsed / state.autoAdvanceDuration) : 1;
+    state.autoAdvanceDuration = duration;
+    state.autoAdvanceElapsed = progress * duration;
+    state.holdElapsed = state.autoAdvanceElapsed;
+  }
+  state.holdDuration = Math.max(state.minimumHoldDuration, state.autoAdvanceDuration);
+  state.allowClickInterrupt = state.holdElapsed >= state.minimumHoldDuration;
+  updateHoldHint();
 }
 
 // Stage / Viewport Advance Trigger
