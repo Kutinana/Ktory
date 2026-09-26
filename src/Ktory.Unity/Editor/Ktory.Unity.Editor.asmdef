@@ -2,7 +2,8 @@
   "name": "Ktory.Unity.Editor",
   "rootNamespace": "Ktory.Unity.Editor",
   "references": [
-    "Ktory.Core"
+    "Ktory.Core",
+    "Ktory.Unity"
   ],
   "includePlatforms": [
     "Editor"

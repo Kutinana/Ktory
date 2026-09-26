@@ -8,6 +8,8 @@ on:
     paths:
       - 'src/Ktory.Core/**'
       - 'src/Ktory.Unity/**'
+      - 'docs/ktory-unity-debugging.md'
+      - 'README.md'
       - 'scripts/publish-upm.ps1'
       - '.github/workflows/publish-upm.yml'
   workflow_dispatch:

@@ -28,13 +28,8 @@ The repository contains the shared core (`src/Ktory.Core`), local and WASM Reade
 
 Unity's generated package is `com.ktory.unity`, available through `https://github.com/Kutinana/Ktory.git#upm`. For reproducible integration, pin a generated package commit or immutable release tag and record its source commit; the main branch's Core directory is not itself a UPM package.
 
-## Build and distribution outputs
+The Unity **Window → Ktory → Debugging** window observes registered live host sessions in Play Mode: source positions, input gates and timers, language refresh, bounded execution logs, choices and control flow. Existing players connect through a small Editor-only adapter; project presentation state remains project-owned. See [integration and Unity validation](docs/ktory-unity-debugging.md).
 
-| Product | Build / publication | Output |
-| --- | --- | --- |
-| Standalone Reader | `Reader - Publish Static Site` | Static files in the `deploy-reader` branch root; local output `artifacts/reader/wwwroot/` |
-| Unity package | `Unity - Publish UPM Package` | `com.ktory.unity` on the `upm` branch; existing `#upm` URLs stay valid |
-| VS Code extension | `VS Code - Build VSIX` | Actions artifact `ktory-vscode-vsix-<source-commit>` containing `ktory-vscode-<version>.vsix`; local output `artifacts/vscode/` |
-| Portal and documentation | Vercel builds `main`, Root Directory `website` | `website/dist/`; separate from the Reader site |
+## Development
 
-`deploy-reader` replaces the ambiguous Reader branch name `deploy-web`. After the first publication, switch the Reader Vercel project's production branch to `deploy-reader`, keeping its Root Directory at the repository root. The portal project must exclude generated branches from deployment. See the [publication mapping and migration notes](docs/ktory-workflow.md#发布产物与托管入口).
+See the [design charter](docs/ktory-design-charter.md), [language specification](docs/ktory-implementation_v1.md), and [repository workflow](docs/ktory-workflow.md) for implementation, verification and distribution details.

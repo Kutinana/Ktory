@@ -338,9 +338,21 @@ alice:
 
 已有实际 Unity 接入在另一设备。本规范保留上述最终验收要求，不要求当前设备重建游戏工程。能够脱离 UI 复现的反馈须转为 Core／桥接回归；渲染、资源、事件接线与平台行为由 Unity 环境补充验证。
 
+#### 5.3.1 运行中调试（2026-09-26）
+
+真实项目验证需要的通用窗口位于 Package `Editor/Debugging`，菜单为 `Window/Ktory/Debugging`。通过 Editor 条件编译的 `IKtoryDebugTarget` 注册真实宿主会话，支持多个实例；本版不创建第二播放器、不连接独立构建的远程 Player、不提供强制跳过。
+
+- Core 仅提供当前源码位置、值快照和可选 `OnTrace` 诊断事件，不引入 Unity 或真实时钟。事件覆盖节点进入、标签派发尝试、有效选项提交、调用、返回、跳转／break、结束及执行错误；观察器异常不改变执行，窗口读取不产生事件。标签尝试不代表外部演出成功。
+- `PresentationController` 暴露真实快显锁、最低停留和自动延迟的剩余值及策略来源。文字显示阶段的停留／自动值是尚未开始的时长；窗口不能调用 Update 或建立新呈现。无活动拍时不得显示上一拍的 AUTO 为当前生效策略。
+- `ChoicePayload.LineNumber` 与 `ChoiceOption.LineNumber/RequestedLanguage/ActualLanguage` 透传选择及选项源码和真实语言，不改变既有文本选择算法。正文与选项各自报告实际语言。
+- 切语言、正常点击、合法选择和重启经过宿主真实处理路径；换语言不推进、不重放标签、不重置固定计时。项目自有打字机、演出资源、额外输入门禁与 AUTO 由项目提供信息，不由 Package 推测自定义修饰符含义。
+- 注册期间收集历史，窗口开关不影响会话。全部实例合计最多 2000 条；退出 Play Mode／重编译撤销订阅，销毁或替换会话清理注册。UI、注册表与历史不进入正式构建。
+
+此决策对应 C03–C06、C08；具体适配、扩展边界和 Unity 验收步骤见 [Debugging 接入说明](ktory-unity-debugging.md)。Core 测试与 Unity 实机证据分别记录。
+
 ### 5.4 独立试读
 
-当前接入形态包括本地 HTTP Reader、WASM Reader 及 VS Code 内的 WASM 试读。VS Code 扩展读取明确打开的编辑器文档，支持手动重载未保存内容；重载开始新会话。它复用核心与 Reader 的现有行为，不另设语言语义。安装、构建与验证见 [VS Code 扩展说明](../src/Ktory.VSCode/README.md)。
+当前接入形态包括本地 HTTP Reader、WASM Reader 及 VS Code 内的 WASM 试读。VS Code 扩展读取明确打开的编辑器文档，支持手动重载未保存内容；重载开始新会话。它复用核心与 Reader 的现有行为，不另设语言语义。安装与使用见 [VS Code 扩展说明](../src/Ktory.VSCode/README.md)，构建与验证见[仓库工作流](ktory-workflow.md#vs-code-扩展开发与验证)。
 
 1. 不依赖 Unity，至少提供语言选择。
 2. 执行基础行为，跳过不能解释为基础行为的内容，不要求外部状态模拟。

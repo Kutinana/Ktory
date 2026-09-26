@@ -1,0 +1,7 @@
+{
+  "name": "Ktory.Unity.Editor.Tests",
+  "references": ["Ktory.Core", "Ktory.Unity", "Ktory.Unity.Editor"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}

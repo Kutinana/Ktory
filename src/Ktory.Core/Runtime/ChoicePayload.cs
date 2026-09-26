@@ -7,6 +7,9 @@ namespace Ktory.Core.Runtime
     public class ChoiceOption
     {
         public string Id { get; set; } = string.Empty;
+        public int LineNumber { get; set; }
+        public string ActualLanguage { get; set; } = string.Empty;
+        public string RequestedLanguage { get; set; } = string.Empty;
         public string Label { get; set; } = string.Empty;
         public char Marker { get; set; } = '*';
         public bool IsConsumed { get; set; }
@@ -22,6 +25,7 @@ namespace Ktory.Core.Runtime
 
     public class ChoicePayload
     {
+        public int LineNumber { get; set; }
         public long PresentationId { get; set; }
         public string ContainerName { get; set; } = "choice";
         public bool IsLoop { get; set; }

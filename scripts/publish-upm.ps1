@@ -101,11 +101,13 @@ try {
     # 2. Copy Editor folder
     Copy-Item -Path "src/Ktory.Unity/Editor" -Destination (Join-Path $tempDir "Editor") -Recurse
 
-    # 3. Prepare Runtime folder
+    # 3. Copy Unity Runtime integration and assembly boundaries (Core remains engine-independent).
     $targetRuntime = Join-Path $tempDir "Runtime"
     New-Item -ItemType Directory -Path $targetRuntime | Out-Null
-    Copy-Item -Path "src/Ktory.Unity/Runtime/Ktory.Core.asmdef" -Destination (Join-Path $targetRuntime "Ktory.Core.asmdef")
-    Copy-Item -Path "src/Ktory.Unity/Runtime/csc.rsp" -Destination (Join-Path $targetRuntime "csc.rsp")
+    # Runtime/Core may be present as an ignored local generation. Always regenerate it from the unique Core source.
+    Get-ChildItem "src/Ktory.Unity/Runtime" | Where-Object { $_.Name -notin @("Core", "Core.meta") } | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination $targetRuntime -Recurse
+    }
 
     # 4. Copy Core C# source folders into Runtime/Core
     $targetCore = Join-Path $targetRuntime "Core"
@@ -119,7 +121,19 @@ try {
     }
 
     # 5. Copy root documentation/license
-    if (Test-Path "README.md") { Copy-Item "README.md" -Destination (Join-Path $tempDir "README.md") }
+    Copy-Item "src/Ktory.Unity/Samples~" -Destination (Join-Path $tempDir "Samples~") -Recurse
+    Copy-Item "src/Ktory.Unity/Tests" -Destination (Join-Path $tempDir "Tests") -Recurse
+    # Maintain the guide in docs; adapt repository-relative sample links for the generated package.
+    $debuggingGuide = Get-Content "docs/ktory-unity-debugging.md" -Raw -Encoding utf8
+    $debuggingGuide = $debuggingGuide.Replace("(../src/Ktory.Unity/", "(")
+    Set-Content -Path (Join-Path $tempDir "DEBUGGING.md") -Value $debuggingGuide -Encoding utf8 -NoNewline
+    if (Test-Path "README.md") {
+        $packageReadme = Get-Content "README.md" -Raw -Encoding utf8
+        $packageReadme = $packageReadme.Replace("(docs/ktory-unity-debugging.md)", "(DEBUGGING.md)")
+        $packageReadme = $packageReadme.Replace("(docs/", "(https://github.com/Kutinana/Ktory/blob/main/docs/")
+        $packageReadme = $packageReadme.Replace("(src/", "(https://github.com/Kutinana/Ktory/blob/main/src/")
+        Set-Content -Path (Join-Path $tempDir "README.md") -Value $packageReadme -Encoding utf8 -NoNewline
+    }
     if (Test-Path "LICENSE") { Copy-Item "LICENSE" -Destination (Join-Path $tempDir "LICENSE") }
 
     # 6. Clean UPM .gitignore

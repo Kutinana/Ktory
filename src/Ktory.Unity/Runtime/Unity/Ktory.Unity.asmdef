@@ -1,0 +1,7 @@
+{
+  "name": "Ktory.Unity",
+  "rootNamespace": "Ktory.Unity",
+  "references": ["Ktory.Core"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

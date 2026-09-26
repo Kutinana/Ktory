@@ -16,32 +16,9 @@ The VSIX includes the .NET WebAssembly runtime, Core, bridge and Reader assets. 
 
 The preview ignores unknown external choice conditions and skips unknown presentation handlers. It supports basic rich text and Ruby; executable HTML, resource-loading elements and arbitrary HTML attributes are removed inside the editor preview. It does not certify Unity rendering, resource bindings or game-state behavior. Syntax highlighting is a TextMate grammar, not a semantic validator or language server.
 
-## Build and verify from this repository
+## Development
 
-Developers need .NET SDK 9, Node.js 20+ and pnpm 10. From this directory:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm build
-pnpm test
-pnpm test:integration
-pnpm package
-pnpm test:vsix
-```
-
-`test:integration` uses a separate VS Code profile and extensions directory. `test:vsix` installs the generated VSIX into another isolated profile and runs the same suite against the installed files. On macOS these commands detect the standard application path; elsewhere set `VSCODE_EXECUTABLE_PATH` to the VS Code executable (and `VSCODE_CLI_PATH` when the CLI is separate). Linux CI needs a display such as `xvfb-run`.
-
-The `VS Code - Build VSIX` workflow uploads `ktory-vscode-vsix-<source-commit>`; extract its VSIX to install the extension. `package` builds and writes the VSIX to the repository's `artifacts/vscode` directory; it does not publish to the Marketplace. The repository does not currently declare a distribution license, so this local package remains `UNLICENSED`; packaging does not choose a project license or establish a Marketplace publisher account.
-
-The extension manifest’s `version` in `package.json` is the single version source. `scripts/package.cjs` derives `ktory-vscode-<version>.vsix` from it, and `test:vsix` reads that same path. Ordinary builds do not increment versions; update the manifest version deliberately for a new release. The commit suffix on the Actions download identifies a build, not an extension version.
-
-## Maintenance boundaries
-
-- `syntaxes/ktory.tmLanguage.json` is the single maintained highlighting grammar. The portal imports it directly.
-- `reader/` is generated from `src/Ktory.Web`, which references `src/Ktory.Core` and the shared frontend in `src/Ktory.Runner/wwwroot`. Never edit the generated runtime or fork the interpreter here.
-- `extension.js` manages VS Code documents and panel lifecycle. `webview.js` adapts the shared Reader to editor messages and local resource URLs. Narrative execution remains in Core; time and input remain in the Reader.
-- `reader/build-info.json` records the source commit, dirty flag and build time. A dirty build is a local candidate, not evidence of a clean release from that commit.
-- Product guarantees follow the [design charter](https://github.com/Kutinana/Ktory/blob/main/docs/ktory-design-charter.md); concrete language behavior follows the implementation specification.
+Build, verification, packaging and maintenance instructions are maintained in the [repository workflow](https://github.com/Kutinana/Ktory/blob/main/docs/ktory-workflow.md#vs-code-扩展开发与验证).
 
 ## Troubleshooting
 

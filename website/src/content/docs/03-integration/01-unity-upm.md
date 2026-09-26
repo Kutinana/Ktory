@@ -95,3 +95,11 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 最低停留与自动推进分别处理：`.wait` 到期仅解除限制，期间点击不排队；`.wait.next` 才在停留结束后自动推进（AUTO 区域或宿主自动模式也可提供自动策略）。`.wait(s).next(t)` 从全文显示完成时同时计时，顺序无关。`HandleUserClick()` 接收原始用户输入；不要直接用 `Step()` 绕过呈现策略。`QueuedAdvance` 为兼容保留，始终为 `false`。
 
 默认 `AutoStepSequencer == true` 时，控制器自己推进；不要在 `OnAdvanceRequested` 中重复 `Step()`。资源与立绘映射、世界状态和外部演出限制仍由宿主持有。改变会话、重启或销毁对象时撤销旧输入及回调，并以实际 Unity 工程反馈检验核心边界。
+
+## Play Mode 调试窗口
+
+通过 **Window → Ktory → Debugging** 打开窗口。现有宿主实现 `IKtoryDebugTarget`，在真实会话 Start 前注册到 `KtoryDebugRegistry`，在禁用、销毁或替换会话时 Dispose；宿主 asmdef 引用 `Ktory.Unity`，适配代码放在 `#if UNITY_EDITOR` 内。Package Manager 提供 **Debugging host probe** 接线样例。
+
+窗口支持多实例、节点与源码跳行、正文／Speaker、真实控制器的推进阻塞与 AUTO 计时、跟随默认或指定语言、正常快显／推进、合法选项及重启，以及调用栈、循环和消费历史。切语言通过宿主调用 `SetLanguage`、`RefreshLanguage(false)` 并刷新 UI，不能重跑标签或推进。标准计时仅在宿主提供真实 `PresentationController` 时可用。
+
+标签等执行记录在注册后开始收集，全部实例最多 2000 条，支持筛选、清空和复制；窗口开关不改变剧情。自定义动画、额外输入锁、项目 AUTO 通过 `InputBlockReason` 和可选 `IKtoryDebugInfoProvider` 提供，Package 不推测其语义。本版没有强制跳过；UI 与注册日志不进入正式构建。详细接线和真实 Unity 验收清单位于生成包的 `DEBUGGING.md`。Core 测试通过不代表 Unity 窗口与实际演出已经实机验证。

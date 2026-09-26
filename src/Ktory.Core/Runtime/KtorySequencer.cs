@@ -5,7 +5,7 @@ using Ktory.Core.Common;
 
 namespace Ktory.Core.Runtime
 {
-    public class KtorySequencer
+    public partial class KtorySequencer
     {
         public KtoryFile File { get; }
         public string RequestedLanguage { get; private set; } = "zh";
@@ -67,6 +67,13 @@ namespace Ktory.Core.Runtime
 
         public void Start(string? entryLabel = null, string requestedLocale = "zh")
         {
+            try { StartCore(entryLabel, requestedLocale); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void StartCore(string? entryLabel = null, string requestedLocale = "zh")
+        {
+            _currentStep = null;
             RequestedLanguage = requestedLocale;
             VisitedItemIds.Clear();
             CallStack.Clear();
@@ -119,6 +126,12 @@ namespace Ktory.Core.Runtime
 
         public void Step(long? expectedPresentationId = null)
         {
+            try { StepCore(expectedPresentationId); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void StepCore(long? expectedPresentationId = null)
+        {
             if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
             {
                 return;
@@ -143,6 +156,12 @@ namespace Ktory.Core.Runtime
         }
 
         public void SubmitChoice(string choiceIdentifier, long? expectedPresentationId = null)
+        {
+            try { SubmitChoiceCore(choiceIdentifier, expectedPresentationId); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void SubmitChoiceCore(string choiceIdentifier, long? expectedPresentationId = null)
         {
             if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
             {
@@ -188,6 +207,8 @@ namespace Ktory.Core.Runtime
                 throw new KtoryControlFlowException($"Choice item '{choiceIdentifier}' is consumed or not selectable.");
             }
 
+            Trace(ExecutionTraceKind.Choice, matchedItem.Id + ": " + matchedOption?.Label, matchedItem.LineNumber);
+
             // Mark single-use item as visited in session
             if (matchedItem.IsOneTime)
             {
@@ -197,7 +218,7 @@ namespace Ktory.Core.Runtime
             // Dispatch item tags
             if (matchedItem.Tags.Count > 0)
             {
-                OnTagsDispatched?.Invoke(matchedItem.Tags);
+                DispatchTags(matchedItem.Tags, matchedItem.LineNumber);
             }
 
             CurrentChoice = null;
@@ -251,11 +272,24 @@ namespace Ktory.Core.Runtime
 
         public void Break()
         {
+            try { BreakCore(); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void BreakCore()
+        {
+            Trace(ExecutionTraceKind.Jump, "Host break");
             ApplyBreak();
             Advance();
         }
 
         public void SetLanguage(string requestedLocale)
+        {
+            try { SetLanguageCore(requestedLocale); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void SetLanguageCore(string requestedLocale)
         {
             if (string.Equals(RequestedLanguage, requestedLocale, StringComparison.OrdinalIgnoreCase))
                 return;
@@ -337,6 +371,7 @@ namespace Ktory.Core.Runtime
                     // Case 1: Inline branch ended naturally -> pop inline frame and resume parent steps
                     if (CallStack.Count > 0 && CallStack.Peek().FrameType == CallFrameType.InlineBranch)
                     {
+                        Trace(ExecutionTraceKind.Return, "Inline branch completed");
                         var frame = CallStack.Pop();
                         while (_activeLoops.Count > frame.LoopStackDepth)
                         {
@@ -360,6 +395,7 @@ namespace Ktory.Core.Runtime
                     // Clear call stack and active loops, then resume at the first root node following the section.
                     if (!_currentBlock.IsRoot)
                     {
+                        Trace(ExecutionTraceKind.End, "Section completed; resume root");
                         ClearActiveLoopsForBlock(_currentBlock);
                         CallStack.Clear();
                         _activeLoops.Clear();
@@ -374,6 +410,7 @@ namespace Ktory.Core.Runtime
                     }
 
                     // Case 3: Root block ended
+                    Trace(ExecutionTraceKind.End, "Root completed");
                     CallStack.Clear();
                     _activeLoops.Clear();
                     ActiveAutoPolicy = null;
@@ -421,12 +458,17 @@ namespace Ktory.Core.Runtime
 
                     case DirectiveStep directiveStep:
                     {
+                        // Ordinary directive beats are traced by ProcessBeatStep.
+                        if (string.Equals(directiveStep.Name, "AUTO", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(directiveStep.Name, "AUTO_END", StringComparison.OrdinalIgnoreCase))
+                            Trace(ExecutionTraceKind.Node, "#" + directiveStep.Name);
+
                         // Handle #AUTO macro directive (enters auto scope without observable pause)
                         if (string.Equals(directiveStep.Name, "AUTO", StringComparison.OrdinalIgnoreCase))
                         {
                             if (directiveStep.Tags.Count > 0)
                             {
-                                OnTagsDispatched?.Invoke(directiveStep.Tags);
+                                DispatchTags(directiveStep.Tags, directiveStep.LineNumber);
                             }
 
                             ActiveAutoPolicy = directiveStep.LexicalAutoPolicy;
@@ -438,7 +480,7 @@ namespace Ktory.Core.Runtime
                         {
                             if (directiveStep.Tags.Count > 0)
                             {
-                                OnTagsDispatched?.Invoke(directiveStep.Tags);
+                                DispatchTags(directiveStep.Tags, directiveStep.LineNumber);
                             }
 
                             ActiveAutoPolicy = null;
@@ -456,6 +498,7 @@ namespace Ktory.Core.Runtime
 
                     case ContainerStep containerStep:
                     {
+                        Trace(ExecutionTraceKind.Node, "#" + containerStep.Name);
                         // Check loop context
                         if (containerStep.IsLoop)
                         {
@@ -476,7 +519,7 @@ namespace Ktory.Core.Runtime
                         // Dispatch container tags
                         if (containerStep.Tags.Count > 0)
                         {
-                            OnTagsDispatched?.Invoke(containerStep.Tags);
+                            DispatchTags(containerStep.Tags, containerStep.LineNumber);
                         }
 
                         var choicePayload = BuildChoicePayload(containerStep);
@@ -517,11 +560,12 @@ namespace Ktory.Core.Runtime
 
         private void ProcessBeatStep(StepNode step)
         {
+            Trace(ExecutionTraceKind.Node, step.GetType().Name, step.LineNumber);
             if (step is TextStep textStep)
             {
                 if (textStep.Tags.Count > 0)
                 {
-                    OnTagsDispatched?.Invoke(textStep.Tags);
+                    DispatchTags(textStep.Tags, textStep.LineNumber);
                 }
 
                 var content = textStep.GetText(RequestedLanguage, DefaultLanguage, out var actualLang);
@@ -546,7 +590,7 @@ namespace Ktory.Core.Runtime
             {
                 if (directiveStep.Tags.Count > 0)
                 {
-                    OnTagsDispatched?.Invoke(directiveStep.Tags);
+                    DispatchTags(directiveStep.Tags, directiveStep.LineNumber);
                 }
 
                 CurrentPresentationId = ++_presentationCounter;
@@ -612,6 +656,10 @@ namespace Ktory.Core.Runtime
 
         private void ExecuteControlFlow(ControlFlowStep cf, ContainerStep? sourceContainer)
         {
+            var kind = cf.FlowType == ControlFlowType.Call ? ExecutionTraceKind.Call
+                : cf.FlowType == ControlFlowType.Return ? ExecutionTraceKind.Return
+                : cf.FlowType == ControlFlowType.End ? ExecutionTraceKind.End : ExecutionTraceKind.Jump;
+            Trace(kind, cf.ToString(), cf.LineNumber > 0 ? cf.LineNumber : CurrentLineNumber);
             switch (cf.FlowType)
             {
                 case ControlFlowType.Jump:
@@ -731,7 +779,10 @@ namespace Ktory.Core.Runtime
                 options.Add(new ChoiceOption
                 {
                     Id = item.Id,
-                    Label = item.GetLabel(RequestedLanguage, DefaultLanguage),
+                    Label = item.GetLabel(RequestedLanguage, DefaultLanguage, out var actualLanguage),
+                    ActualLanguage = actualLanguage,
+                    RequestedLanguage = RequestedLanguage,
+                    LineNumber = item.LineNumber,
                     Marker = item.Marker,
                     IsConsumed = isConsumed,
                     CanSelect = canSelect,
@@ -742,6 +793,7 @@ namespace Ktory.Core.Runtime
             return new ChoicePayload
             {
                 ContainerName = container.Name,
+                LineNumber = container.LineNumber,
                 IsLoop = container.IsLoop,
                 Tags = container.Tags,
                 Options = options

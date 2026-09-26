@@ -113,7 +113,24 @@ dotnet run --project src/Ktory.Runner
 
 每项能力分开记录三列：**契约状态（已确认／未决／阶段外）**、**实现状态（完整／部分／缺口）**、**验证证据（提交、环境、命令、结果）**。Core 的 Ruby 字符串测试不能证明 TMP 能渲染；导入编译成功不能证明输入和时序正确。
 
-VS Code 扩展在其目录执行 `pnpm install --frozen-lockfile`、`pnpm build`、`pnpm test`、`pnpm test:integration` 和 `pnpm package`。构建复用 Web/Runner/Core；`reader/` 为生成物，VSIX 输出至 `artifacts/vscode/`。原生集成测试使用独立 VS Code 配置，不修改日常安装。`build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
+### VS Code 扩展开发与验证
+
+开发环境需要 .NET SDK 9、Node.js 20+ 和 pnpm 10。在 `src/Ktory.VSCode` 执行：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+pnpm test
+pnpm test:integration
+pnpm package
+pnpm test:vsix
+```
+
+`test:integration` 使用独立 VS Code 配置和扩展目录；`test:vsix` 将生成的 VSIX 安装到另一隔离配置，再对安装后的文件运行同一套测试。macOS 自动检测标准应用路径；其他环境可设置 `VSCODE_EXECUTABLE_PATH`，CLI 独立时另设 `VSCODE_CLI_PATH`。Linux CI 需要 `xvfb-run` 等显示环境。
+
+构建复用 Web/Runner/Core，`reader/` 是生成物。`extension.js` 管理文档与面板生命周期，`webview.js` 负责共享 Reader 的编辑器消息及本地资源适配；剧情执行仍归 Core，时序与输入归 Reader。`reader/build-info.json` 记录源提交、dirty 标记和构建时间；dirty 构建不能作为该提交的干净发布证据。
+
+`package` 生成 `artifacts/vscode/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前包声明为 `UNLICENSED`；打包不替项目决定授权方式或建立发布者账户。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。`build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
 
 ### 当前优先落实的工程项
 
@@ -148,7 +165,7 @@ Unity 包名是 `com.ktory.unity`。当前便捷安装入口为：
 
 Unity 官方支持 Git 依赖使用分支、标签或提交，并以 lock 文件记录解析提交，见[Git dependencies](https://docs.unity3d.com/2022.1/Documentation/Manual/upm-git.html)。更新包时显式核对 lock 中的实际提交，不依赖“已拉最新分支”的口头描述。断网时可交付从同一 S 生成的完整包目录／归档，保留来源记录；它仍然是生成物，不能成为第二套 Core 源码。
 
-现有 UPM 脚本每次只复制 Unity Runtime 的指定配置文件与 Core 目录。若新增通用 Unity Runtime 组件，必须同步打包规则并检查产物，不能仅把 `.cs` 放进目录就认为已分发。当前脚本会重写产物分支；需要长期可复验版本时，应保留对应不可变引用或归档，不能仅依赖分支历史。
+UPM 脚本复制 Unity Runtime 接入目录、Editor、调试样例及 Unity 测试，再从唯一 Core 源码生成 Runtime/Core；Core 与 Unity 接入各有程序集边界。新增通用组件须检查打包产物，不能仅把 `.cs` 放进目录就认为已分发。需要长期可复验版本时，应保留对应不可变引用或归档，不能仅依赖浮动分支。调试适配和验收见 [Unity Debugging](ktory-unity-debugging.md)。
 
 ### 远端反馈的最小内容
 
@@ -166,6 +183,8 @@ Unity 版本、目标平台、Editor/Player、脚本后端（相关时）：
 能脱离 UI 复现的错误转为本机失败用例；只有渲染、资源、事件接线或平台相关的问题保留在 Unity 层。通用修复回到本仓库，游戏专用行为保留在游戏工程。反馈完成后记录同一 S/P 上通过的场景，不泛化为“所有 Unity 场景都已验证”。
 
 ## 7. 文档同步与发布说明
+
+维护说明、接入细节和验收流程集中放在 `docs/`。根目录保留项目 README 与协作入口；产品目录仅保留分发所需的用户 README、CHANGELOG；`website/src/content/docs/` 保留网站实际使用的三语教程。产品 README 以安装和使用为主，开发与发布流程链接到本文，避免多处维护。Unity 调试指南从 `docs/ktory-unity-debugging.md` 生成到 UPM 包，不在源码产品目录另存一份。
 
 定位与边界只在[宪章](ktory-design-charter.md)维护完整定义；具体语义只在 implementation 维护。AGENT.md、README 与门户通过摘要和链接引用它们，历史工程讨论与原型明确标为历史。
 

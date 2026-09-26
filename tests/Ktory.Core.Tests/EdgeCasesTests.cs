@@ -755,8 +755,10 @@ namespace Ktory.Core.Tests
 
             // Verify PresentationController automatically advances in AUTO
             controller.SetupForCurrentBeat();
-            controller.NotifyPrintingFinished();
             Assert.True(controller.AutoAdvanceOnHoldEnd);
+            controller.NotifyPrintingFinished();
+            // Zero-delay AUTO completes synchronously; diagnostics must now describe the ended session.
+            Assert.False(controller.AutoAdvanceOnHoldEnd);
             controller.Update(controller.HoldDuration);
 
             // Automatically advances past #AUTO_END to completed

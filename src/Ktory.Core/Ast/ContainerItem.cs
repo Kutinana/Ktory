@@ -41,19 +41,29 @@ namespace Ktory.Core.Ast
         public bool IsOneTime => Marker == '*';
 
         public string GetLabel(string requestedLocale, string defaultLocale)
+            => GetLabel(requestedLocale, defaultLocale, out _);
+
+        public string GetLabel(string requestedLocale, string defaultLocale, out string actualLocale)
         {
             if (LabelVariants.TryGetValue(requestedLocale, out var text) && !string.IsNullOrEmpty(text))
             {
+                actualLocale = requestedLocale;
                 return text;
             }
             if (LabelVariants.TryGetValue(defaultLocale, out var defaultText) && !string.IsNullOrEmpty(defaultText))
             {
+                actualLocale = defaultLocale;
                 return defaultText;
             }
             foreach (var kvp in LabelVariants)
             {
-                if (!string.IsNullOrEmpty(kvp.Value)) return kvp.Value;
+                if (!string.IsNullOrEmpty(kvp.Value))
+                {
+                    actualLocale = kvp.Key;
+                    return kvp.Value;
+                }
             }
+            actualLocale = defaultLocale;
             return string.Empty;
         }
 

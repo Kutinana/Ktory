@@ -32,6 +32,24 @@ namespace Ktory.Core.Runtime
         public bool AutoAdvanceOnHoldEnd { get; private set; } = false;
         public bool AllowClickInterruptHold => ElapsedInPhase >= _minimumHoldDuration;
 
+        // Read-only telemetry. Reading these properties never starts a timer or requests an advance.
+        public double MinimumHoldDuration => _minimumHoldDuration;
+        public double AutoAdvanceDuration => _autoAdvanceDuration;
+        public bool UsesEstimatedWait => _usesEstimatedWait;
+        public bool UsesEstimatedAuto => _usesEstimatedAuto;
+        public string AutoAdvanceSource { get; private set; } = "None";
+        public double FastForwardLockRemaining => Phase != PresentationPhase.Printing || CanFastForward ? 0
+            : FastForwardLockDuration == double.MaxValue ? double.PositiveInfinity
+            : Math.Max(0, FastForwardLockDuration - ElapsedInPhase);
+        public double MinimumHoldRemaining => Phase == PresentationPhase.Printing ? _minimumHoldDuration
+            : Phase == PresentationPhase.Holding ? Math.Max(0, _minimumHoldDuration - ElapsedInPhase) : 0;
+        public double AutoAdvanceRemaining => !AutoAdvanceOnHoldEnd ? 0
+            : Phase == PresentationPhase.Printing ? _autoAdvanceDuration
+            : Phase == PresentationPhase.Holding ? Math.Max(0, _autoAdvanceDuration - _elapsedForAutoAdvance) : 0;
+        public bool CanHandleUserClick => _sequencer.Status == ExecutionStatus.SuspendedAtBeat &&
+            ((Phase == PresentationPhase.Printing && CanFastForward && ElapsedInPhase >= FastForwardLockDuration) ||
+             (Phase == PresentationPhase.Holding && AllowClickInterruptHold));
+
         private double _minimumHoldDuration;
         private double _autoAdvanceDuration;
         private double _elapsedForAutoAdvance;
@@ -134,6 +152,11 @@ namespace Ktory.Core.Runtime
                     Phase = PresentationPhase.Holding;
                     ElapsedInPhase = 0;
                     SetupHoldPhase(payload);
+                }
+                else
+                {
+                    // Pending estimated durations follow the refreshed text; the printing clock/lock stays intact.
+                    ConfigureHoldTiming(payload);
                 }
             }
             else if (Phase == PresentationPhase.Holding)
@@ -269,6 +292,13 @@ namespace Ktory.Core.Runtime
             _minimumHoldDuration = 0;
             _autoAdvanceDuration = 0;
             _elapsedForAutoAdvance = 0;
+            AutoAdvanceOnHoldEnd = false;
+            AutoAdvanceSource = "None";
+            HoldDuration = 0;
+            CanFastForward = true;
+            FastForwardLockDuration = 0;
+            _usesEstimatedWait = false;
+            _usesEstimatedAuto = false;
 
             if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat || _sequencer.CurrentPayload == null)
             {
@@ -286,6 +316,7 @@ namespace Ktory.Core.Runtime
             }
 
             // Text step: start in Printing phase
+            ConfigureHoldTiming(payload);
             Phase = PresentationPhase.Printing;
 
             // Check .skippable(bool, [time])
@@ -394,6 +425,11 @@ namespace Ktory.Core.Runtime
             ElapsedInPhase = 0;
             _elapsedForAutoAdvance = 0;
 
+            ConfigureHoldTiming(payload);
+        }
+
+        private void ConfigureHoldTiming(TextPayload payload)
+        {
             var nextTag = FindTag(payload, "next");
             var waitTag = FindTag(payload, "wait");
             var autoPolicy = _sequencer.ActiveAutoPolicy;
@@ -403,6 +439,7 @@ namespace Ktory.Core.Runtime
                 ? EstimateReadingTime(payload.Content, payload.ActualLanguage)
                 : Math.Max(0, waitTag.GetPositional<double>(0, 0));
             AutoAdvanceOnHoldEnd = nextTag != null || (autoPolicy != null && autoPolicy.Enabled);
+            AutoAdvanceSource = nextTag != null ? ".next" : AutoAdvanceOnHoldEnd ? "#AUTO" : "None";
 
             if (nextTag != null)
             {
