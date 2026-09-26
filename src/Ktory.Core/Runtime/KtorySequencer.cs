@@ -21,8 +21,8 @@ namespace Ktory.Core.Runtime
         public HashSet<string> VisitedItemIds { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public Stack<CallFrame> CallStack { get; } = new Stack<CallFrame>();
 
-        // Active loop stack: (LoopContext, ReturnFrame)
-        private readonly Stack<(LoopContext Loop, CallFrame ResumeFrame)> _activeLoops = new Stack<(LoopContext, CallFrame)>();
+        // Active loop stack: (LoopContext, ResumeFrame, CallStackDepthAtEntry)
+        private readonly Stack<(LoopContext Loop, CallFrame ResumeFrame, int CallStackDepth)> _activeLoops = new Stack<(LoopContext, CallFrame, int)>();
 
         // Current execution pointer
         private KtoryBlock _currentBlock;
@@ -171,6 +171,10 @@ namespace Ktory.Core.Runtime
             if (matchedItem.TargetJump != null)
             {
                 ExecuteControlFlow(matchedItem.TargetJump, _currentStep as ContainerStep);
+                if (Status == ExecutionStatus.Completed)
+                {
+                    return;
+                }
                 Advance();
             }
             else if (matchedItem.InlineSteps.Count > 0)
@@ -180,7 +184,7 @@ namespace Ktory.Core.Runtime
                 bool isLoop = sourceContainer?.IsLoop == true;
 
                 // Push return frame for after inline steps finish
-                var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps)
+                var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.InlineBranch)
                 {
                     SourceContainer = sourceContainer,
                     ReturnToContainer = isLoop
@@ -211,18 +215,7 @@ namespace Ktory.Core.Runtime
 
         public void Break()
         {
-            if (_activeLoops.Count == 0)
-            {
-                throw new KtoryControlFlowException("No active loop container to break from.");
-            }
-
-            var (_, resumeFrame) = _activeLoops.Pop();
-            _currentBlock = resumeFrame.Block;
-            _currentSteps = resumeFrame.Steps;
-            _currentStepIndex = resumeFrame.StepIndex;
-            CurrentChoice = null;
-            CurrentPayload = null;
-
+            ApplyBreak();
             Advance();
         }
 
@@ -251,12 +244,18 @@ namespace Ktory.Core.Runtime
 
         private void Advance()
         {
+            if (Status == ExecutionStatus.Completed)
+            {
+                return;
+            }
+
             while (true)
             {
                 // If we've reached the end of the current step list
                 if (_currentStepIndex >= _currentSteps.Count)
                 {
-                    if (CallStack.Count > 0)
+                    // Case 1: Inline branch ended naturally -> pop inline frame and resume parent steps
+                    if (CallStack.Count > 0 && CallStack.Peek().FrameType == CallFrameType.InlineBranch)
                     {
                         var frame = CallStack.Pop();
                         _currentBlock = frame.Block;
@@ -272,13 +271,14 @@ namespace Ktory.Core.Runtime
                         continue;
                     }
 
-                    // If inside a named section and reached end
+                    // Case 2: Named section reached natural end -> implicit end per specification:
+                    // Clear call stack and active loops, then resume at the first root node following the section.
                     if (!_currentBlock.IsRoot)
                     {
-                        // Pop active loop if belonging to this block
                         ClearActiveLoopsForBlock(_currentBlock);
+                        CallStack.Clear();
+                        _activeLoops.Clear();
 
-                        // Resume next root section or end
                         if (ResumeRootSectionAfter(_currentBlock))
                         {
                             continue;
@@ -287,7 +287,9 @@ namespace Ktory.Core.Runtime
                         return;
                     }
 
-                    // Root block ended
+                    // Case 3: Root block ended
+                    CallStack.Clear();
+                    _activeLoops.Clear();
                     Status = ExecutionStatus.Completed;
                     return;
                 }
@@ -364,7 +366,11 @@ namespace Ktory.Core.Runtime
                             if (!currentLoop.CanLoopAgain())
                             {
                                 // Loop limit reached, break loop
-                                _activeLoops.Pop();
+                                var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
+                                while (CallStack.Count > loopBoundaryDepth)
+                                {
+                                    CallStack.Pop();
+                                }
                                 continue;
                             }
                         }
@@ -382,7 +388,11 @@ namespace Ktory.Core.Runtime
                         {
                             if (containerStep.IsLoop && _activeLoops.Count > 0 && _activeLoops.Peek().Loop.Container == containerStep)
                             {
-                                _activeLoops.Pop();
+                                var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
+                                while (CallStack.Count > loopBoundaryDepth)
+                                {
+                                    CallStack.Pop();
+                                }
                             }
                             continue;
                         }
@@ -395,6 +405,10 @@ namespace Ktory.Core.Runtime
                     case ControlFlowStep cfStep:
                     {
                         ExecuteControlFlow(cfStep, null);
+                        if (Status == ExecutionStatus.Completed)
+                        {
+                            return;
+                        }
                         continue;
                     }
                 }
@@ -413,7 +427,8 @@ namespace Ktory.Core.Runtime
             // Create new loop context
             var loop = new LoopContext(containerStep);
             var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps);
-            _activeLoops.Push((loop, resumeFrame));
+            int callStackDepth = CallStack.Count;
+            _activeLoops.Push((loop, resumeFrame, callStackDepth));
         }
 
         private void ApplyBreak()
@@ -423,7 +438,15 @@ namespace Ktory.Core.Runtime
                 throw new KtoryControlFlowException("No active loop container to break from.");
             }
 
-            var (_, resumeFrame) = _activeLoops.Pop();
+            var (_, resumeFrame, loopBoundaryDepth) = _activeLoops.Pop();
+
+            // Unwind call stack up to the loop boundary depth so that inline branch frames
+            // created inside the loop are purged without disrupting outer call frames.
+            while (CallStack.Count > loopBoundaryDepth)
+            {
+                CallStack.Pop();
+            }
+
             _currentBlock = resumeFrame.Block;
             _currentSteps = resumeFrame.Steps;
             _currentStepIndex = resumeFrame.StepIndex;
@@ -457,7 +480,7 @@ namespace Ktory.Core.Runtime
                     }
 
                     bool returnToContainer = sourceContainer?.IsLoop == true;
-                    var returnFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps)
+                    var returnFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.SectionCall)
                     {
                         SourceContainer = sourceContainer,
                         ReturnToContainer = returnToContainer
@@ -472,16 +495,28 @@ namespace Ktory.Core.Runtime
 
                 case ControlFlowType.Return:
                 {
-                    if (CallStack.Count == 0)
+                    // Unwind frames until we find a SectionCall frame (pierces inline branch blocks)
+                    CallFrame? callFrame = null;
+                    while (CallStack.Count > 0)
+                    {
+                        var f = CallStack.Pop();
+                        if (f.FrameType == CallFrameType.SectionCall)
+                        {
+                            callFrame = f;
+                            break;
+                        }
+                    }
+
+                    if (callFrame == null)
                     {
                         throw new KtoryControlFlowException("-> return encountered with empty call stack.");
                     }
-                    var frame = CallStack.Pop();
-                    _currentBlock = frame.Block;
-                    _currentSteps = frame.Steps;
-                    _currentStepIndex = frame.StepIndex;
 
-                    if (frame.ReturnToContainer && frame.SourceContainer != null)
+                    _currentBlock = callFrame.Block;
+                    _currentSteps = callFrame.Steps;
+                    _currentStepIndex = callFrame.StepIndex;
+
+                    if (callFrame.ReturnToContainer && callFrame.SourceContainer != null)
                     {
                         _currentStepIndex--;
                         if (_currentStepIndex < 0) _currentStepIndex = 0;
@@ -548,8 +583,20 @@ namespace Ktory.Core.Runtime
             _currentBlock = File.RootBlock;
             _currentSteps = File.RootBlock.Steps;
 
-            // Find first step in root block whose line number is greater than block.EndLineNumber (or StartLineNumber)
-            int resumeIndex = _currentSteps.FindIndex(s => s.LineNumber > block.StartLineNumber);
+            int maxLine = block.StartLineNumber;
+            if (block.EndLineNumber > maxLine)
+            {
+                maxLine = block.EndLineNumber;
+            }
+            foreach (var s in block.Steps)
+            {
+                if (s.LineNumber > maxLine)
+                {
+                    maxLine = s.LineNumber;
+                }
+            }
+
+            int resumeIndex = _currentSteps.FindIndex(s => s.LineNumber > maxLine);
             if (resumeIndex >= 0)
             {
                 _currentStepIndex = resumeIndex;
@@ -561,7 +608,7 @@ namespace Ktory.Core.Runtime
 
         private void ClearActiveLoopsForBlock(KtoryBlock block)
         {
-            if (_activeLoops.Count > 0 && _activeLoops.Peek().ResumeFrame.Block == block)
+            while (_activeLoops.Count > 0 && _activeLoops.Peek().ResumeFrame.Block == block)
             {
                 _activeLoops.Pop();
             }
