@@ -1,0 +1,10 @@
+**
+!package.json
+!README.md
+!CHANGELOG.md
+!extension.js
+!webview.js
+!webview.css
+!language-configuration.json
+!syntaxes/**
+!reader/**

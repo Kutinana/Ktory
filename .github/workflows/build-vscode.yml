@@ -1,0 +1,45 @@
+name: Build VS Code Extension
+
+on:
+  pull_request:
+    paths: ['src/Ktory.Core/**', 'src/Ktory.Web/**', 'src/Ktory.Runner/**', 'src/Ktory.VSCode/**', 'tests/**', 'samples/**', 'website/astro.config.mjs', 'Directory.Build.*', '.github/workflows/build-vscode.yml']
+  push:
+    branches: [main, master]
+    paths: ['src/Ktory.Core/**', 'src/Ktory.Web/**', 'src/Ktory.Runner/**', 'src/Ktory.VSCode/**', 'tests/**', 'samples/**', 'website/astro.config.mjs', 'Directory.Build.*', '.github/workflows/build-vscode.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: src/Ktory.VSCode/pnpm-lock.yaml
+      - name: Core and bridge regressions
+        run: dotnet test tests/Ktory.Core.Tests/Ktory.Core.Tests.csproj -m:1 -nr:false -p:UseSharedCompilation=false
+      - name: Install packaging tools
+        working-directory: src/Ktory.VSCode
+        run: pnpm install --frozen-lockfile
+      - name: Build offline VSIX
+        working-directory: src/Ktory.VSCode
+        run: pnpm package
+      - name: Grammar and bundle checks
+        working-directory: src/Ktory.VSCode
+        run: pnpm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ktory-vscode-${{ github.sha }}
+          path: artifacts/ktory-*.vsix
+          if-no-files-found: error

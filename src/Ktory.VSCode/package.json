@@ -1,0 +1,104 @@
+{
+  "name": "ktory",
+  "displayName": "Ktory — Script & Preview",
+  "description": "Ktory syntax highlighting and offline, in-editor reading powered by the shared C# core.",
+  "version": "0.1.0",
+  "publisher": "Kutinana",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kutinana/Ktory.git",
+    "directory": "src/Ktory.VSCode"
+  },
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "ktory",
+    "ktr",
+    "narrative",
+    "dialogue"
+  ],
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ktory",
+        "aliases": [
+          "Ktory",
+          "ktory"
+        ],
+        "extensions": [
+          ".ktr",
+          ".ktory"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ktory",
+        "scopeName": "source.ktory",
+        "path": "./syntaxes/ktory.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "ktory.openPreview",
+        "title": "Open Preview to the Side",
+        "category": "Ktory",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "ktory.reloadPreview",
+        "title": "Reload Preview from Editor",
+        "category": "Ktory",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "ktory.openPreview",
+          "when": "editorLangId == ktory",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ktory.openPreview",
+          "when": "resourceExtname == .ktr || resourceExtname == .ktory",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "vscode:prepublish": "pnpm build",
+    "package": "vsce package --no-dependencies --skip-license -o ../../artifacts/ktory-0.1.0.vsix",
+    "test": "node --test test/unit.test.cjs",
+    "test:integration": "node test/run-integration.cjs",
+    "test:vsix": "node test/run-integration.cjs --vsix ../../artifacts/ktory-0.1.0.vsix"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "3.6.0",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.2.0"
+  }
+}

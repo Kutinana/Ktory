@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "ktory",
+  "scopeName": "source.ktory",
+  "fileTypes": ["ktr", "ktory"],
+  "displayName": "Ktory",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.ktory",
+      "match": "//.*$"
+    },
+    {
+      "name": "keyword.control.section.ktory",
+      "match": "===.*?==="
+    },
+    {
+      "name": "keyword.control.flow.ktory",
+      "match": "(->|=>)"
+    },
+    {
+      "name": "entity.name.tag.decorator.ktory",
+      "match": "\\.[a-zA-Z0-9_]+"
+    },
+    {
+      "name": "constant.language.locale.ktory",
+      "match": "@[a-zA-Z0-9_-]+[:：]"
+    },
+    {
+      "name": "keyword.other.container.ktory",
+      "match": "^\\s*#[a-zA-Z0-9_]+"
+    },
+    {
+      "name": "string.quoted.choice.ktory",
+      "match": "\\[.*?\\]"
+    },
+    {
+      "name": "keyword.operator.choice.ktory",
+      "match": "^\\s*[*+]"
+    },
+    {
+      "name": "entity.name.function.speaker.ktory",
+      "match": "^[ \\t]*[^\\s:：@#.*+=>-][^:：\\n]*(?=[:：])"
+    }
+  ]
+}

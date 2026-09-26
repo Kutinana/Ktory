@@ -22,16 +22,19 @@ public class KtoryWasmBridge
     [JSInvokable]
     public string Start(string script, string requestedLocale, string? entryBlock)
     {
+        // A failed reload must not leave the previous story available to later input.
+        _sequencer = null;
         _recentTags.Clear();
         var file = KtoryParser.Parse(script);
-        _sequencer = new KtorySequencer(file);
-        _sequencer.OnTagsDispatched += tags =>
+        var sequencer = new KtorySequencer(file);
+        sequencer.OnTagsDispatched += tags =>
         {
             _recentTags.AddRange(tags);
             if (_recentTags.Count > 50) _recentTags.RemoveRange(0, _recentTags.Count - 50);
         };
 
-        _sequencer.Start(entryBlock, requestedLocale);
+        sequencer.Start(entryBlock, requestedLocale);
+        _sequencer = sequencer;
         return SerializeState();
     }
 
