@@ -30,8 +30,30 @@ namespace Ktory.Core.Runtime
         public bool AutoAdvanceOnHoldEnd { get; private set; } = false;
         public bool AllowClickInterruptHold { get; private set; } = true;
 
+        /// <summary>
+        /// Maximum number of immediate auto-advances processed in a single batch/frame.
+        /// Prevents infinite zero-second directive loops (#do.loop.next) from blocking the host main thread.
+        /// When exceeded in a single batch, remaining advances are deferred to the next Update() tick.
+        /// Default is 64.
+        /// </summary>
+        public int MaxAutoAdvancesPerBatch { get; set; } = 64;
+
+        /// <summary>
+        /// True if the last batch of auto-advances hit MaxAutoAdvancesPerBatch and has more advances deferred to next Update().
+        /// </summary>
+        public bool HasDeferredAdvance => _hasDeferredAdvance;
+
+        private int _pendingAdvances = 0;
+        private bool _isProcessingAdvances = false;
+        private bool _hasDeferredAdvance = false;
+
         public event Action? OnAdvanceRequested;
         public event Action? OnFastForwardRequested;
+
+        /// <summary>
+        /// Fired when an auto-advance batch hits MaxAutoAdvancesPerBatch to report possible runaway zero-second directive loops.
+        /// </summary>
+        public event Action<int>? OnBatchAdvanceLimitReached;
 
         public PresentationController(KtorySequencer sequencer)
         {
@@ -39,6 +61,107 @@ namespace Ktory.Core.Runtime
         }
 
         public void SetupForCurrentBeat()
+        {
+            ApplyBeatState();
+            ProcessAdvances();
+        }
+
+        public void NotifyPrintingFinished()
+        {
+            if (Phase != PresentationPhase.Printing) return;
+
+            ElapsedInPhase = 0;
+            if (_sequencer.CurrentPayload != null)
+            {
+                SetupHoldPhase(_sequencer.CurrentPayload);
+            }
+            else
+            {
+                Phase = PresentationPhase.Holding;
+            }
+
+            // If a click was queued during printing or wait, advance now if allowed,
+            // or if auto-advance is active with zero hold duration (e.g. standard #AUTO).
+            if (QueuedAdvance || (AutoAdvanceOnHoldEnd && HoldDuration <= 0))
+            {
+                RequestAdvance();
+            }
+        }
+
+        public void HandleUserClick()
+        {
+            if (_sequencer.Status == ExecutionStatus.AwaitingChoice)
+            {
+                return; // Choices require specific item clicks
+            }
+
+            if (Phase == PresentationPhase.Printing)
+            {
+                // In printing phase: check if fast-forward is allowed
+                if (CanFastForward && ElapsedInPhase >= FastForwardLockDuration)
+                {
+                    OnFastForwardRequested?.Invoke();
+                    NotifyPrintingFinished();
+                }
+                // If not allowed, click is ignored
+                return;
+            }
+
+            if (Phase == PresentationPhase.Holding)
+            {
+                if (AllowClickInterruptHold)
+                {
+                    // .next(t) / AUTO: click immediately triggers advance and cancels remaining hold timer
+                    RequestAdvance();
+                }
+                else
+                {
+                    // .wait(t): queue advance until hold time expires
+                    QueuedAdvance = true;
+                }
+            }
+        }
+
+        public void Update(double deltaTime)
+        {
+            if (_hasDeferredAdvance)
+            {
+                _hasDeferredAdvance = false;
+                ProcessAdvances();
+                return;
+            }
+
+            ElapsedInPhase += deltaTime;
+
+            if (Phase == PresentationPhase.Printing)
+            {
+                // Check if skippable lock expired
+                if (!CanFastForward && ElapsedInPhase >= FastForwardLockDuration)
+                {
+                    CanFastForward = true;
+                }
+                return;
+            }
+
+            if (Phase == PresentationPhase.Holding)
+            {
+                if (AutoAdvanceOnHoldEnd && ElapsedInPhase >= HoldDuration)
+                {
+                    RequestAdvance();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Requests an advance to the next beat. Uses iterative batch processing without recursion.
+        /// </summary>
+        public void RequestAdvance()
+        {
+            _pendingAdvances++;
+            ProcessAdvances();
+        }
+
+        private void ApplyBeatState()
         {
             ElapsedInPhase = 0;
             QueuedAdvance = false;
@@ -55,10 +178,6 @@ namespace Ktory.Core.Runtime
             if (payload.StepType == StepType.Directive)
             {
                 SetupHoldPhase(payload);
-                if (AutoAdvanceOnHoldEnd && HoldDuration <= 0)
-                {
-                    TriggerAdvance();
-                }
                 return;
             }
 
@@ -89,82 +208,64 @@ namespace Ktory.Core.Runtime
             }
         }
 
-        public void NotifyPrintingFinished()
+        private bool ShouldAutoAdvanceImmediately()
         {
-            if (Phase != PresentationPhase.Printing) return;
-
-            ElapsedInPhase = 0;
-            if (_sequencer.CurrentPayload != null)
+            if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat)
             {
-                SetupHoldPhase(_sequencer.CurrentPayload);
-            }
-            else
-            {
-                Phase = PresentationPhase.Holding;
+                return false;
             }
 
-            // If a click was queued during printing or wait, advance now if allowed,
-            // or if auto-advance is active with zero hold duration (e.g. standard #AUTO).
-            if (QueuedAdvance || (AutoAdvanceOnHoldEnd && HoldDuration <= 0))
-            {
-                TriggerAdvance();
-            }
+            return Phase == PresentationPhase.Holding && AutoAdvanceOnHoldEnd && HoldDuration <= 0;
         }
 
-        public void HandleUserClick()
+        private void ProcessAdvances()
         {
-            if (_sequencer.Status == ExecutionStatus.AwaitingChoice)
+            if (_isProcessingAdvances) return;
+            _isProcessingAdvances = true;
+            _hasDeferredAdvance = false;
+
+            try
             {
-                return; // Choices require specific item clicks
+                int advancesThisBatch = 0;
+
+                while (_sequencer.Status == ExecutionStatus.SuspendedAtBeat)
+                {
+                    bool shouldAdvance = (_pendingAdvances > 0) || ShouldAutoAdvanceImmediately();
+                    if (!shouldAdvance)
+                    {
+                        break;
+                    }
+
+                    if (advancesThisBatch >= MaxAutoAdvancesPerBatch)
+                    {
+                        _hasDeferredAdvance = true;
+                        OnBatchAdvanceLimitReached?.Invoke(advancesThisBatch);
+                        break;
+                    }
+
+                    if (_pendingAdvances > 0)
+                    {
+                        _pendingAdvances--;
+                    }
+
+                    Phase = PresentationPhase.Completed;
+                    QueuedAdvance = false;
+                    OnAdvanceRequested?.Invoke();
+
+                    _sequencer.Step();
+                    advancesThisBatch++;
+
+                    ApplyBeatState();
+                }
+
+                if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat)
+                {
+                    _pendingAdvances = 0;
+                }
             }
-
-            if (Phase == PresentationPhase.Printing)
+            finally
             {
-                // In printing phase: check if fast-forward is allowed
-                if (CanFastForward && ElapsedInPhase >= FastForwardLockDuration)
-                {
-                    OnFastForwardRequested?.Invoke();
-                    NotifyPrintingFinished();
-                }
-                // If not allowed, click is ignored
-                return;
-            }
-
-            if (Phase == PresentationPhase.Holding)
-            {
-                if (AllowClickInterruptHold)
-                {
-                    // .next(t) / AUTO: click immediately triggers advance and cancels remaining hold timer
-                    TriggerAdvance();
-                }
-                else
-                {
-                    // .wait(t): queue advance until hold time expires
-                    QueuedAdvance = true;
-                }
-            }
-        }
-
-        public void Update(double deltaTime)
-        {
-            ElapsedInPhase += deltaTime;
-
-            if (Phase == PresentationPhase.Printing)
-            {
-                // Check if skippable lock expired
-                if (!CanFastForward && ElapsedInPhase >= FastForwardLockDuration)
-                {
-                    CanFastForward = true;
-                }
-                return;
-            }
-
-            if (Phase == PresentationPhase.Holding)
-            {
-                if (AutoAdvanceOnHoldEnd && ElapsedInPhase >= HoldDuration)
-                {
-                    TriggerAdvance();
-                }
+                _isProcessingAdvances = false;
             }
         }
 
@@ -218,15 +319,6 @@ namespace Ktory.Core.Runtime
                 AllowClickInterruptHold = true;
                 HoldDuration = 0;
             }
-        }
-
-        private void TriggerAdvance()
-        {
-            Phase = PresentationPhase.Completed;
-            QueuedAdvance = false;
-            OnAdvanceRequested?.Invoke();
-            _sequencer.Step();
-            SetupForCurrentBeat();
         }
 
         private static double EstimateReadingTime(string text, string language)

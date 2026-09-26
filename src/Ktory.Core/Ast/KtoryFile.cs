@@ -53,6 +53,20 @@ namespace Ktory.Core.Ast
 
         public void AddBlock(KtoryBlock block)
         {
+            if (string.Equals(block.Label, "root", StringComparison.OrdinalIgnoreCase) && !block.IsRoot)
+            {
+                throw new Ktory.Core.Common.KtoryException(
+                    $"Section label 'root' is reserved for the root block (at line {block.StartLineNumber}).",
+                    block.StartLineNumber, 1);
+            }
+
+            if (Blocks.TryGetValue(block.Label, out var existing))
+            {
+                throw new Ktory.Core.Common.KtoryException(
+                    $"Duplicate section '=== {block.Label} ===' at line {block.StartLineNumber}. A section with this name is already defined at line {existing.StartLineNumber}.",
+                    block.StartLineNumber, 1);
+            }
+
             Blocks[block.Label] = block;
             if (block.IsRoot)
             {

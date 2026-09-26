@@ -32,6 +32,7 @@ namespace Ktory.Core.Parser
             var parser = new KtoryParser();
             var file = parser.ParseInternal(source);
             file.BindLexicalAutoScopes();
+            KtoryValidator.Validate(file);
             return file;
         }
 
@@ -427,6 +428,14 @@ namespace Ktory.Core.Parser
             {
                 var childLine = lines[index];
 
+                // If option line had a jump shorthand, forbid combining it with an indented branch body
+                if (item.TargetJump != null)
+                {
+                    throw new KtoryException(
+                        $"Option line jump shorthand '{line.Text.Trim()}' cannot be combined with an indented branch body at line {childLine.LineNumber}. Either use the inline shorthand without a body, or write the control flow statement inside the indented body.",
+                        childLine.LineNumber, childLine.Indent);
+                }
+
                 if (inHead)
                 {
                     // 1. Bracketed label variant: [@en: "Talk to Alice"] or [Talk to Alice]
@@ -446,17 +455,7 @@ namespace Ktory.Core.Parser
                         continue;
                     }
 
-                    // 3. Option TargetJump on child line: -> Label or => Label
-                    if (childLine.Text.StartsWith("->") || childLine.Text.StartsWith("=>"))
-                    {
-                        item.TargetJump = ParseControlFlow(childLine);
-                        inHead = false;
-                        branchAnchor = childLine.Text;
-                        index++;
-                        continue;
-                    }
-
-                    // 4. Any other line begins the branch execution body!
+                    // 3. Any other line begins the branch execution body!
                     inHead = false;
                     branchAnchor = childLine.Text;
                 }
@@ -569,27 +568,10 @@ namespace Ktory.Core.Parser
 
         private static void ExtractTrailingTags(ref string content, List<TagData> targetTags)
         {
-            var extracted = new List<TagData>();
-            while (true)
+            if (LexicalScanner.TryExtractTrailingTags(content, out string cleanText, out var extractedTags))
             {
-                int dotIdx = content.LastIndexOf(" .", StringComparison.Ordinal);
-                if (dotIdx < 0) break;
-
-                string tagPart = content.Substring(dotIdx + 1).Trim();
-                var tags = TagParser.ParseTags(tagPart);
-                if (tags.Count > 0)
-                {
-                    extracted.InsertRange(0, tags);
-                    content = content.Substring(0, dotIdx).Trim();
-                }
-                else
-                {
-                    break;
-                }
-            }
-            if (extracted.Count > 0)
-            {
-                targetTags.AddRange(extracted);
+                content = cleanText;
+                targetTags.AddRange(extractedTags);
             }
         }
 
@@ -645,7 +627,7 @@ namespace Ktory.Core.Parser
                 string raw = lineStr;
 
                 // Strip comments
-                string uncommented = StripComment(raw);
+                string uncommented = LexicalScanner.StripComment(raw);
                 if (string.IsNullOrWhiteSpace(uncommented))
                 {
                     continue; // Skip blank lines and pure comments
@@ -670,36 +652,6 @@ namespace Ktory.Core.Parser
             }
 
             return result;
-        }
-
-        private static string StripComment(string line)
-        {
-            bool inQuote = false;
-            char quoteChar = '\0';
-
-            for (int i = 0; i < line.Length - 1; i++)
-            {
-                char c = line[i];
-                if ((c == '"' || c == '\'') && (i == 0 || line[i - 1] != '\\'))
-                {
-                    if (!inQuote)
-                    {
-                        inQuote = true;
-                        quoteChar = c;
-                    }
-                    else if (quoteChar == c)
-                    {
-                        inQuote = false;
-                    }
-                }
-
-                if (!inQuote && c == '/' && line[i + 1] == '/')
-                {
-                    return line.Substring(0, i);
-                }
-            }
-
-            return line;
         }
     }
 }

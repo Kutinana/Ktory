@@ -18,6 +18,13 @@ namespace Ktory.Core.Runtime
 
         public IExpressionEvaluator Evaluator { get; set; } = new DefaultExpressionEvaluator();
 
+        /// <summary>
+        /// Maximum number of internal transitions / instructions allowed during a single Advance() call.
+        /// Guards against infinite loops that do not yield content or choices (e.g. infinite jumps without beats).
+        /// Default is 10,000.
+        /// </summary>
+        public int MaxInstructionBudgetPerAdvance { get; set; } = 10000;
+
         // Session state
         public HashSet<string> VisitedItemIds { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public Stack<CallFrame> CallStack { get; } = new Stack<CallFrame>();
@@ -264,8 +271,22 @@ namespace Ktory.Core.Runtime
                 return;
             }
 
+            int executedInstructions = 0;
+            var executionTrail = new Queue<string>();
+
             while (true)
             {
+                if (++executedInstructions > MaxInstructionBudgetPerAdvance)
+                {
+                    Status = ExecutionStatus.Error;
+                    string trail = string.Join(" -> ", executionTrail);
+                    throw new KtoryInstructionBudgetExceededException(
+                        $"Instruction budget of {MaxInstructionBudgetPerAdvance} exceeded during single advance without yielding content or choice. " +
+                        $"Possible infinite loop detected in script.\n" +
+                        $"Last active block: '{_currentBlock?.Label ?? "Unknown"}', step index: {_currentStepIndex}, line: {_currentStep?.LineNumber}.\n" +
+                        $"Recent execution path: {trail}");
+                }
+
                 // Check if currently looping a non-container step (TextStep or DirectiveStep)
                 if (_activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode is not ContainerStep)
                 {
@@ -342,6 +363,17 @@ namespace Ktory.Core.Runtime
 
                 _currentStep = _currentSteps[_currentStepIndex++];
                 ActiveAutoPolicy = _currentStep.LexicalAutoPolicy;
+
+                string desc = _currentStep switch
+                {
+                    ControlFlowStep cf => $"{cf.FlowType} {(cf.TargetLabel ?? "")}".Trim(),
+                    DirectiveStep d => $"#{d.Name}",
+                    ContainerStep c => $"container:{c.Name}",
+                    TextStep t => $"text:L{t.LineNumber}",
+                    _ => _currentStep.GetType().Name
+                };
+                executionTrail.Enqueue($"{_currentBlock.Label}:L{_currentStep.LineNumber}({desc})");
+                if (executionTrail.Count > 10) executionTrail.Dequeue();
 
                 // Guard evaluation
                 if (!string.IsNullOrEmpty(_currentStep.GuardCondition))

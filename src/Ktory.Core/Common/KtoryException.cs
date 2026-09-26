@@ -29,4 +29,11 @@ namespace Ktory.Core.Common
         {
         }
     }
+
+    public class KtoryInstructionBudgetExceededException : KtoryControlFlowException
+    {
+        public KtoryInstructionBudgetExceededException(string message) : base(message)
+        {
+        }
+    }
 }

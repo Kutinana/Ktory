@@ -1,4 +1,5 @@
 using Ktory.Core.Ast;
+using Ktory.Core.Common;
 using Ktory.Core.Parser;
 using Ktory.Core.Runtime;
 using Xunit;
@@ -982,6 +983,328 @@ namespace Ktory.Core.Tests
                 Assert.False(rPolicy2.GetProperty("useEstimatedReadingTime").GetBoolean());
                 Assert.Equal(3.5, rPolicy2.GetProperty("defaultWaitSeconds").GetDouble());
             }
+        }
+
+        [Fact]
+        public void OptionBranch_StartingWithSubroutineCall_ExecutesSubroutineThenRemainderOfBranch()
+        {
+            string script = @"
+#choice
+  * [查看线索]
+    => Detail
+    : 查看之后，我有了新的想法。
+: 继续主线。
+
+=== Detail ===
+  : 这里是一条线索。
+  -> return
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+
+            // Select option -> enters Detail subroutine first
+            sequencer.SubmitChoice("查看线索");
+            Assert.Equal("这里是一条线索。", sequencer.CurrentPayload!.Content);
+
+            // Step in Detail executes -> return, resumes inline branch to step 2
+            sequencer.Step();
+            Assert.Equal("查看之后，我有了新的想法。", sequencer.CurrentPayload!.Content);
+
+            // Step finishes inline branch, resumes root main line
+            sequencer.Step();
+            Assert.Equal("继续主线。", sequencer.CurrentPayload!.Content);
+
+            // Step finishes root block
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void OptionBranch_StartingWithSubroutineCall_InsideLoopContainer_ReturnsToLoopAfterBranch()
+        {
+            string script = @"
+#choice.loop
+  * [查看线索]
+    => Detail
+    : 查看之后，我有了新的想法。
+  + [离开] -> break
+: 继续主线。
+
+=== Detail ===
+  : 这里是一条线索。
+  -> return
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+
+            sequencer.Start();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+
+            // 1. First iteration: choose [查看线索]
+            sequencer.SubmitChoice("查看线索");
+            Assert.Equal("这里是一条线索。", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step(); // -> return -> remainder of branch
+            Assert.Equal("查看之后，我有了新的想法。", sequencer.CurrentPayload!.Content);
+
+            // Finishes branch -> loops back to choice menu
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.False(sequencer.CurrentChoice!.Options[0].CanSelect); // * consumed
+            Assert.True(sequencer.CurrentChoice.Options[1].CanSelect); // + available
+
+            // 2. Select [离开] -> break out of loop
+            sequencer.SubmitChoice("离开");
+            Assert.Equal("继续主线。", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void Option_JumpShorthandCombinedWithIndentedBody_ThrowsParseException()
+        {
+            string script = @"
+#choice
+  * [离开] -> break
+    : 这行文字不应该存在
+";
+            var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
+            Assert.Contains("cannot be combined with an indented branch body", ex.Message);
+        }
+
+        [Fact]
+        public void Sequencer_EndlessControlFlowLoop_ThrowsInstructionBudgetExceededException()
+        {
+            string script = @"
+-> Again
+
+=== Again ===
+  -> Again
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            sequencer.MaxInstructionBudgetPerAdvance = 50; // Use small budget for test speed
+
+            var ex = Assert.Throws<KtoryInstructionBudgetExceededException>(() => sequencer.Start());
+
+            Assert.Equal(ExecutionStatus.Error, sequencer.Status);
+            Assert.Contains("Instruction budget of 50 exceeded", ex.Message);
+            Assert.Contains("Again", ex.Message);
+            Assert.Contains("Recent execution path", ex.Message);
+        }
+
+        [Fact]
+        public void Sequencer_NormalLoopWithDialogueAndChoices_ExecutesWithoutHittingBudget()
+        {
+            string script = @"
+#choice.loop
+  * [选项一]
+    : 对白一
+  + [退出]
+    -> break
+: 主线结束
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            sequencer.MaxInstructionBudgetPerAdvance = 20; // Budget reset per beat
+
+            sequencer.Start();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+
+            sequencer.SubmitChoice("选项一");
+            Assert.Equal("对白一", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+
+            sequencer.SubmitChoice("退出");
+            Assert.Equal("主线结束", sequencer.CurrentPayload!.Content);
+
+            sequencer.Step();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void PresentationController_ZeroSecondDirectiveLoop_DoesNotCrashStackAndLimitsPerBatch()
+        {
+            string script = @"
+#do.loop.next
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer);
+            controller.MaxAutoAdvancesPerBatch = 32;
+
+            int limitFiredCount = 0;
+            int limitAdvancesReported = 0;
+            controller.OnBatchAdvanceLimitReached += count =>
+            {
+                limitFiredCount++;
+                limitAdvancesReported = count;
+            };
+
+            sequencer.Start();
+            // In previous implementation, SetupForCurrentBeat() would recursively call itself and crash with StackOverflowException
+            controller.SetupForCurrentBeat();
+
+            Assert.Equal(1, limitFiredCount);
+            Assert.Equal(32, limitAdvancesReported);
+            Assert.True(controller.HasDeferredAdvance);
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+
+            // Simulating next frame in Unity Update(): processes next batch
+            controller.Update(0.016);
+            Assert.Equal(2, limitFiredCount);
+            Assert.True(controller.HasDeferredAdvance);
+        }
+
+        [Fact]
+        public void PresentationController_ChainedZeroSecondDirectives_ExecutesBatchThenStopsAtDialogue()
+        {
+            string script = @"
+#bg(office).next
+#se(rain).next
+#chara(alice).next
+: Alice ""你好！""
+";
+            var file = KtoryParser.Parse(script);
+            var sequencer = new KtorySequencer(file);
+            var controller = new PresentationController(sequencer);
+
+            int advanceCount = 0;
+            controller.OnAdvanceRequested += () => advanceCount++;
+
+            sequencer.Start();
+            controller.SetupForCurrentBeat();
+
+            // 3 directives auto-advanced in batch
+            Assert.Equal(3, advanceCount);
+            Assert.False(controller.HasDeferredAdvance);
+            Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
+            Assert.Equal(PresentationPhase.Printing, controller.Phase);
+            Assert.Equal("Alice \"你好！\"", sequencer.CurrentPayload!.Content);
+
+            // Dialogue finishes printing and enters Holding
+            controller.NotifyPrintingFinished();
+            Assert.Equal(PresentationPhase.Holding, controller.Phase);
+
+            // User click advances to Completed
+            controller.HandleUserClick();
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+        }
+
+        [Fact]
+        public void LexicalScanner_DotInMiddleOfText_IsNotMistakenForTrailingTag()
+        {
+            // Case 1: Plain text with extension in middle
+            string script1 = @": 请打开 .ktr 文件。";
+            var file1 = KtoryParser.Parse(script1);
+            var step1 = Assert.IsType<TextStep>(file1.RootBlock.Steps[0]);
+            Assert.Equal("请打开 .ktr 文件。", step1.TextVariants["zh"]);
+            Assert.Empty(step1.Tags);
+
+            // Case 2: Extension in middle followed by genuine trailing tag
+            string script2 = @": 请打开 .ktr 文件。 .wait(2)";
+            var file2 = KtoryParser.Parse(script2);
+            var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
+            Assert.Equal("请打开 .ktr 文件。", step2.TextVariants["zh"]);
+            Assert.Single(step2.Tags);
+            Assert.Equal("wait", step2.Tags[0].Name);
+            Assert.Equal(2L, step2.Tags[0].PositionalArgs[0]);
+
+            // Case 3: Dot without whitespace
+            string script3 = @": 请查看config.ktr文件";
+            var file3 = KtoryParser.Parse(script3);
+            var step3 = Assert.IsType<TextStep>(file3.RootBlock.Steps[0]);
+            Assert.Equal("请查看config.ktr文件", step3.TextVariants["zh"]);
+            Assert.Empty(step3.Tags);
+        }
+
+        [Fact]
+        public void LexicalScanner_UrlSchemeDoubleSlash_IsNotTreatedAsComment()
+        {
+            // URL in unquoted dialogue
+            string script = @": 文档地址 https://example.com/guide // 真实注释";
+            var file = KtoryParser.Parse(script);
+            var step = Assert.IsType<TextStep>(file.RootBlock.Steps[0]);
+            Assert.Equal("文档地址 https://example.com/guide", step.TextVariants["zh"]);
+
+            // http and file URLs
+            string script2 = @": 下载地址 http://ktory.org 以及 file:///root/doc";
+            var file2 = KtoryParser.Parse(script2);
+            var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
+            Assert.Equal("下载地址 http://ktory.org 以及 file:///root/doc", step2.TextVariants["zh"]);
+        }
+
+        [Fact]
+        public void StaticValidator_DuplicateSections_ThrowsParseException()
+        {
+            string script = @"
+=== SectionA ===
+: 台词1
+
+=== SectionA ===
+: 台词2
+";
+            var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
+            Assert.Contains("Duplicate section '=== SectionA ==='", ex.Message);
+
+            string scriptRoot = @"
+=== root ===
+: 试图重写root
+";
+            var exRoot = Assert.Throws<KtoryException>(() => KtoryParser.Parse(scriptRoot));
+            Assert.Contains("Section label 'root' is reserved", exRoot.Message);
+        }
+
+        [Fact]
+        public void StaticValidator_UnresolvedJumpOrCallTarget_ThrowsParseException()
+        {
+            // Jump to nonexistent section
+            string scriptJump = @"
+: 开始
+-> MissingSection
+";
+            var exJump = Assert.Throws<KtoryException>(() => KtoryParser.Parse(scriptJump));
+            Assert.Contains("Target section '=== MissingSection ===' not found in file", exJump.Message);
+
+            // Call to nonexistent section
+            string scriptCall = @"
+: 开始
+=> NonExistentSub
+";
+            var exCall = Assert.Throws<KtoryException>(() => KtoryParser.Parse(scriptCall));
+            Assert.Contains("Target section '=== NonExistentSub ===' not found in file", exCall.Message);
+
+            // Choice option pointing to nonexistent section
+            string scriptChoice = @"
+#choice
+  * [去不存在的地方] -> Nowhere
+";
+            var exChoice = Assert.Throws<KtoryException>(() => KtoryParser.Parse(scriptChoice));
+            Assert.Contains("Target section '=== Nowhere ===' not found in file", exChoice.Message);
+        }
+
+        [Fact]
+        public void StaticValidator_UnindentedSection_ConflictingLinesAfterTerminal_ThrowsParseException()
+        {
+            // SubSection is unindented, capturing lines after -> return
+            string script = @"
+: 根节第一句。
+
+=== SubSection ===
+艾莉丝: 命名节台词。
+-> return
+
+主角: 根节第二句。
+";
+            var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
+            Assert.Contains("Unreachable code or conflicting section boundary", ex.Message);
+            Assert.Contains("Please indent the section body", ex.Message);
         }
     }
 }
