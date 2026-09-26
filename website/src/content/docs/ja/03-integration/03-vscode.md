@@ -9,7 +9,7 @@ sidebar:
 
 ## インストールと起動
 
-VS Code 1.97 以降で **Extensions: Install from VSIX…** を実行し、ビルド済みの `ktory-0.1.0.vsix` を選びます。`.ktr` または `.ktory` ファイルを開き、エディター上部の試読アイコン、または **Ktory: Open Preview to the Side** を実行します。
+VS Code 1.97 以降で **Extensions: Install from VSIX…** を実行し、ビルド済みの `ktory-vscode-<version>.vsix` を選びます。`.ktr` または `.ktory` ファイルを開き、エディター上部の試読アイコン、または **Ktory: Open Preview to the Side** を実行します。
 
 VSIX は WebAssembly ランタイムを内蔵しています。利用者は .NET、Unity、ローカルサーバー、オンライン試読器を必要としません。ローカル VSIX の提供は Marketplace への公開を意味しません。
 

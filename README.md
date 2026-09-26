@@ -27,3 +27,14 @@ Ink already supports host-driven continuation, choices, tags, external functions
 The repository contains the shared core (`src/Ktory.Core`), local and WASM Reader hosts (`src/Ktory.Runner`, `src/Ktory.Web`), Unity package sources (`src/Ktory.Unity`), the VS Code extension (`src/Ktory.VSCode`), and the portal (`website`). The extension bundles the same WASM core and Reader frontend for offline use; its TextMate grammar is also used by the portal. Generated packages and deployed sites are distribution artifacts, not independently maintained core implementations.
 
 Unity's generated package is `com.ktory.unity`, available through `https://github.com/Kutinana/Ktory.git#upm`. For reproducible integration, pin a generated package commit or immutable release tag and record its source commit; the main branch's Core directory is not itself a UPM package.
+
+## Build and distribution outputs
+
+| Product | Build / publication | Output |
+| --- | --- | --- |
+| Standalone Reader | `Reader - Publish Static Site` | Static files in the `deploy-reader` branch root; local output `artifacts/reader/wwwroot/` |
+| Unity package | `Unity - Publish UPM Package` | `com.ktory.unity` on the `upm` branch; existing `#upm` URLs stay valid |
+| VS Code extension | `VS Code - Build VSIX` | Actions artifact `ktory-vscode-vsix-<source-commit>` containing `ktory-vscode-<version>.vsix`; local output `artifacts/vscode/` |
+| Portal and documentation | Vercel builds `main`, Root Directory `website` | `website/dist/`; separate from the Reader site |
+
+`deploy-reader` replaces the ambiguous Reader branch name `deploy-web`. After the first publication, switch the Reader Vercel project's production branch to `deploy-reader`, keeping its Root Directory at the repository root. The portal project must exclude generated branches from deployment. See the [publication mapping and migration notes](docs/ktory-workflow.md#发布产物与托管入口).

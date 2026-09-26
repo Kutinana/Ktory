@@ -12,7 +12,9 @@ fs.writeFileSync(path.join(profile, 'user/User/settings.json'), JSON.stringify({
   'update.mode': 'none', 'telemetry.telemetryLevel': 'off', 'extensions.autoUpdate': false
 }));
 if (process.argv[2] === '--vsix') {
-  const vsix = path.resolve(process.argv[3]);
+  const vsix = process.argv[3]
+    ? path.resolve(process.argv[3])
+    : require('../scripts/package.cjs').packagePath;
   const cli = process.env.VSCODE_CLI_PATH || (process.platform === 'darwin'
     ? path.resolve(path.dirname(executable), '../Resources/app/bin/code') : executable);
   const install = spawnSync(cli, [

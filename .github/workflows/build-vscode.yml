@@ -1,4 +1,4 @@
-name: Build VS Code Extension
+name: VS Code - Build VSIX
 
 on:
   pull_request:
@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   build:
+    name: Build VS Code extension package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,8 +39,9 @@ jobs:
       - name: Grammar and bundle checks
         working-directory: src/Ktory.VSCode
         run: pnpm test
-      - uses: actions/upload-artifact@v4
+      - name: Upload VS Code VSIX
+        uses: actions/upload-artifact@v4
         with:
-          name: ktory-vscode-${{ github.sha }}
-          path: artifacts/ktory-*.vsix
+          name: ktory-vscode-vsix-${{ github.sha }}
+          path: artifacts/vscode/ktory-vscode-*.vsix
           if-no-files-found: error

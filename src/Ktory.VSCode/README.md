@@ -4,7 +4,7 @@
 
 ## Install and read
 
-1. In VS Code 1.97 or newer, run **Extensions: Install from VSIX…** and select `ktory-0.1.0.vsix`.
+1. In VS Code 1.97 or newer, run **Extensions: Install from VSIX…** and select `ktory-vscode-<version>.vsix`.
 2. Open a `.ktr` file and click **Open Preview to the Side** in the editor title, or run **Ktory: Open Preview to the Side**. The Explorer context menu also supports this command.
 3. Click the reading area or press Space/Enter to reveal text and advance. Select choices using their buttons or number keys. The Reader also supports its existing AUTO, fast-forward and restart controls.
 4. Choose a named entry section, or change the requested language. Missing translations follow the core's fallback rules.
@@ -31,7 +31,9 @@ pnpm test:vsix
 
 `test:integration` uses a separate VS Code profile and extensions directory. `test:vsix` installs the generated VSIX into another isolated profile and runs the same suite against the installed files. On macOS these commands detect the standard application path; elsewhere set `VSCODE_EXECUTABLE_PATH` to the VS Code executable (and `VSCODE_CLI_PATH` when the CLI is separate). Linux CI needs a display such as `xvfb-run`.
 
-`package` builds and writes the VSIX to the repository's `artifacts` directory; it does not publish to the Marketplace. The repository does not currently declare a distribution license, so this local package remains `UNLICENSED`; packaging does not choose a project license or establish a Marketplace publisher account.
+The `VS Code - Build VSIX` workflow uploads `ktory-vscode-vsix-<source-commit>`; extract its VSIX to install the extension. `package` builds and writes the VSIX to the repository's `artifacts/vscode` directory; it does not publish to the Marketplace. The repository does not currently declare a distribution license, so this local package remains `UNLICENSED`; packaging does not choose a project license or establish a Marketplace publisher account.
+
+The extension manifest’s `version` in `package.json` is the single version source. `scripts/package.cjs` derives `ktory-vscode-<version>.vsix` from it, and `test:vsix` reads that same path. Ordinary builds do not increment versions; update the manifest version deliberately for a new release. The commit suffix on the Actions download identifies a build, not an extension version.
 
 ## Maintenance boundaries
 

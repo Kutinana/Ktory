@@ -1,4 +1,4 @@
-name: Publish UPM Branch
+name: Unity - Publish UPM Package
 
 on:
   push:
@@ -14,6 +14,7 @@ on:
 
 jobs:
   publish-upm:
+    name: Publish Unity package to upm
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,7 +30,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Generate UPM branch with .meta files and push
+      - name: Publish com.ktory.unity with .meta files to upm
         shell: pwsh
         run: |
           ./scripts/publish-upm.ps1 -Push

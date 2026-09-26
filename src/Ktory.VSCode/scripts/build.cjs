@@ -4,7 +4,7 @@ const { spawnSync, execFileSync } = require('node:child_process');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const root = path.resolve(extensionRoot, '../..');
-const output = path.join(root, 'artifacts/vscode-reader');
+const output = path.join(root, 'artifacts/vscode/reader');
 // Publishing in place retains obsolete fingerprinted assets; start with an empty output.
 fs.rmSync(output, { recursive: true, force: true });
 const result = spawnSync('dotnet', ['publish', 'src/Ktory.Web', '-c', 'Release', '-o', output,

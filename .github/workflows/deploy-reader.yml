@@ -1,4 +1,4 @@
-name: Build & Deploy Web Reader
+name: Reader - Publish Static Site
 
 on:
   push:
@@ -6,13 +6,17 @@ on:
       - main
       - master
     paths:
-      - 'src/**'
+      - 'src/Ktory.Core/**'
+      - 'src/Ktory.Web/**'
+      - 'src/Ktory.Runner/wwwroot/**'
       - 'samples/**'
+      - 'Directory.Build.*'
       - '.github/workflows/deploy-reader.yml'
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
+    name: Publish Reader to deploy-reader
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,14 +30,14 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Publish WebAssembly Static Site
+      - name: Build Reader static files
         run: |
-          dotnet publish src/Ktory.Web -c Release -o dist
+          dotnet publish src/Ktory.Web -c Release -o artifacts/reader
 
-      - name: Deploy to deploy-web branch
+      - name: Publish Reader files to deploy-reader branch
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: deploy-web
-          publish_dir: ./dist/wwwroot
-          commit_message: "Automated Web Reader build from ${{ github.sha }}"
+          publish_branch: deploy-reader
+          publish_dir: ./artifacts/reader/wwwroot
+          commit_message: "chore(reader): publish static site from ${{ github.sha }}"

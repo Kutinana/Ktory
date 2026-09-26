@@ -9,7 +9,7 @@ sidebar:
 
 ## 安装与打开
 
-使用 VS Code 1.97 或更新版本。在命令面板执行 **Extensions: Install from VSIX…**，选择构建得到的 `ktory-0.1.0.vsix`。打开 `.ktr` 或 `.ktory` 文件，点击编辑器右上角的试读图标，或执行 **Ktory: Open Preview to the Side**。
+使用 VS Code 1.97 或更新版本。在命令面板执行 **Extensions: Install from VSIX…**，选择构建得到的 `ktory-vscode-<version>.vsix`。打开 `.ktr` 或 `.ktory` 文件，点击编辑器右上角的试读图标，或执行 **Ktory: Open Preview to the Side**。
 
 VSIX 已内置 WebAssembly 运行时；试读不需要安装 .NET、启动 Unity、运行本地服务或连接在线试读器。当前提供本地 VSIX 构建，未因此宣称已发布 Marketplace。
 

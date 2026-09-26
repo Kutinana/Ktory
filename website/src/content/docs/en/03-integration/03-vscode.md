@@ -9,7 +9,7 @@ This page follows the [Ktory design principles](/en/01-overview/03-design-princi
 
 ## Install and open
 
-Use VS Code 1.97 or newer. Run **Extensions: Install from VSIX…**, then select the built `ktory-0.1.0.vsix`. Open a `.ktr` or `.ktory` file and click the preview icon in the editor title, or run **Ktory: Open Preview to the Side**.
+Use VS Code 1.97 or newer. Run **Extensions: Install from VSIX…**, then select the built `ktory-vscode-<version>.vsix`. Open a `.ktr` or `.ktory` file and click the preview icon in the editor title, or run **Ktory: Open Preview to the Side**.
 
 The VSIX bundles the WebAssembly runtime. Reading needs no .NET installation, Unity, local server or online Reader. A local VSIX build does not imply a Marketplace release.
 

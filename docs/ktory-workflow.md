@@ -35,11 +35,28 @@
 | `docs` | 产品契约、规范、工作流与历史依据 | 以实现偶然行为改写已经确认的原则 |
 | `samples` 与 `tests` | 使用样例、行为断言及回归证据 | 用测试通过自动批准新的语义 |
 | `scripts`、`.github/workflows` | 生成、验证和分发产物 | 直接修改生成物作为源码修复 |
-| `artifacts`、`website/dist`、`upm`、`deploy-web` | 构建或分发结果 | 独立维护、反向覆盖主线源码 |
+| `artifacts`、`website/dist`、`upm`、`deploy-reader` | 构建或分发结果 | 独立维护、反向覆盖主线源码 |
 
 依赖从宿主与工具指向 Core；Core 不反向依赖门户或宿主。Reader 前端可以实现呈现策略，但必须按同一契约验收。目录内现有命名不意味着该层可以越界。
 
 门户若声称提供真实 Ktory 试读，必须使用 Core 的 WASM/桥接或链接正式 Reader。现有首页 JS 演示只可标为示意，不作为脚本验证或核心执行证据；替换成 Core 驱动是待处理事项。语法高亮器可以近似识别 token，但无权决定运行时语义。
+
+### 发布产物与托管入口
+
+| 产品 | 构建入口／Actions 名称 | 生成物与发布位置 | 使用方 |
+| --- | --- | --- | --- |
+| 独立试读器 Reader | `deploy-reader.yml` / `Reader - Publish Static Site` | `artifacts/reader/wwwroot/` → `deploy-reader` 分支根目录 | Vercel `ktory`；Root Directory 留空，按静态文件托管 |
+| Unity UPM 包 | `publish-upm.yml` / `Unity - Publish UPM Package` | `upm` 分支根目录的 `com.ktory.unity` 包 | Unity Package Manager；保留现有 `#upm` 安装入口 |
+| VS Code 扩展 | `build-vscode.yml` / `VS Code - Build VSIX` | `artifacts/vscode/ktory-vscode-<version>.vsix`；Actions 下载包 `ktory-vscode-vsix-<源提交>` | VS Code 安装 VSIX；内置 Reader 的中间构建位于 `artifacts/vscode/reader/` |
+| 门户与文档 | Vercel 从 `main` 的 `website/` 构建 | `website/dist/`；无单独的 Actions 产物分支 | Vercel `ktory-home`；Root Directory 为 `website` |
+
+VSIX 的唯一版本来源是 `src/Ktory.VSCode/package.json` 的 `version`。打包文件名由 `scripts/package.cjs` 派生，安装测试共用同一路径；常规构建不自动递增版本，发新版时显式更新 manifest 版本。Actions 下载包末尾的源提交用于区分构建，不是扩展版本号。
+
+Reader 的触发路径只覆盖 Core、Web、共用 Reader 前端、样例和相关构建配置；单独修改 Unity 接入或 VS Code 扩展不触发独立 Reader 发布。各 workflow 保持自身原有验证步骤，不因一次产品修正增加全局专项测试步骤。
+
+**从旧分支迁移**：`deploy-web` 是 Reader 发布分支的旧名。此改动合入后，Reader workflow 首次运行会生成 `deploy-reader`；随后将 Vercel `ktory` 的生产分支改为 `deploy-reader`，Root Directory 继续使用仓库根目录。确认新分支部署成功后再决定是否清理旧分支；workflow 不再更新 `deploy-web`。
+
+Vercel `ktory-home` 应仅接收门户源码分支的部署，排除 `deploy-reader`、旧 `deploy-web` 和 `upm`。Reader 项目只接收自己的产物分支。仅修改仓库里的发布分支名不会自动修改 Vercel 项目配置，也不会自动消除门户对产物分支的错误预览部署。
 
 ## 3. “唯一置信源”按问题定义
 
@@ -96,7 +113,7 @@ dotnet run --project src/Ktory.Runner
 
 每项能力分开记录三列：**契约状态（已确认／未决／阶段外）**、**实现状态（完整／部分／缺口）**、**验证证据（提交、环境、命令、结果）**。Core 的 Ruby 字符串测试不能证明 TMP 能渲染；导入编译成功不能证明输入和时序正确。
 
-VS Code 扩展在其目录执行 `pnpm install --frozen-lockfile`、`pnpm build`、`pnpm test`、`pnpm test:integration` 和 `pnpm package`。构建复用 Web/Runner/Core；`reader/` 为生成物，VSIX 输出至 `artifacts/`。原生集成测试使用独立 VS Code 配置，不修改日常安装。新建的 `build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
+VS Code 扩展在其目录执行 `pnpm install --frozen-lockfile`、`pnpm build`、`pnpm test`、`pnpm test:integration` 和 `pnpm package`。构建复用 Web/Runner/Core；`reader/` 为生成物，VSIX 输出至 `artifacts/vscode/`。原生集成测试使用独立 VS Code 配置，不修改日常安装。`build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
 
 ### 当前优先落实的工程项
 
