@@ -864,12 +864,17 @@ function updateState(serverState, isLanguageSwitch = false) {
 function renderBeat(payload, isLanguageSwitch = false) {
   // Hot language switch: update current typing/active text and speaker if applicable
   if (isLanguageSwitch && state.currentActiveTypingEl) {
+    const wasTyping = state.isTyping;
+    const wasHolding = state.isHolding;
+
     // 1. Immediately abort typewriter timer and fast-forward lock timer
     clearInterval(state.typewriterTimer);
     clearTimeout(state.fastForwardLockTimer);
     state.typewriterTimer = null;
     state.fastForwardLockTimer = null;
     state.isTyping = false;
+    state.canFastForward = true;
+    if (el.btnFastForward) el.btnFastForward.disabled = true;
 
     // 2. Hide typing cursor
     if (state.currentActiveCursorEl) {
@@ -888,8 +893,38 @@ function renderBeat(payload, isLanguageSwitch = false) {
     state.fullTextHtml = payload.content;
     state.currentActiveTypingEl.innerHTML = payload.content;
 
-    // 5. Update prompt hint if not holding
-    if (!state.isHolding) {
+    if (payload.tags) {
+      state.activeTags = payload.tags;
+    }
+    const tags = state.activeTags || [];
+
+    // 5. Unified post-display state handling (without re-executing plot/directive tags)
+    if (wasTyping) {
+      // Switching while typing reveals full translation and triggers post-text policy (.wait / .next / #AUTO / manual)
+      setupHoldTimer(tags);
+    } else if (wasHolding) {
+      // Switching while already in hold stage preserves or recalculates remaining time
+      const nextTag = tags.find(t => t.name.toLowerCase() === 'next');
+      const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
+      const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
+
+      const isEstimated = (waitTag && waitTag.positionalArgs.length === 0) ||
+                          (!waitTag && !nextTag && autoPolicy && autoPolicy.enabled && autoPolicy.useEstimatedReadingTime);
+
+      if (isEstimated) {
+        const newDuration = estimateReadingTime(payload.content || '', payload.actualLanguage || state.requestedLocale);
+        const progressRatio = state.holdDuration > 0 ? Math.min(0.95, state.holdElapsed / state.holdDuration) : 0;
+        state.holdDuration = Math.max(0.5, newDuration);
+        state.holdElapsed = progressRatio * state.holdDuration;
+      }
+
+      const remainingSec = Math.max(0, state.holdDuration - state.holdElapsed);
+      const autoPrefix = (autoPolicy && autoPolicy.enabled && !waitTag && !nextTag) ? '[AUTO] ' : '';
+      el.dockStepHint.textContent = state.allowClickInterrupt
+        ? `${autoPrefix}自动推进倒计时 (${remainingSec.toFixed(1)}s)... 点击即刻推进`
+        : `强制停留中 (${remainingSec.toFixed(1)}s)...`;
+    } else {
+      // Already finished typing and not holding (manual wait)
       el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
     }
 
@@ -1063,13 +1098,14 @@ function fastForwardTypewriter() {
 
 function finishTypewriter(cursorEl, tags) {
   clearInterval(state.typewriterTimer);
+  state.typewriterTimer = null;
   state.isTyping = false;
   if (state.fastForwardLockTimer) {
     clearTimeout(state.fastForwardLockTimer);
     state.fastForwardLockTimer = null;
   }
   state.canFastForward = true;
-  if (el.btnFastForward) el.btnFastForward.disabled = false;
+  if (el.btnFastForward) el.btnFastForward.disabled = true;
   if (cursorEl) cursorEl.style.display = 'none';
 
   setupHoldTimer(tags);
@@ -1107,6 +1143,11 @@ function estimateReadingTime(text, lang = 'zh') {
 // Hold & Auto-Advance Timer (.next / .wait / #AUTO)
 // ==========================================================================
 function setupHoldTimer(tags, defaultHoldSec = 0) {
+  if (state.holdTimer) {
+    clearInterval(state.holdTimer);
+    state.holdTimer = null;
+  }
+
   const nextTag = tags.find(t => t.name.toLowerCase() === 'next');
   const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
   const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
@@ -1153,7 +1194,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     state.holdElapsed = 0;
 
     el.dockProgressBar.style.width = '0%';
-    const autoPrefix = autoPolicy ? '[AUTO] ' : '';
+    const autoPrefix = (autoPolicy && autoPolicy.enabled && !waitTag && !nextTag) ? '[AUTO] ' : '';
     el.dockStepHint.textContent = state.allowClickInterrupt
       ? `${autoPrefix}自动推进倒计时 (${holdSec.toFixed(1)}s)... 点击即刻推进`
       : `强制停留中 (${holdSec.toFixed(1)}s)...`;
@@ -1164,8 +1205,14 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
       const progress = Math.min(100, (state.holdElapsed / Math.max(0.1, state.holdDuration)) * 100);
       el.dockProgressBar.style.width = `${progress}%`;
 
+      const remainingSec = Math.max(0, state.holdDuration - state.holdElapsed);
+      el.dockStepHint.textContent = state.allowClickInterrupt
+        ? `${autoPrefix}自动推进倒计时 (${remainingSec.toFixed(1)}s)... 点击即刻推进`
+        : `强制停留中 (${remainingSec.toFixed(1)}s)...`;
+
       if (state.holdElapsed >= state.holdDuration) {
         clearInterval(state.holdTimer);
+        state.holdTimer = null;
         state.isHolding = false;
         el.dockProgressBar.style.width = '0%';
         stepSession();
