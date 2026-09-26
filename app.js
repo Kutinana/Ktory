@@ -38,6 +38,7 @@ const state = {
   allowClickInterrupt: true,
 
   // Narrative Stream Data
+  currentPresentationId: 0,
   beatsCount: 0,
   visitedItems: [],
   recentTags: [],
@@ -149,7 +150,7 @@ function setupEventListeners() {
       if (!isNaN(num) && num >= 1 && num <= state.choice.options.length) {
         const option = state.choice.options[num - 1];
         if (option && option.canSelect) {
-          submitChoice(option.id);
+          submitChoice(option.id, state.currentPresentationId);
         }
       }
     }
@@ -606,12 +607,12 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
       const json = await dotNetRef.invokeMethodAsync('Start', script, requestedLocale, entryBlock || null);
       return JSON.parse(json);
     },
-    async step() {
-      const json = await dotNetRef.invokeMethodAsync('Step');
+    async step(expectedPresentationId = null) {
+      const json = await dotNetRef.invokeMethodAsync('Step', expectedPresentationId || null);
       return JSON.parse(json);
     },
-    async choice(choiceId) {
-      const json = await dotNetRef.invokeMethodAsync('Choice', choiceId);
+    async choice(choiceId, expectedPresentationId = null) {
+      const json = await dotNetRef.invokeMethodAsync('Choice', choiceId, expectedPresentationId || null);
       return JSON.parse(json);
     },
     async break() {
@@ -686,90 +687,162 @@ async function loadSamples() {
   }
 }
 
+// ==========================================================================
+// Serial Session Operation Queue & Epoch Isolation
+// Guarantees:
+// 1. Advance, choice submission, and language switching are processed serially.
+// 2. Restarting / reloading creates a new epoch; responses from old sessions are dropped.
+// 3. PresentationId uniquely stamps presentations and prevents stale actions.
+// ==========================================================================
+let currentSessionEpoch = 0;
+let sessionOpChain = Promise.resolve();
+
+function enqueueSessionOp(opFn) {
+  const opEpoch = currentSessionEpoch;
+  sessionOpChain = sessionOpChain.then(async () => {
+    // If epoch changed before this op began, discard it immediately
+    if (opEpoch !== currentSessionEpoch) {
+      return;
+    }
+    try {
+      await opFn(opEpoch);
+    } catch (err) {
+      console.error('Session operation failed:', err);
+    }
+  });
+  return sessionOpChain;
+}
+
 async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
   clearTimers();
   resetStoryStream();
+  currentSessionEpoch++;
+  const sessionEpoch = currentSessionEpoch;
 
   // If entryBlock is not provided or empty, normalize to null (defaults to root block)
   if (!entryBlock) {
     entryBlock = null;
   }
 
-  try {
-    let data = null;
-    if (window.KtoryWasm && window.KtoryWasm.start) {
-      data = await window.KtoryWasm.start(script, requestedLocale, entryBlock);
-    } else {
-      const res = await fetch('/api/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script, requestedLocale, entryBlock })
-      });
-      if (res.ok) {
-        data = await res.json();
+  return enqueueSessionOp(async (opEpoch) => {
+    if (sessionEpoch !== currentSessionEpoch) return;
+
+    try {
+      let data = null;
+      if (window.KtoryWasm && window.KtoryWasm.start) {
+        data = await window.KtoryWasm.start(script, requestedLocale, entryBlock);
       } else {
-        const err = await res.json();
-        alert(`解析错误: ${err.error}`);
-        return;
+        const res = await fetch('/api/session/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script, requestedLocale, entryBlock })
+        });
+        if (sessionEpoch !== currentSessionEpoch) return;
+        if (res.ok) {
+          data = await res.json();
+        } else {
+          const err = await res.json();
+          alert(`解析错误: ${err.error}`);
+          return;
+        }
       }
+      if (sessionEpoch !== currentSessionEpoch) return;
+      if (data) {
+        updateState(data);
+      }
+    } catch (err) {
+      if (sessionEpoch !== currentSessionEpoch) return;
+      console.error('Failed to start session:', err);
+      alert(`解析错误: ${err.message || err}`);
     }
-    if (data) {
-      updateState(data);
-    }
-  } catch (err) {
-    console.error('Failed to start session:', err);
-    alert(`解析错误: ${err.message || err}`);
-  }
+  });
 }
 
-async function stepSession() {
+async function stepSession(expectedPresentationId = null) {
+  if (expectedPresentationId && expectedPresentationId !== state.currentPresentationId) {
+    return;
+  }
   if (state.status === 'Completed' || state.status === 'AwaitingChoice') return;
-  clearTimers();
 
-  try {
-    let data = null;
-    if (window.KtoryWasm && window.KtoryWasm.step) {
-      data = await window.KtoryWasm.step();
-    } else {
-      const res = await fetch('/api/session/step', { method: 'POST' });
-      if (res.ok) {
-        data = await res.json();
+  const targetPresentationId = expectedPresentationId || state.currentPresentationId;
+  const sessionEpoch = currentSessionEpoch;
+
+  return enqueueSessionOp(async (opEpoch) => {
+    if (opEpoch !== currentSessionEpoch) return;
+    if (state.status === 'Completed' || state.status === 'AwaitingChoice') return;
+    if (targetPresentationId && targetPresentationId !== state.currentPresentationId) return;
+
+    clearTimers();
+
+    try {
+      let data = null;
+      if (window.KtoryWasm && window.KtoryWasm.step) {
+        data = await window.KtoryWasm.step(targetPresentationId);
+      } else {
+        const res = await fetch('/api/session/step', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ presentationId: targetPresentationId })
+        });
+        if (opEpoch !== currentSessionEpoch) return;
+        if (res.ok) {
+          data = await res.json();
+        }
       }
+      if (opEpoch !== currentSessionEpoch) return;
+      if (data) {
+        updateState(data);
+      }
+    } catch (err) {
+      if (opEpoch !== currentSessionEpoch) return;
+      console.error('Failed to step session:', err);
     }
-    if (data) {
-      updateState(data);
-    }
-  } catch (err) {
-    console.error('Failed to step session:', err);
-  }
+  });
 }
 
-async function submitChoice(choiceId) {
+async function submitChoice(choiceId, expectedPresentationId = null) {
+  if (expectedPresentationId && expectedPresentationId !== state.currentPresentationId) {
+    return;
+  }
+  if (state.status !== 'AwaitingChoice') return;
+
+  const targetPresentationId = expectedPresentationId || state.currentPresentationId;
+  const sessionEpoch = currentSessionEpoch;
+
   clearTimers();
   if (state.currentActiveChoiceEl) {
     state.currentActiveChoiceEl.classList.add('has-selection');
     state.currentActiveChoiceEl = null;
   }
-  try {
-    let data = null;
-    if (window.KtoryWasm && window.KtoryWasm.choice) {
-      data = await window.KtoryWasm.choice(choiceId);
-    } else {
-      const res = await fetch('/api/session/choice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ choiceId })
-      });
-      if (res.ok) {
-        data = await res.json();
+
+  return enqueueSessionOp(async (opEpoch) => {
+    if (opEpoch !== currentSessionEpoch) return;
+    if (targetPresentationId && targetPresentationId !== state.currentPresentationId) return;
+
+    try {
+      let data = null;
+      if (window.KtoryWasm && window.KtoryWasm.choice) {
+        data = await window.KtoryWasm.choice(choiceId, targetPresentationId);
+      } else {
+        const res = await fetch('/api/session/choice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ choiceId, presentationId: targetPresentationId })
+        });
+        if (opEpoch !== currentSessionEpoch) return;
+        if (res.ok) {
+          data = await res.json();
+        }
       }
+      if (opEpoch !== currentSessionEpoch) return;
+      if (data) {
+        updateState(data);
+      }
+    } catch (err) {
+      if (opEpoch !== currentSessionEpoch) return;
+      console.error('Failed to submit choice:', err);
     }
-    if (data) {
-      updateState(data);
-    }
-  } catch (err) {
-    console.error('Failed to submit choice:', err);
-  }
+  });
 }
 
 async function changeLanguage(locale) {
@@ -778,26 +851,35 @@ async function changeLanguage(locale) {
     btn.classList.toggle('active', btn.dataset.locale === locale);
   });
 
-  try {
-    let data = null;
-    if (window.KtoryWasm && window.KtoryWasm.setLanguage) {
-      data = await window.KtoryWasm.setLanguage(locale);
-    } else {
-      const res = await fetch('/api/session/language', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locale })
-      });
-      if (res.ok) {
-        data = await res.json();
+  const sessionEpoch = currentSessionEpoch;
+
+  return enqueueSessionOp(async (opEpoch) => {
+    if (opEpoch !== currentSessionEpoch) return;
+
+    try {
+      let data = null;
+      if (window.KtoryWasm && window.KtoryWasm.setLanguage) {
+        data = await window.KtoryWasm.setLanguage(locale);
+      } else {
+        const res = await fetch('/api/session/language', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locale })
+        });
+        if (opEpoch !== currentSessionEpoch) return;
+        if (res.ok) {
+          data = await res.json();
+        }
       }
+      if (opEpoch !== currentSessionEpoch) return;
+      if (data) {
+        updateState(data, true);
+      }
+    } catch (err) {
+      if (opEpoch !== currentSessionEpoch) return;
+      console.error('Failed to change language:', err);
     }
-    if (data) {
-      updateState(data, true);
-    }
-  } catch (err) {
-    console.error('Failed to change language:', err);
-  }
+  });
 }
 
 async function restartSession() {
@@ -830,6 +912,10 @@ function updateState(serverState, isLanguageSwitch = false) {
   state.status = serverState.status;
   state.payload = serverState.payload;
   state.choice = serverState.choice;
+  state.currentPresentationId = serverState.presentationId ??
+                                serverState.payload?.presentationId ??
+                                serverState.choice?.presentationId ??
+                                0;
   state.requestedLocale = serverState.requestedLanguage;
   state.defaultLocale = serverState.defaultLanguage;
   state.visitedItems = serverState.visitedItems || [];
@@ -862,6 +948,28 @@ function updateState(serverState, isLanguageSwitch = false) {
 }
 
 function renderBeat(payload, isLanguageSwitch = false) {
+  const isDirective = payload.stepType === 1 || payload.stepType === 'Directive';
+
+  // 1. Directives beat (#do, .bg, .sfx, etc.)
+  if (isDirective) {
+    if (isLanguageSwitch) {
+      // Hot language switch on a directive beat:
+      // Directive beats contain no dialogue text to translate.
+      // Simply preserve current hold countdown state without touching DOM or previous dialogue elements.
+      if (state.isHolding) {
+        const remainingSec = Math.max(0, state.holdDuration - state.holdElapsed);
+        el.dockStepHint.textContent = state.allowClickInterrupt
+          ? `自动推进倒计时 (${remainingSec.toFixed(1)}s)... 点击即刻推进`
+          : `强制停留中 (${remainingSec.toFixed(1)}s)...`;
+      }
+      return;
+    }
+
+    state.beatsCount++;
+    renderDirectiveBeat(payload);
+    return;
+  }
+
   // Hot language switch: update current typing/active text and speaker if applicable
   if (isLanguageSwitch && state.currentActiveTypingEl) {
     const wasTyping = state.isTyping;
@@ -934,12 +1042,6 @@ function renderBeat(payload, isLanguageSwitch = false) {
 
   state.beatsCount++;
 
-  // 1. Directives beat (#do, .bg, .sfx, etc.)
-  if (payload.stepType === 1 || payload.stepType === 'Directive') {
-    renderDirectiveBeat(payload);
-    return;
-  }
-
   // 2. Standard Prose / Dialogue Beat
   const passage = document.createElement('div');
   passage.className = 'passage-item';
@@ -996,6 +1098,13 @@ function renderBeat(payload, isLanguageSwitch = false) {
 }
 
 function renderDirectiveBeat(payload) {
+  // Clear any active typing / prose elements from previous dialogue beats
+  state.currentActiveTypingEl = null;
+  state.currentActiveSpeakerEl = null;
+  state.currentActiveCursorEl = null;
+  state.currentActivePassageEl = null;
+  state.fullTextHtml = '';
+
   const passage = document.createElement('div');
   passage.className = 'passage-item passage-directive';
 
@@ -1027,6 +1136,9 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
   state.currentActiveCursorEl = cursorEl;
   state.fullTextHtml = htmlContent;
 
+  const typewriterPresentationId = state.currentPresentationId;
+  const typewriterEpoch = currentSessionEpoch;
+
   cursorEl.style.display = 'inline-block';
   el.dockStepHint.textContent = '文字呈现中... 点击可快速显示全文';
 
@@ -1050,6 +1162,9 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
         if (duration > 0) {
           el.dockStepHint.textContent = `快显锁定中 (${duration}s)...`;
           state.fastForwardLockTimer = setTimeout(() => {
+            if (typewriterPresentationId !== state.currentPresentationId || typewriterEpoch !== currentSessionEpoch) {
+              return;
+            }
             state.canFastForward = true;
             if (el.btnFastForward) el.btnFastForward.disabled = false;
             el.dockStepHint.textContent = '点击可快速显示全文';
@@ -1071,8 +1186,13 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
 
   const speedMs = 18; // literary typewriter speed
   state.typewriterTimer = setInterval(() => {
+    if (typewriterPresentationId !== state.currentPresentationId || typewriterEpoch !== currentSessionEpoch) {
+      clearInterval(state.typewriterTimer);
+      state.typewriterTimer = null;
+      return;
+    }
     if (tokenIdx >= tokens.length) {
-      finishTypewriter(cursorEl, tags);
+      finishTypewriter(cursorEl, tags, typewriterPresentationId, typewriterEpoch);
       return;
     }
 
@@ -1083,6 +1203,8 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
 
 function fastForwardTypewriter() {
   if (!state.isTyping || !state.canFastForward) return;
+  const currentPresId = state.currentPresentationId;
+  const currentEpoch = currentSessionEpoch;
   clearInterval(state.typewriterTimer);
   if (state.fastForwardLockTimer) {
     clearTimeout(state.fastForwardLockTimer);
@@ -1092,11 +1214,14 @@ function fastForwardTypewriter() {
   if (state.currentActiveTypingEl) {
     state.currentActiveTypingEl.innerHTML = state.fullTextHtml;
   }
-  finishTypewriter(state.currentActiveCursorEl, state.activeTags);
+  finishTypewriter(state.currentActiveCursorEl, state.activeTags, currentPresId, currentEpoch);
   scrollToBottom();
 }
 
-function finishTypewriter(cursorEl, tags) {
+function finishTypewriter(cursorEl, tags, expectedPresentationId = null, expectedEpoch = null) {
+  if (expectedEpoch !== null && expectedEpoch !== currentSessionEpoch) return;
+  if (expectedPresentationId !== null && expectedPresentationId !== state.currentPresentationId) return;
+
   clearInterval(state.typewriterTimer);
   state.typewriterTimer = null;
   state.isTyping = false;
@@ -1148,6 +1273,9 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     state.holdTimer = null;
   }
 
+  const holdPresentationId = state.currentPresentationId;
+  const holdEpoch = currentSessionEpoch;
+
   const nextTag = tags.find(t => t.name.toLowerCase() === 'next');
   const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
   const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
@@ -1184,7 +1312,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     // Immediate auto advance per specification
     state.isHolding = false;
     el.dockProgressBar.style.width = '0%';
-    stepSession();
+    stepSession(holdPresentationId);
     return;
   }
 
@@ -1201,6 +1329,14 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
 
     const intervalMs = 25;
     state.holdTimer = setInterval(() => {
+      // Guard against stale presentation or session epoch
+      if (holdPresentationId !== state.currentPresentationId || holdEpoch !== currentSessionEpoch) {
+        clearInterval(state.holdTimer);
+        state.holdTimer = null;
+        state.isHolding = false;
+        return;
+      }
+
       state.holdElapsed += intervalMs / 1000;
       const progress = Math.min(100, (state.holdElapsed / Math.max(0.1, state.holdDuration)) * 100);
       el.dockProgressBar.style.width = `${progress}%`;
@@ -1215,7 +1351,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
         state.holdTimer = null;
         state.isHolding = false;
         el.dockProgressBar.style.width = '0%';
-        stepSession();
+        stepSession(holdPresentationId);
       }
     }, intervalMs);
   } else {
@@ -1241,10 +1377,11 @@ function handleAdvanceAction() {
   // 2. If holding (.next / .wait)
   if (state.isHolding) {
     if (state.allowClickInterrupt) {
+      const presId = state.currentPresentationId;
       clearTimers();
       state.isHolding = false;
       el.dockProgressBar.style.width = '0%';
-      stepSession();
+      stepSession(presId);
     } else {
       el.dockStepHint.textContent = '强制停留中，请稍候...';
     }
@@ -1252,7 +1389,7 @@ function handleAdvanceAction() {
   }
 
   // 3. Normal step
-  stepSession();
+  stepSession(state.currentPresentationId);
 }
 
 function clearTimers() {
@@ -1269,6 +1406,11 @@ function clearTimers() {
 // ==========================================================================
 function renderChoices(choicePayload) {
   clearTimers();
+  state.currentActiveTypingEl = null;
+  state.currentActiveSpeakerEl = null;
+  state.currentActiveCursorEl = null;
+  state.currentActivePassageEl = null;
+  state.fullTextHtml = '';
 
   // If there is already an active unselected choice group on screen, remove it before rendering the updated one
   if (state.currentActiveChoiceEl && !state.currentActiveChoiceEl.classList.contains('has-selection')) {
@@ -1282,6 +1424,8 @@ function renderChoices(choicePayload) {
 
   const choiceGroup = document.createElement('div');
   choiceGroup.className = 'choice-group-block';
+  const choicePresentationId = choicePayload.presentationId || state.currentPresentationId;
+  choiceGroup.dataset.presentationId = choicePresentationId;
   state.currentActiveChoiceEl = choiceGroup;
 
   const isInvestigate = choicePayload.containerName === 'investigate';
@@ -1314,10 +1458,16 @@ function renderChoices(choicePayload) {
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // Guard: Stale button clicks on old content must not affect new content
+      if (state.currentPresentationId !== choicePresentationId) {
+        return;
+      }
+      // Immediately disable all buttons in this choice group to prevent double submission
+      choiceGroup.querySelectorAll('.choice-card-btn').forEach(b => b.disabled = true);
       btn.classList.add('is-selected');
       choiceGroup.classList.add('has-selection');
       state.currentActiveChoiceEl = null;
-      submitChoice(opt.id);
+      submitChoice(opt.id, choicePresentationId);
     });
 
     listEl.appendChild(btn);
