@@ -32,6 +32,8 @@ Alice: That's unbelievable...
 
 Decorators attach to their owning anchor; indentation bounds options and branch bodies. `.tag` and `.tag()` both have no arguments, while `.tag(0)` explicitly passes integer zero. Positional and named arguments are supported, for example `.bgm("main", volume=0.6)`. These names do not supply audio or portrait implementations.
 
+A decorator without a preceding anchor in its block, such as `.effect` on the first line, stops loading with a parse error and source line. It is neither discarded nor attached to the following line. Named section and branch boundaries do not supply anchors from another block.
+
 Presentation timing conventions use seconds. `.next(0.5)` requests advancement half a second after text finishes displaying. `.skippable(false, 3)` restricts text fast-forwarding for the first three seconds. The core parses these declarations; the host or presentation controller implements their timing.
 
 `.wait(t)` only enforces a minimum hold after printing; it does not enable automatic advancement. Clicks during that hold are discarded, so manual playback needs a fresh click afterwards. Bare `.wait` uses estimated reading time. `.next(t)` schedules automatic advancement after printing; an omitted argument means zero seconds.

@@ -60,19 +60,18 @@ namespace Ktory.Core.Parser
             // Parse blocks: Root section + named sections
             KtoryBlock currentBlock = file.RootBlock;
             int sectionIndent = -1;
-            bool isIndentedSection = false;
 
             while (index < lines.Count)
             {
                 var line = lines[index];
 
-                // Check section end: If we are inside an indented named section and indent drops back to <= sectionIndent
-                if (currentBlock != file.RootBlock && isIndentedSection && line.Indent <= sectionIndent)
+                // A named section only owns lines deeper than its declaration.
+                // This also leaves an empty section when the next line is root content.
+                if (currentBlock != file.RootBlock && line.Indent <= sectionIndent)
                 {
                     // Return to root section
                     currentBlock = file.RootBlock;
                     sectionIndent = -1;
-                    isIndentedSection = false;
                 }
 
                 // Check @speaker declaration
@@ -95,17 +94,7 @@ namespace Ktory.Core.Parser
                     file.AddBlock(newBlock);
                     currentBlock = newBlock;
 
-                    // Check if subsequent lines are indented relative to this header
-                    if (index + 1 < lines.Count && lines[index + 1].Indent > line.Indent)
-                    {
-                        isIndentedSection = true;
-                        sectionIndent = line.Indent;
-                    }
-                    else
-                    {
-                        isIndentedSection = false;
-                        sectionIndent = -1;
-                    }
+                    sectionIndent = line.Indent;
 
                     index++;
                     continue;
@@ -138,13 +127,17 @@ namespace Ktory.Core.Parser
             // 1. Check Decorator line standalone (.name(...))
             if (line.Text.StartsWith("."))
             {
+                if (currentBlock.Steps.Count == 0)
+                {
+                    throw new KtoryException(
+                        "Decorator has no preceding anchor in this block.",
+                        line.LineNumber, line.Indent + 1);
+                }
+
                 // Attach to previous step in current block
                 var tags = TagParser.ParseTags(line.Text);
-                if (currentBlock.Steps.Count > 0)
-                {
-                    var prev = currentBlock.Steps[currentBlock.Steps.Count - 1];
-                    prev.Tags.AddRange(tags);
-                }
+                var prev = currentBlock.Steps[currentBlock.Steps.Count - 1];
+                prev.Tags.AddRange(tags);
                 index++;
                 return null;
             }
@@ -155,7 +148,7 @@ namespace Ktory.Core.Parser
                 var cf = ParseControlFlow(line);
                 index++;
                 // Attach any trailing or next-line tags
-                AttachFollowingTags(lines, ref index, cf);
+                AttachFollowingTags(lines, ref index, cf, line.Indent);
                 return cf;
             }
 
@@ -231,6 +224,13 @@ namespace Ktory.Core.Parser
 
                 speakerDef.DisplayNames[lang] = val;
                 speakerDef.Aliases.Add(val);
+            }
+
+            if (speakerDef.DisplayNames.Count == 0)
+            {
+                throw new KtoryException(
+                    $"Speaker declaration '{line.Text}' must define at least one non-empty localized name.",
+                    line.LineNumber, line.Indent + 1);
             }
 
             file.AddSpeaker(speakerDef);
@@ -364,7 +364,7 @@ namespace Ktory.Core.Parser
                     Tags = lineTags
                 };
 
-                AttachFollowingTags(lines, ref index, directive);
+                AttachFollowingTags(lines, ref index, directive, lineIndent);
                 return directive;
             }
         }
@@ -470,7 +470,7 @@ namespace Ktory.Core.Parser
                 }
 
                 // Parse as inline step
-                var dummyBlock = new KtoryBlock("inline");
+                var dummyBlock = new KtoryBlock("inline") { Steps = item.InlineSteps };
                 var step = ParseStep(lines, ref index, file, dummyBlock);
                 if (step != null)
                 {
@@ -605,9 +605,11 @@ namespace Ktory.Core.Parser
             throw new KtoryException($"Unrecognized control flow statement: '{text}'", lineNumber, 1);
         }
 
-        private static void AttachFollowingTags(List<SourceLine> lines, ref int index, StepNode step)
+        private static void AttachFollowingTags(List<SourceLine> lines, ref int index, StepNode step, int anchorIndent)
         {
-            while (index < lines.Count && lines[index].Text.StartsWith("."))
+            // A dedent may leave this branch or named section. Let its owning
+            // block resolve the decorator instead of consuming it across that boundary.
+            while (index < lines.Count && lines[index].Indent >= anchorIndent && lines[index].Text.StartsWith("."))
             {
                 step.Tags.AddRange(TagParser.ParseTags(lines[index].Text));
                 index++;

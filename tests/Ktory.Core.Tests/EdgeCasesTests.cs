@@ -314,8 +314,8 @@ namespace Ktory.Core.Tests
 : RootEnd
 
 === ExternalSub ===
-: SubLine
--> return
+  : SubLine
+  -> return
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);
@@ -639,10 +639,10 @@ namespace Ktory.Core.Tests
 -> end
 
 === Sub ===
-#choice.loop(1)
-  + [返回主线] -> return
-: 不应该因为上次调用而跳过菜单。
--> return
+  #choice.loop(1)
+    + [返回主线] -> return
+  : 不应该因为上次调用而跳过菜单。
+  -> return
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);
@@ -688,10 +688,10 @@ namespace Ktory.Core.Tests
 -> end
 
 === Sub ===
-#choice.loop(1)
-  + [子过程返回] -> return
-: 子过程结束。
--> return
+  #choice.loop(1)
+    + [子过程返回] -> return
+  : 子过程结束。
+  -> return
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);
@@ -854,8 +854,8 @@ namespace Ktory.Core.Tests
 -> end
 
 === Sub ===
-: InsideSub
--> return
+  : InsideSub
+  -> return
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);
@@ -875,24 +875,27 @@ namespace Ktory.Core.Tests
         }
 
         [Fact]
-        public void Sequencer_DefaultStart_WhenNoRootSection_StartsAtFirstNamedSection()
+        public void Sequencer_DefaultStart_WhenRootIsEmpty_CompletesUntilExplicitEntryIsChosen()
         {
             string script = @"
 === SectionA ===
-: In Section A
--> end
+  : In Section A
+  -> end
 
 === SectionB ===
-: In Section B
--> end
+  : In Section B
+  -> end
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);
 
-            // When script has no root nodes, starts at first named section
+            // An empty root completes; named sections require an explicit entry.
             sequencer.Start();
-            Assert.Equal("In Section A", sequencer.CurrentPayload!.Content);
+            Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
+            Assert.Null(sequencer.CurrentPayload);
 
+            sequencer.Start("SectionA");
+            Assert.Equal("In Section A", sequencer.CurrentPayload!.Content);
             sequencer.Step();
             Assert.Equal(ExecutionStatus.Completed, sequencer.Status);
 
@@ -938,7 +941,7 @@ namespace Ktory.Core.Tests
             Assert.False(rootAutoPolicy.TryGetProperty("scopeBlock", out _));
 
             // Step through AUTO_END to completion
-            string stepJson = bridge.Step();
+            string stepJson = bridge.Step(root.GetProperty("presentationId").GetInt64(), root.GetProperty("sessionId").GetString());
             using var stepDoc = System.Text.Json.JsonDocument.Parse(stepJson);
             Assert.Equal("Completed", stepDoc.RootElement.GetProperty("status").GetString());
             Assert.Equal(System.Text.Json.JsonValueKind.Null, stepDoc.RootElement.GetProperty("autoPolicy").ValueKind);
@@ -956,8 +959,11 @@ namespace Ktory.Core.Tests
 ";
             var bridge = new Ktory.Web.KtoryWasmBridge();
             string json1 = bridge.Start(script, "zh", null);
+            PresentationToken token;
             using (var doc1 = System.Text.Json.JsonDocument.Parse(json1))
             {
+                token = new PresentationToken(doc1.RootElement.GetProperty("sessionId").GetString()!,
+                    doc1.RootElement.GetProperty("presentationId").GetInt64());
                 var payload1 = doc1.RootElement.GetProperty("payload");
                 Assert.Equal("估算阅读时间。", payload1.GetProperty("content").GetString());
 
@@ -970,7 +976,7 @@ namespace Ktory.Core.Tests
                 Assert.True(rPolicy1.GetProperty("useEstimatedReadingTime").GetBoolean());
             }
 
-            string json2 = bridge.Step();
+            string json2 = bridge.Step(token.PresentationId, token.SessionId);
             using (var doc2 = System.Text.Json.JsonDocument.Parse(json2))
             {
                 var payload2 = doc2.RootElement.GetProperty("payload");
@@ -1277,17 +1283,17 @@ namespace Ktory.Core.Tests
         {
             string script = @"
 === SectionA ===
-: 台词1
+  : 台词1
 
 === SectionA ===
-: 台词2
+  : 台词2
 ";
             var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
             Assert.Contains("Duplicate section '=== SectionA ==='", ex.Message);
 
             string scriptRoot = @"
 === root ===
-: 试图重写root
+  : 试图重写root
 ";
             var exRoot = Assert.Throws<KtoryException>(() => KtoryParser.Parse(scriptRoot));
             Assert.Contains("Section label 'root' is reserved", exRoot.Message);
@@ -1322,21 +1328,21 @@ namespace Ktory.Core.Tests
         }
 
         [Fact]
-        public void StaticValidator_UnindentedSection_ConflictingLinesAfterTerminal_ThrowsParseException()
+        public void StaticValidator_NamedSectionStepAfterTerminal_ThrowsParseException()
         {
-            // SubSection is unindented, capturing lines after -> return
+            // A step still inside the section cannot follow its terminal return.
             string script = @"
 : 根节第一句。
 
 === SubSection ===
-艾莉丝: 命名节台词。
--> return
+  艾莉丝: 命名节台词。
+  -> return
 
-主角: 根节第二句。
+  主角: 这句仍在命名节内，无法执行。
 ";
             var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
-            Assert.Contains("Unreachable code or conflicting section boundary", ex.Message);
-            Assert.Contains("Please indent the section body", ex.Message);
+            Assert.Contains("Unreachable code in section '=== SubSection ==='", ex.Message);
+            Assert.Contains("after terminal control flow statement", ex.Message);
         }
 
         [Fact]
@@ -1435,7 +1441,7 @@ namespace Ktory.Core.Tests
         }
 
         [Fact]
-        public void PresentationId_StaleStepAndChoice_IgnoredOrRejected()
+        public void PresentationId_StaleStepAndChoice_IgnoredWithDiagnostics()
         {
             string script = @"
 : 第一句
@@ -1445,6 +1451,8 @@ namespace Ktory.Core.Tests
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);
+            var trace = new List<ExecutionTrace>();
+            sequencer.OnTrace += trace.Add;
 
             sequencer.Start();
             long pres1 = sequencer.CurrentPresentationId;
@@ -1461,8 +1469,14 @@ namespace Ktory.Core.Tests
             long pres2 = sequencer.CurrentPresentationId;
             Assert.Equal(2, pres2);
 
-            // Submit choice with stale presentation id -> throws KtoryControlFlowException
-            Assert.Throws<KtoryControlFlowException>(() => sequencer.SubmitChoice("选项1", expectedPresentationId: pres1));
+            // A stale choice is ignored without changing or consuming the current menu.
+            var menu = sequencer.CurrentChoice;
+            Assert.Null(Record.Exception(() => sequencer.SubmitChoice("选项1", expectedPresentationId: pres1)));
+            Assert.Same(menu, sequencer.CurrentChoice);
+            Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
+            Assert.Empty(sequencer.VisitedItemIds);
+            Assert.Contains(trace, entry => entry.Kind == ExecutionTraceKind.InputIgnored);
+            Assert.DoesNotContain(trace, entry => entry.Kind == ExecutionTraceKind.Error);
 
             // Submit choice with correct presentation id -> succeeds
             sequencer.SubmitChoice("选项1", expectedPresentationId: pres2);

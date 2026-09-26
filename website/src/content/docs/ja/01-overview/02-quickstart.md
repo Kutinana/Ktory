@@ -84,6 +84,7 @@ player.Start(requestedLocale: "ja");
 // 3. ループ進行：Enter キーで一歩進み、選択肢では番号を入力
 while (player.Status != ExecutionStatus.Completed)
 {
+    var token = player.CurrentPresentationToken;
     // 選択肢ブロック：プレイヤーの入力を待つ
     if (player.Status == ExecutionStatus.AwaitingChoice)
     {
@@ -102,7 +103,7 @@ while (player.Status != ExecutionStatus.Completed)
             menu.Options[choice - 1].CanSelect)
         {
             // 選択を送信：コアが自動的に選択した分岐の最初の拍まで進めます
-            player.SubmitChoice(menu.Options[choice - 1].Id, menu.PresentationId);
+            player.SubmitChoice(menu.Options[choice - 1].Id, token);
         }
         continue;
     }
@@ -116,7 +117,7 @@ while (player.Status != ExecutionStatus.Completed)
 
     // プレイヤーの Enter キー入力を待ち、次の一歩を踏み出す
     Console.ReadLine();
-    player.Step(beat.PresentationId);
+    player.Step(token);
 }
 
 Console.WriteLine("\nスクリプトの再生が終了しました！");
@@ -135,7 +136,7 @@ Enter キーを押せば、アリスとの出会いの物語をご自身の手�
 - **拍（Beat）**: セリフや地の文における論理的な停止点です。Enter キーを押したりダイアログを 1 回クリックするたびに、コアは 1「拍」進みます。
 - **プロンプターはタイプライター効果に関与しない**: コアの責務はゲームエンジンに「いまこのセリフを喋る順番です」と伝えることだけです。そのセリフをタイプライターのように 1 文字ずつ表示するか、フェードインさせるか、あるいはボイス付きで再生するかは、すべてゲームエンジン側が決定します。
 - **選択即推進（選択するとそのまま進む）**: `SubmitChoice()` で選択肢を送信した時点で、コアは選択された分岐の最初のセリフまで進めて一時停止します。そのため、追加で `Step()` を呼び出す必要はなく、呼び出すべきでもありません。
-- **誤クリック防止の安全キー（`PresentationId`）**: `player.Step(beat.PresentationId)` というコードに気付いたかもしれません。この ID は一時的なチケットのようなもので、「いま進めようとしているのが、現在画面に表示されているセリフそのものであるか」をコアが検証するために使われます。連打や誤操作によって後続の物語が意図せず一気に流れてしまうのを防ぎます。
+- **セッションと拍のトークン（`PresentationToken`）**：内容を表示する時点で `player.CurrentPresentationToken` を保存し、入力とともに渡します。セッションと拍の両方を識別し、古いコールバックや処理済み送信の再送は無視して診断ログだけに記録します。非同期コールバックの実行時に新しいトークンを読み直してはいけません。
 
 ## 次のステップ
 

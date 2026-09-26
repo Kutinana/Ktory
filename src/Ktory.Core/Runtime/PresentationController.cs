@@ -18,6 +18,10 @@ namespace Ktory.Core.Runtime
     public class PresentationController
     {
         private readonly KtorySequencer _sequencer;
+        private PresentationToken _presentationToken;
+
+        /// <summary>Capture this token when scheduling work for the currently configured beat.</summary>
+        public PresentationToken CurrentPresentationToken => _presentationToken;
 
         public PresentationPhase Phase { get; private set; } = PresentationPhase.Idle;
         public double ElapsedInPhase { get; private set; }
@@ -46,7 +50,8 @@ namespace Ktory.Core.Runtime
         public double AutoAdvanceRemaining => !AutoAdvanceOnHoldEnd ? 0
             : Phase == PresentationPhase.Printing ? _autoAdvanceDuration
             : Phase == PresentationPhase.Holding ? Math.Max(0, _autoAdvanceDuration - _elapsedForAutoAdvance) : 0;
-        public bool CanHandleUserClick => _sequencer.Status == ExecutionStatus.SuspendedAtBeat &&
+        public bool CanHandleUserClick => _sequencer.MatchesCurrentPresentation(_presentationToken) &&
+            _sequencer.Status == ExecutionStatus.SuspendedAtBeat &&
             ((Phase == PresentationPhase.Printing && CanFastForward && ElapsedInPhase >= FastForwardLockDuration) ||
              (Phase == PresentationPhase.Holding && AllowClickInterruptHold));
 
@@ -87,6 +92,13 @@ namespace Ktory.Core.Runtime
         /// When AutoStepSequencer is false, the host must queue and execute sequencer.Step().
         /// </summary>
         public event Action? OnAdvanceRequested;
+
+        /// <summary>
+        /// Session-aware advance notification for asynchronous host-managed stepping. Queue the
+        /// supplied token, then pass it to sequencer.Step(token). Use one advance subscription;
+        /// AutoStepSequencer still determines which layer owns the actual step.
+        /// </summary>
+        public event Action<PresentationToken>? OnAdvanceRequestedWithToken;
 
         /// <summary>
         /// Fired after a beat transition has successfully advanced the sequencer and updated beat presentation state.
@@ -131,6 +143,7 @@ namespace Ktory.Core.Runtime
         /// </param>
         public void RefreshLanguage(bool completePrintingOnLanguageSwitch = true)
         {
+            if (!AcceptInput(_presentationToken, nameof(RefreshLanguage))) return;
             if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat || _sequencer.CurrentPayload == null)
             {
                 return;
@@ -181,9 +194,16 @@ namespace Ktory.Core.Runtime
             OnLanguageRefreshed?.Invoke();
         }
 
-        public void NotifyPrintingFinished()
+        public void NotifyPrintingFinished() => NotifyPrintingFinished(_presentationToken);
+
+        public void NotifyPrintingFinished(PresentationToken expected)
         {
-            if (Phase != PresentationPhase.Printing) return;
+            if (!AcceptInput(expected, nameof(NotifyPrintingFinished))) return;
+            if (Phase != PresentationPhase.Printing)
+            {
+                _sequencer.TraceIgnoredInput("duplicate printing completion", expected);
+                return;
+            }
 
             ElapsedInPhase = 0;
             if (_sequencer.CurrentPayload != null)
@@ -198,12 +218,15 @@ namespace Ktory.Core.Runtime
             // Only an explicit automatic policy can advance when printing finishes.
             if (AutoAdvanceOnHoldEnd && HoldDuration <= 0)
             {
-                RequestAdvance();
+                RequestAdvance(expected);
             }
         }
 
-        public void HandleUserClick()
+        public void HandleUserClick() => HandleUserClick(_presentationToken);
+
+        public void HandleUserClick(PresentationToken expected)
         {
+            if (!AcceptInput(expected, nameof(HandleUserClick))) return;
             if (_sequencer.Status == ExecutionStatus.AwaitingChoice)
             {
                 return; // Choices require specific item clicks
@@ -214,14 +237,14 @@ namespace Ktory.Core.Runtime
                 // In printing phase: check if fast-forward is allowed
                 if (CanFastForward && ElapsedInPhase >= FastForwardLockDuration)
                 {
-                    long startingPresId = _sequencer.CurrentPresentationId;
                     OnFastForwardRequested?.Invoke();
 
                     // Guard against duplicate notification: if the subscriber's UI callback already
                     // called NotifyPrintingFinished() and advanced to a new beat, do not notify again on the new beat.
-                    if (Phase == PresentationPhase.Printing && _sequencer.CurrentPresentationId == startingPresId)
+                    if (Phase == PresentationPhase.Printing && _presentationToken == expected &&
+                        _sequencer.MatchesCurrentPresentation(expected))
                     {
-                        NotifyPrintingFinished();
+                        NotifyPrintingFinished(expected);
                     }
                 }
                 // If not allowed, click is ignored
@@ -233,7 +256,7 @@ namespace Ktory.Core.Runtime
                 if (AllowClickInterruptHold)
                 {
                     // Once the minimum wait expires, a fresh click may interrupt the automatic delay.
-                    RequestAdvance();
+                    RequestAdvance(expected);
                 }
                 // Clicks during .wait are discarded, never replayed at its end.
             }
@@ -241,6 +264,15 @@ namespace Ktory.Core.Runtime
 
         public void Update(double deltaTime)
         {
+            // Ordinary frame updates need no diagnostic while there is no active presentation work.
+            if ((Phase == PresentationPhase.Idle || Phase == PresentationPhase.Completed) && !_hasDeferredAdvance) return;
+            Update(deltaTime, _presentationToken);
+        }
+
+        public void Update(double deltaTime, PresentationToken expected)
+        {
+            if (!AcceptInput(expected, nameof(Update))) return;
+            if (Phase == PresentationPhase.Idle || Phase == PresentationPhase.Completed) return;
             if (_hasDeferredAdvance)
             {
                 _hasDeferredAdvance = false;
@@ -265,7 +297,7 @@ namespace Ktory.Core.Runtime
                 _elapsedForAutoAdvance += deltaTime;
                 if (AutoAdvanceOnHoldEnd && AllowClickInterruptHold && _elapsedForAutoAdvance >= _autoAdvanceDuration)
                 {
-                    RequestAdvance();
+                    RequestAdvance(expected);
                 }
             }
         }
@@ -275,19 +307,37 @@ namespace Ktory.Core.Runtime
         /// fast-forward lock or minimum wait. Raw user input should use HandleUserClick().
         /// Uses iterative batch processing without recursion.
         /// </summary>
-        public void RequestAdvance()
+        public void RequestAdvance() => RequestAdvance(_presentationToken);
+
+        public void RequestAdvance(PresentationToken expected)
         {
+            if (!AcceptInput(expected, nameof(RequestAdvance))) return;
+            if (Phase != PresentationPhase.Printing && Phase != PresentationPhase.Holding)
+            {
+                _sequencer.TraceIgnoredInput("duplicate advance request", expected);
+                return;
+            }
             if ((Phase == PresentationPhase.Printing && (!CanFastForward || ElapsedInPhase < FastForwardLockDuration)) ||
                 (Phase == PresentationPhase.Holding && !AllowClickInterruptHold))
             {
                 return;
             }
-            _pendingAdvances++;
+            _pendingAdvances = 1;
             ProcessAdvances();
+        }
+
+        private bool AcceptInput(PresentationToken expected, string operation)
+        {
+            if (expected == _presentationToken && _sequencer.MatchesCurrentPresentation(expected)) return true;
+            _sequencer.TraceIgnoredInput(operation, expected);
+            return false;
         }
 
         private void ApplyBeatState()
         {
+            _presentationToken = _sequencer.CurrentPresentationToken;
+            _pendingAdvances = 0;
+            _hasDeferredAdvance = false;
             ElapsedInPhase = 0;
             _minimumHoldDuration = 0;
             _autoAdvanceDuration = 0;
@@ -363,7 +413,8 @@ namespace Ktory.Core.Runtime
             {
                 int advancesThisBatch = 0;
 
-                while (_sequencer.Status == ExecutionStatus.SuspendedAtBeat)
+                while (_sequencer.Status == ExecutionStatus.SuspendedAtBeat &&
+                    _sequencer.MatchesCurrentPresentation(_presentationToken))
                 {
                     bool shouldAdvance = (_pendingAdvances > 0) || ShouldAutoAdvanceImmediately();
                     if (!shouldAdvance)
@@ -385,21 +436,29 @@ namespace Ktory.Core.Runtime
 
                     Phase = PresentationPhase.Completed;
 
-                    long presIdBefore = _sequencer.CurrentPresentationId;
+                    var tokenBefore = _presentationToken;
+                    OnAdvanceRequestedWithToken?.Invoke(tokenBefore);
                     OnAdvanceRequested?.Invoke();
 
                     if (AutoStepSequencer)
                     {
                         // If a subscriber to OnAdvanceRequested already invoked sequencer.Step(),
-                        // CurrentPresentationId will have changed. Do not step twice!
-                        if (_sequencer.CurrentPresentationId == presIdBefore && _sequencer.Status == ExecutionStatus.SuspendedAtBeat)
+                        // The whole token changes on restart as well as advance. Do not step twice
+                        // or apply this request to a new session that reuses the same numeric id.
+                        if (_sequencer.MatchesCurrentPresentation(tokenBefore) && _sequencer.Status == ExecutionStatus.SuspendedAtBeat)
                         {
-                            _sequencer.Step();
+                            _sequencer.Step(tokenBefore);
                         }
                         advancesThisBatch++;
 
                         ApplyBeatState();
                         OnBeatChanged?.Invoke();
+                        if (_sequencer.CurrentSessionId != tokenBefore.SessionId)
+                        {
+                            // A subscriber started another session. This batch belongs to the
+                            // previous one; new automatic work must wait for that session's input/tick.
+                            break;
+                        }
                     }
                     else
                     {

@@ -41,13 +41,12 @@ app.MapPost("/api/session/step", async (HttpRequest request, RunnerSessionServic
 {
     try
     {
-        long? presId = null;
+        StepRequest? req = null;
         if (request.ContentLength > 0 && request.HasJsonContentType())
         {
-            var req = await request.ReadFromJsonAsync<StepRequest>();
-            presId = req?.PresentationId;
+            req = await request.ReadFromJsonAsync<StepRequest>();
         }
-        var state = sessionService.Step(presId);
+        var state = sessionService.Step(new PresentationToken(req?.SessionId ?? "", req?.PresentationId ?? 0));
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -60,7 +59,7 @@ app.MapPost("/api/session/choice", (SubmitChoiceRequest req, RunnerSessionServic
 {
     try
     {
-        var state = sessionService.SubmitChoice(req.ChoiceId, req.PresentationId);
+        var state = sessionService.SubmitChoice(req.ChoiceId, new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0));
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -69,11 +68,11 @@ app.MapPost("/api/session/choice", (SubmitChoiceRequest req, RunnerSessionServic
     }
 });
 
-app.MapPost("/api/session/break", (RunnerSessionService sessionService) =>
+app.MapPost("/api/session/break", (StepRequest req, RunnerSessionService sessionService) =>
 {
     try
     {
-        var state = sessionService.Break();
+        var state = sessionService.Break(new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0));
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -86,7 +85,7 @@ app.MapPost("/api/session/language", (SetLanguageRequest req, RunnerSessionServi
 {
     try
     {
-        var state = sessionService.SetLanguage(req.Locale);
+        var state = sessionService.SetLanguage(req.Locale, new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0));
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -109,13 +108,14 @@ app.Run();
 
 // Data Models
 public record StartSessionRequest(string Script, string? RequestedLocale, string? EntryBlock);
-public record SubmitChoiceRequest(string ChoiceId, long? PresentationId = null);
-public record StepRequest(long? PresentationId = null);
-public record SetLanguageRequest(string Locale);
+public record SubmitChoiceRequest(string ChoiceId, long? PresentationId = null, string? SessionId = null);
+public record StepRequest(long? PresentationId = null, string? SessionId = null);
+public record SetLanguageRequest(string Locale, long? PresentationId = null, string? SessionId = null);
 
 public class RunnerSessionState
 {
     public string Status { get; set; } = "Ready";
+    public string SessionId { get; set; } = "";
     public long PresentationId { get; set; }
     public TextPayload? Payload { get; set; }
     public ChoicePayload? Choice { get; set; }
@@ -124,6 +124,7 @@ public class RunnerSessionState
     public List<string> VisitedItems { get; set; } = new List<string>();
     public int CallStackDepth { get; set; }
     public List<TagData> RecentTags { get; set; } = new List<TagData>();
+    public List<ExecutionTrace> Diagnostics { get; set; } = new List<ExecutionTrace>();
     public AutoPolicyData? AutoPolicy { get; set; }
     public string? ErrorMessage { get; set; }
 }
@@ -133,21 +134,47 @@ public class RunnerSessionService
     private readonly object _lock = new object();
     private KtorySequencer? _sequencer;
     private readonly List<TagData> _recentTags = new List<TagData>();
+    private readonly List<ExecutionTrace> _diagnostics = new List<ExecutionTrace>();
 
     public RunnerSessionState Start(string script, string requestedLocale, string? entryBlock)
     {
         lock (_lock)
         {
+            // Reload always ends the old session, even when parsing or startup fails.
+            _sequencer?.InvalidateSession();
+            _sequencer = null;
             _recentTags.Clear();
+            _diagnostics.Clear();
             var file = KtoryParser.Parse(script);
-            _sequencer = new KtorySequencer(file);
-            _sequencer.OnTagsDispatched += tags =>
+            var sequencer = new KtorySequencer(file)
+            {
+                Evaluator = new DefaultExpressionEvaluator { IgnoreUnknownConditions = true }
+            };
+            sequencer.OnTrace += trace =>
+            {
+                if (trace.Kind != ExecutionTraceKind.Warning && trace.Kind != ExecutionTraceKind.InputIgnored) return;
+                _diagnostics.Add(trace);
+                if (_diagnostics.Count > 50) _diagnostics.RemoveAt(0);
+            };
+            sequencer.OnTagsDispatched += tags =>
             {
                 _recentTags.AddRange(tags);
                 if (_recentTags.Count > 50) _recentTags.RemoveRange(0, _recentTags.Count - 50);
             };
 
-            _sequencer.Start(entryBlock, requestedLocale);
+            try
+            {
+                sequencer.Start(entryBlock, requestedLocale);
+            }
+            catch
+            {
+                sequencer.InvalidateSession();
+                _recentTags.Clear();
+                _diagnostics.Clear();
+                throw;
+            }
+
+            _sequencer = sequencer;
             return GetStateInternal();
         }
     }
@@ -162,12 +189,32 @@ public class RunnerSessionService
         }
     }
 
+    public RunnerSessionState Step(PresentationToken token)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            _sequencer.Step(token);
+            return GetStateInternal();
+        }
+    }
+
     public RunnerSessionState SubmitChoice(string choiceId, long? expectedPresentationId = null)
     {
         lock (_lock)
         {
             if (_sequencer == null) throw new InvalidOperationException("No active session.");
             _sequencer.SubmitChoice(choiceId, expectedPresentationId);
+            return GetStateInternal();
+        }
+    }
+
+    public RunnerSessionState SubmitChoice(string choiceId, PresentationToken token)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            _sequencer.SubmitChoice(choiceId, token);
             return GetStateInternal();
         }
     }
@@ -182,12 +229,32 @@ public class RunnerSessionService
         }
     }
 
+    public RunnerSessionState Break(PresentationToken token)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            _sequencer.Break(token);
+            return GetStateInternal();
+        }
+    }
+
     public RunnerSessionState SetLanguage(string locale)
     {
         lock (_lock)
         {
             if (_sequencer == null) throw new InvalidOperationException("No active session.");
             _sequencer.SetLanguage(locale);
+            return GetStateInternal();
+        }
+    }
+
+    public RunnerSessionState SetLanguage(string locale, PresentationToken token)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            _sequencer.SetLanguage(locale, token);
             return GetStateInternal();
         }
     }
@@ -210,6 +277,7 @@ public class RunnerSessionService
         return new RunnerSessionState
         {
             Status = _sequencer.Status.ToString(),
+            SessionId = _sequencer.CurrentSessionId,
             PresentationId = _sequencer.CurrentPresentationId,
             Payload = _sequencer.CurrentPayload,
             Choice = _sequencer.CurrentChoice,
@@ -218,6 +286,7 @@ public class RunnerSessionService
             VisitedItems = new List<string>(_sequencer.VisitedItemIds),
             CallStackDepth = _sequencer.CallStack.Count,
             RecentTags = new List<TagData>(_recentTags),
+            Diagnostics = new List<ExecutionTrace>(_diagnostics),
             AutoPolicy = _sequencer.ActiveAutoPolicy?.ToData()
         };
     }

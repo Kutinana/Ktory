@@ -38,8 +38,9 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 {
     [SerializeField] private TextAsset script;
     private KtorySequencer player;
+    public PresentationToken DisplayedToken { get; private set; }
 
-    private void Start()
+    private void OnEnable()
     {
         player = new KtorySequencer(KtoryParser.Parse(script.text));
         player.OnTagsDispatched += tags =>
@@ -50,20 +51,23 @@ public sealed class KtoryCoreProbe : MonoBehaviour
         LogCurrent();
     }
 
-    public void AdvanceDisplayedBeat(long presentationId)
+    public void AdvanceDisplayedBeat(PresentationToken token)
     {
-        player.Step(presentationId);
+        player.Step(token);
         LogCurrent();
     }
 
-    public void SubmitOption(string optionId, long presentationId)
+    public void SubmitOption(string optionId, PresentationToken token)
     {
-        player.SubmitChoice(optionId, presentationId);
+        player.SubmitChoice(optionId, token);
         LogCurrent();
     }
+
+    private void OnDisable() => player?.InvalidateSession();
 
     private void LogCurrent()
     {
+        DisplayedToken = player.CurrentPresentationToken;
         if (player.Status == ExecutionStatus.AwaitingChoice)
         {
             foreach (var option in player.CurrentChoice.Options)
@@ -75,26 +79,28 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 }
 ```
 
-普通推进携带所显示拍的 `PresentationId`；选项按钮保存菜单的 `PresentationId` 与项 `Id`。`SubmitChoice()` 已输出分支的第一拍，不要再为同一次选择调用 `Step()`。原始点击必须先由现有宿主完成快显、输入与外部推进条件判断。
+显示内容时保存完整的 `DisplayedToken`；选项按钮保存同一菜单的令牌和项 `Id`。按钮闭包应先用局部变量捕获令牌，不能在执行时读取已改变的属性。`SubmitChoice()` 已输出分支的第一拍，不要再为同一次选择调用 `Step()`。原始点击必须先由现有宿主完成快显、输入与外部推进条件判断。
 
 ## 接入配套表现时序
 
-若宿主采用共享的 `PresentationController`，其接线如下；也可以自己实现相同契约：
+若宿主采用共享的 `PresentationController`，其接线如下；也可以自己实现相同契约。表中的 `token` 是创建显示任务或排队输入时保存的 `presentation.CurrentPresentationToken`，包含会话和拍号：
 
 | 宿主动作 | 配套接口 |
 | --- | --- |
 | 绑定已创建的播放器 | `new PresentationController(player)` |
 | `Start()` 或有效选择后建立呈现状态 | `SetupForCurrentBeat()`，随后读取当前输出 |
 | 每帧更新时钟 | `Update(Time.unscaledDeltaTime)` |
-| 原始普通点击 | `HandleUserClick()` |
-| 打字机自然完成 | `NotifyPrintingFinished()` |
+| 原始普通点击 | `HandleUserClick(token)` |
+| 打字机自然完成 | `NotifyPrintingFinished(token)` |
 | 自动或点击推进后的重绘 | 订阅 `OnBeatChanged` |
 | 快显当前文本 | 订阅 `OnFastForwardRequested`，只显示全文，不再次通知完成 |
 | 当前语言变化 | `player.SetLanguage(...)` 后 `RefreshLanguage()`，并刷新显示 |
 
-最低停留与自动推进分别处理：`.wait` 到期仅解除限制，期间点击不排队；`.wait.next` 才在停留结束后自动推进（AUTO 区域或宿主自动模式也可提供自动策略）。`.wait(s).next(t)` 从全文显示完成时同时计时，顺序无关。`HandleUserClick()` 接收原始用户输入；不要直接用 `Step()` 绕过呈现策略。`QueuedAdvance` 为兼容保留，始终为 `false`。
+最低停留与自动推进分别处理：`.wait` 到期仅解除限制，期间点击不排队；`.wait.next` 才在停留结束后自动推进（AUTO 区域或宿主自动模式也可提供自动策略）。`.wait(s).next(t)` 从全文显示完成时同时计时，顺序无关。`HandleUserClick(token)` 接收原始用户输入；不要直接用 `Step()` 绕过呈现策略。`QueuedAdvance` 为兼容保留，始终为 `false`。
 
-默认 `AutoStepSequencer == true` 时，控制器自己推进；不要在 `OnAdvanceRequested` 中重复 `Step()`。资源与立绘映射、世界状态和外部演出限制仍由宿主持有。改变会话、重启或销毁对象时撤销旧输入及回调，并以实际 Unity 工程反馈检验核心边界。
+默认 `AutoStepSequencer == true` 时，控制器自己推进；不要在任一推进事件中重复 `Step()`。宿主管理推进时将其设为 `false`，只通过 `OnAdvanceRequestedWithToken` 捕获令牌，接受后 `Step(token)` 并建立下一拍；过期回调不得重新 Setup 当前拍或重置计时。资源与立绘映射、世界状态和外部演出限制仍由宿主持有。
+
+每次 `Start()` 生成新的会话标识；关闭、替换或重启前调用 `InvalidateSession()`，并撤销旧输入、订阅与异步工作。过期／重复输入仅产生后台 `InputIgnored`，不弹出剧情错误；当前有效菜单的非法选项仍报错。无令牌或仅拍号的旧接口保留同步兼容，不能承诺跨会话隔离。实际 Unity 的生命周期仍需实机复验。
 
 ## Play Mode 调试窗口
 

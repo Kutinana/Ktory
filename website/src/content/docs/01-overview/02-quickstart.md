@@ -84,6 +84,7 @@ player.Start(requestedLocale: "zh");
 // 3. 循环推进：玩家敲回车就走一步，遇到选项就输入数字
 while (player.Status != ExecutionStatus.Completed)
 {
+    var token = player.CurrentPresentationToken;
     // 遇到选项支：等待玩家输入选择
     if (player.Status == ExecutionStatus.AwaitingChoice)
     {
@@ -102,7 +103,7 @@ while (player.Status != ExecutionStatus.Completed)
             menu.Options[choice - 1].CanSelect)
         {
             // 提交选择：核心会自动推进到所选分支的第一拍
-            player.SubmitChoice(menu.Options[choice - 1].Id, menu.PresentationId);
+            player.SubmitChoice(menu.Options[choice - 1].Id, token);
         }
         continue;
     }
@@ -116,7 +117,7 @@ while (player.Status != ExecutionStatus.Completed)
 
     // 等待玩家敲击回车，迈出下一步
     Console.ReadLine();
-    player.Step(beat.PresentationId);
+    player.Step(token);
 }
 
 Console.WriteLine("\n剧本播放完毕！");
@@ -135,7 +136,7 @@ dotnet run
 - **拍（Beat）**：对白或旁白的逻辑停顿点。每当你按一次回车或点击一次对话框，核心就走过一“拍”。
 - **提词器不管打字机**：核心只负责告诉游戏引擎“现在该说这句话了”，至于这句话是用打字机逐字蹦出、还是淡入淡出、还是配着语音播放，完全由游戏引擎自行决定。
 - **选择即推进**：当调用 `SubmitChoice()` 提交选项时，核心已经帮你翻到了所选分支的第一句话并停下，不需要也不应该再额外调用一次 `Step()`。
-- **防手滑的安全钥匙 (`PresentationId`)**：你可能注意到了 `player.Step(beat.PresentationId)`。这个 ID 就像一张临时门票，核心用它来确认“你推进的确实是当前展示的这句台词”，防止狂点跳过或连点时把后续剧情点乱。
+- **会话与拍令牌（`PresentationToken`）**：显示内容时保存 `player.CurrentPresentationToken`，之后提交输入时携带这份令牌。它同时标识会话与拍；旧回调或已消费提交的重复投递会被忽略，仅记后台诊断。异步回调不能在执行时重新读取新令牌。
 
 ## 下一步
 

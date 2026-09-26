@@ -132,7 +132,11 @@ namespace Ktory.Unity.Editor.Debugging
                     Run(player, () => target.SetLanguage(locale.Trim()));
             }
             if (payload?.StepType == StepType.Text)
+            {
                 EditorGUILayout.LabelField("Body output", LanguageLabel(payload.ActualLanguage, seq.RequestedLanguage));
+                if (!string.IsNullOrEmpty(payload.SpeakerActualLanguage))
+                    EditorGUILayout.LabelField("Speaker output", LanguageLabel(payload.SpeakerActualLanguage, seq.RequestedLanguage));
+            }
             else if (seq.CurrentChoice == null)
                 EditorGUILayout.LabelField("Body output", "No localized text at this node");
 

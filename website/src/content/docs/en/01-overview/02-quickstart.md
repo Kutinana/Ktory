@@ -84,6 +84,7 @@ player.Start(requestedLocale: "en");
 // 3. Drive the loop: step forward on Enter, enter a number when encountering choices
 while (player.Status != ExecutionStatus.Completed)
 {
+    var token = player.CurrentPresentationToken;
     // Encountered a choice menu: wait for player input
     if (player.Status == ExecutionStatus.AwaitingChoice)
     {
@@ -102,7 +103,7 @@ while (player.Status != ExecutionStatus.Completed)
             menu.Options[choice - 1].CanSelect)
         {
             // Submit choice: the core automatically advances to the first beat of the chosen branch
-            player.SubmitChoice(menu.Options[choice - 1].Id, menu.PresentationId);
+            player.SubmitChoice(menu.Options[choice - 1].Id, token);
         }
         continue;
     }
@@ -116,7 +117,7 @@ while (player.Status != ExecutionStatus.Completed)
 
     // Wait for the player to press Enter, then advance to the next step
     Console.ReadLine();
-    player.Step(beat.PresentationId);
+    player.Step(token);
 }
 
 Console.WriteLine("\nScript playback completed!");
@@ -135,7 +136,7 @@ Press Enter, and watch as you advance your encounter with Alice step by step.
 - **Beat**: A logical stopping point for dialogue or narration. Each time you press Enter or click the dialogue box, the core advances through one "beat".
 - **The teleprompter doesn't care about typewriters**: The core is only responsible for telling the game engine "it's time to show this line now." Whether that line appears via a typewriter letter-by-letter animation, fades in, or plays alongside voice acting is entirely up to the game engine.
 - **Selecting is advancing**: When calling `SubmitChoice()` to submit an option, the core already turns to the first line of the selected branch and pauses there. You do not need to—and should not—call `Step()` an extra time.
-- **Safety key against accidental clicks (`PresentationId`)**: You may have noticed `player.Step(beat.PresentationId)`. This ID acts like a temporary ticket that the core uses to verify "the line you are confirming is indeed the line currently being presented," preventing rapid clicks or accidental skips from advancing past subsequent narrative beats uncontrollably.
+- **Session and presentation token (`PresentationToken`)**: Capture `player.CurrentPresentationToken` when displaying content and keep it with the input. It identifies both the session and the beat. Old callbacks and repeat delivery of a consumed submission are ignored with background diagnostics. An asynchronous callback must not read a new token when it finally runs.
 
 ## Next Steps
 

@@ -44,10 +44,12 @@ const state = {
   allowClickInterrupt: true,
 
   // Narrative Stream Data
+  currentSessionId: '',
   currentPresentationId: 0,
   beatsCount: 0,
   visitedItems: [],
   recentTags: [],
+  diagnostics: [],
   callStackDepth: 0,
   currentSampleKey: '',
   samples: {}
@@ -61,6 +63,9 @@ const el = {
   storyStream: document.getElementById('storyStream'),
   storyCompletedBanner: document.getElementById('storyCompletedBanner'),
   btnReplayStory: document.getElementById('btnReplayStory'),
+  runtimeDiagnostics: document.getElementById('runtimeDiagnostics'),
+  runtimeDiagnosticSummary: document.getElementById('runtimeDiagnosticSummary'),
+  runtimeDiagnosticMessages: document.getElementById('runtimeDiagnosticMessages'),
 
   // Top Nav
   langSwitcher: document.getElementById('langSwitcher'),
@@ -628,20 +633,20 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
       const json = await dotNetRef.invokeMethodAsync('Start', script, requestedLocale, entryBlock || null);
       return JSON.parse(json);
     },
-    async step(expectedPresentationId = null) {
-      const json = await dotNetRef.invokeMethodAsync('Step', expectedPresentationId || null);
+    async step(expectedPresentationId = null, expectedSessionId = null) {
+      const json = await dotNetRef.invokeMethodAsync('Step', expectedPresentationId, expectedSessionId);
       return JSON.parse(json);
     },
-    async choice(choiceId, expectedPresentationId = null) {
-      const json = await dotNetRef.invokeMethodAsync('Choice', choiceId, expectedPresentationId || null);
+    async choice(choiceId, expectedPresentationId = null, expectedSessionId = null) {
+      const json = await dotNetRef.invokeMethodAsync('Choice', choiceId, expectedPresentationId, expectedSessionId);
       return JSON.parse(json);
     },
-    async break() {
-      const json = await dotNetRef.invokeMethodAsync('Break');
+    async break(expectedPresentationId = null, expectedSessionId = null) {
+      const json = await dotNetRef.invokeMethodAsync('Break', expectedPresentationId, expectedSessionId);
       return JSON.parse(json);
     },
-    async setLanguage(locale) {
-      const json = await dotNetRef.invokeMethodAsync('SetLanguage', locale);
+    async setLanguage(locale, expectedPresentationId = null, expectedSessionId = null) {
+      const json = await dotNetRef.invokeMethodAsync('SetLanguage', locale, expectedPresentationId, expectedSessionId);
       return JSON.parse(json);
     },
     async getSamples() {
@@ -745,7 +750,10 @@ async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
   state.status = 'Loading';
   state.payload = null;
   state.choice = null;
+  state.currentSessionId = '';
   state.currentPresentationId = 0;
+  state.diagnostics = [];
+  renderDiagnostics();
   state.currentActiveChoiceEl = null;
   state.requestedLocale = requestedLocale;
   currentSessionEpoch++;
@@ -797,7 +805,7 @@ async function stepSession(expectedPresentationId = null) {
   if (state.status !== 'SuspendedAtBeat') return;
 
   const targetPresentationId = expectedPresentationId || state.currentPresentationId;
-  const sessionEpoch = currentSessionEpoch;
+  const targetSessionId = state.currentSessionId;
 
   return enqueueSessionOp(async (opEpoch) => {
     if (opEpoch !== currentSessionEpoch) return;
@@ -809,12 +817,12 @@ async function stepSession(expectedPresentationId = null) {
     try {
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.step) {
-        data = await window.KtoryWasm.step(targetPresentationId);
+        data = await window.KtoryWasm.step(targetPresentationId, targetSessionId);
       } else {
         const res = await fetch('/api/session/step', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ presentationId: targetPresentationId })
+          body: JSON.stringify({ presentationId: targetPresentationId, sessionId: targetSessionId })
         });
         if (opEpoch !== currentSessionEpoch) return;
         if (res.ok) {
@@ -833,14 +841,18 @@ async function stepSession(expectedPresentationId = null) {
   });
 }
 
-async function submitChoice(choiceId, expectedPresentationId = null) {
+async function submitChoice(choiceId, expectedPresentationId = null, expectedSessionId = null) {
+  if (expectedSessionId !== null && expectedSessionId !== state.currentSessionId) {
+    console.debug('[Ktory] Ignored choice from a previous session.');
+    return;
+  }
   if (expectedPresentationId && expectedPresentationId !== state.currentPresentationId) {
     return;
   }
   if (state.status !== 'AwaitingChoice') return;
 
   const targetPresentationId = expectedPresentationId || state.currentPresentationId;
-  const sessionEpoch = currentSessionEpoch;
+  const targetSessionId = expectedSessionId ?? state.currentSessionId;
 
   clearTimers();
   if (state.currentActiveChoiceEl) {
@@ -855,12 +867,12 @@ async function submitChoice(choiceId, expectedPresentationId = null) {
     try {
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.choice) {
-        data = await window.KtoryWasm.choice(choiceId, targetPresentationId);
+        data = await window.KtoryWasm.choice(choiceId, targetPresentationId, targetSessionId);
       } else {
         const res = await fetch('/api/session/choice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ choiceId, presentationId: targetPresentationId })
+          body: JSON.stringify({ choiceId, presentationId: targetPresentationId, sessionId: targetSessionId })
         });
         if (opEpoch !== currentSessionEpoch) return;
         if (res.ok) {
@@ -886,7 +898,7 @@ async function changeLanguage(locale) {
   });
   if (state.status === 'Error' || state.status === 'Loading' || state.status === 'Ready') return;
 
-  const sessionEpoch = currentSessionEpoch;
+  const targetSessionId = state.currentSessionId;
 
   return enqueueSessionOp(async (opEpoch) => {
     if (opEpoch !== currentSessionEpoch) return;
@@ -894,12 +906,12 @@ async function changeLanguage(locale) {
     try {
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.setLanguage) {
-        data = await window.KtoryWasm.setLanguage(locale);
+        data = await window.KtoryWasm.setLanguage(locale, state.currentPresentationId, targetSessionId);
       } else {
         const res = await fetch('/api/session/language', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ locale })
+          body: JSON.stringify({ locale, presentationId: state.currentPresentationId, sessionId: targetSessionId })
         });
         if (opEpoch !== currentSessionEpoch) return;
         if (res.ok) {
@@ -954,6 +966,7 @@ function updateState(serverState, isLanguageSwitch = false) {
   state.status = serverState.status;
   state.payload = serverState.payload;
   state.choice = serverState.choice;
+  state.currentSessionId = serverState.sessionId || '';
   state.currentPresentationId = serverState.presentationId ??
                                 serverState.payload?.presentationId ??
                                 serverState.choice?.presentationId ??
@@ -963,6 +976,8 @@ function updateState(serverState, isLanguageSwitch = false) {
   state.visitedItems = serverState.visitedItems || [];
   state.callStackDepth = serverState.callStackDepth || 0;
   state.recentTags = serverState.recentTags || [];
+  state.diagnostics = serverState.diagnostics || [];
+  renderDiagnostics();
   state.autoPolicy = serverState.autoPolicy || serverState.payload?.autoPolicy || null;
 
   if (el.dockLocaleTag) el.dockLocaleTag.textContent = (serverState.payload?.actualLanguage || state.requestedLocale || 'ZH').toUpperCase();
@@ -987,6 +1002,16 @@ function updateState(serverState, isLanguageSwitch = false) {
   if (state.status === 'SuspendedAtBeat' && state.payload) {
     renderBeat(state.payload, isLanguageSwitch);
   }
+}
+
+function renderDiagnostics() {
+  if (!el.runtimeDiagnostics) return;
+  // InputIgnored (512) is a background diagnostic, never a player-facing warning.
+  const warnings = state.diagnostics.filter(item => item.kind === 'Warning' || item.kind === 256);
+  el.runtimeDiagnostics.hidden = warnings.length === 0;
+  el.runtimeDiagnosticSummary.textContent = `剧本警告（${warnings.length}）`;
+  el.runtimeDiagnosticMessages.textContent = warnings.map(item =>
+    `${item.block || 'Root'} · L${item.lineNumber}: ${item.message}`).join('\n');
 }
 
 function renderBeat(payload, isLanguageSwitch = false) {
@@ -1031,9 +1056,13 @@ function renderBeat(payload, isLanguageSwitch = false) {
     // 3. Dynamically update speaker display name in DOM
     if (state.currentActiveSpeakerEl) {
       state.currentActiveSpeakerEl.textContent = payload.speaker || '';
+      state.currentActiveSpeakerEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
     } else if (payload.speaker && state.currentActivePassageEl) {
       const spEl = state.currentActivePassageEl.querySelector('.speaker-name');
-      if (spEl) spEl.textContent = payload.speaker;
+      if (spEl) {
+        spEl.textContent = payload.speaker;
+        spEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
+      }
     }
 
     // 4. Update the text content
@@ -1098,6 +1127,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
     textContainer = passage.querySelector('.dialogue-text');
     cursorEl = passage.querySelector('.typing-cursor');
     state.currentActiveSpeakerEl = passage.querySelector('.speaker-name');
+    state.currentActiveSpeakerEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
   } else {
     // Narrator
     passage.classList.add('passage-narrator');
@@ -1468,6 +1498,7 @@ function renderChoices(choicePayload) {
   const choiceGroup = document.createElement('div');
   choiceGroup.className = 'choice-group-block';
   const choicePresentationId = choicePayload.presentationId || state.currentPresentationId;
+  const choiceSessionId = state.currentSessionId;
   choiceGroup.dataset.presentationId = choicePresentationId;
   state.currentActiveChoiceEl = choiceGroup;
 
@@ -1502,7 +1533,9 @@ function renderChoices(choicePayload) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       // Guard: Stale button clicks on old content must not affect new content
-      if (state.currentPresentationId !== choicePresentationId) {
+      if (state.currentSessionId !== choiceSessionId || state.currentPresentationId !== choicePresentationId ||
+          state.currentActiveChoiceEl !== choiceGroup) {
+        console.debug('[Ktory] Ignored a choice button from an expired view.');
         return;
       }
       // Immediately disable all buttons in this choice group to prevent double submission
@@ -1510,7 +1543,7 @@ function renderChoices(choicePayload) {
       btn.classList.add('is-selected');
       choiceGroup.classList.add('has-selection');
       state.currentActiveChoiceEl = null;
-      submitChoice(opt.id, choicePresentationId);
+      submitChoice(opt.id, choicePresentationId, choiceSessionId);
     });
 
     listEl.appendChild(btn);

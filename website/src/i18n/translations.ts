@@ -81,8 +81,8 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
   zh: {
     htmlLang: 'zh-CN',
     head: {
-      title: 'Ktory — 对白驱动游戏的叙事创作与接入',
-      description: '面向对白驱动游戏的叙事创作与接入系统，以 .ktr 组织文本与剧情，目标是减少重复呈现配置和逐场景接线。',
+      title: 'Ktory · 用写剧本的方式写游戏',
+      description: '面向对白驱动游戏的叙事创作与接入系统',
     },
     nav: {
       docs: '文档中心',
@@ -91,9 +91,9 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
       language: '选择语言',
     },
     hero: {
-      slogan: 'Narrative Authoring & Integration',
-      description1: '面向对白驱动游戏的叙事创作与接入系统。',
-      description2: '以 .ktr 集中组织剧情；共享呈现与显式演出交接为待落实目标，旨在减少重复配置和逐场景接线。',
+      slogan: '用写剧本的方式写游戏',
+      description1: '面向对白驱动游戏的叙事创作与接入系统',
+      description2: '',
       quickstart: '快速上手',
       quickstartHref: '/01-overview/02-quickstart/',
       reader: '在线试读器',
@@ -130,23 +130,23 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
       title: '四大核心架构支柱',
       p1: {
         title: 'Anchor-Decorator 模型',
-        desc: '对白与指令形成逻辑停止点，修饰符携带演出意图和参数。基础剧情结构与具体资源、动画和显示方式分开维护。',
+        desc: '对白与指令作锚点，修饰符作演出。基础剧情结构与具体资源、动画和显示方式分开维护。',
       },
       p2: {
         title: '宿主负责呈现与时间',
-        desc: '核心处理剧情拓扑、选择与会话记录；宿主处理游戏状态、资源、渲染、时钟和原始输入，决定何时请求下一拍。',
+        desc: 'Ktory 剧本处理剧情拓扑、选择与会话记录；游戏引擎处理游戏状态、资源、渲染、时钟和原始输入。',
       },
       p3: {
         title: '共享 C# 核心',
-        desc: '核心目标框架为 netstandard2.1，无外部 NuGet 依赖。试读工具使用 net9.0；Unity 发布流程将共享源码打包为 com.ktory.unity。',
+        desc: '一套核心，多端通用。无外部依赖，目标 .NET 标准库。',
       },
       p4: {
         title: '单文件内联多语言',
-        desc: '通过 @locale 维护同文件译文。核心按请求语言选择文本，缺译时回退默认语言，并在切换语言时保留剧情位置与会话记录。',
+        desc: '一次性维护同文件译文。保留所有剧情拓扑、选择与演出效果。',
       },
     },
     footer: {
-      copyright: 'Ktory Narrative Script System © 2026',
+      copyright: 'Ktory © 2026',
       tagline: 'Designed with Editorial Ink aesthetic for game storytellers.',
       docs: 'Documentation',
       reader: 'Reader',

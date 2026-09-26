@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ktory.Core\Ktory.Core.csproj" />
     <ProjectReference Include="..\..\src\Ktory.Web\Ktory.Web.csproj" />
+    <ProjectReference Include="..\..\src\Ktory.Runner\Ktory.Runner.csproj" />
   </ItemGroup>
 
 </Project>

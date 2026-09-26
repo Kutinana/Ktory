@@ -147,11 +147,17 @@
     } else if (message.type === 'changed' && currentDocument && message.version !== currentDocument.version) {
       status.textContent = `${currentDocument.name} 已修改；当前仍在试读版本 ${currentDocument.version}。请重新载入。`;
     } else if (message.type === 'action' && currentDocument && message.revision === currentDocument.revision) {
+      if (message.sessionId !== state.currentSessionId ||
+          ((message.action === 'advance' || message.action === 'choice') &&
+           message.presentationId !== state.currentPresentationId)) {
+        console.debug('[Ktory] Ignored editor action for an expired session or presentation.');
+        return;
+      }
       // Editor commands share exactly the same presentation/input paths as the buttons.
       if (message.action === 'advance') await handleAdvanceAction();
       if (message.action === 'restart') await restartSession();
       if (message.action === 'language' && typeof message.locale === 'string') await changeLanguage(message.locale);
-      if (message.action === 'choice' && typeof message.id === 'string') await submitChoice(message.id, message.presentationId);
+      if (message.action === 'choice' && typeof message.id === 'string') await submitChoice(message.id, message.presentationId, message.sessionId);
     }
   });
   window.addEventListener('unhandledrejection', event => window.ktoryReaderHost.onError(event.reason?.message || String(event.reason)));

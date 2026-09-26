@@ -9,7 +9,9 @@ sidebar:
 
 # Control Flow and Sections
 
-The root executes in source order and skips named section bodies. Use canonical indentation: a named section's body is deeper than `=== Label ===`; returning to the header's indentation resumes root content.
+The root executes in source order and skips named section bodies. A named section's body must be indented deeper than `=== Label ===`; returning to the header's indentation resumes root content. Unindented content immediately after the header also belongs to the root.
+
+`Start()` executes only the root by default. A file containing only named sections completes immediately when its root is empty. Enter a named section through an explicit root jump or call, or a host-specified entry point.
 
 ```ktory
 : The story begins.

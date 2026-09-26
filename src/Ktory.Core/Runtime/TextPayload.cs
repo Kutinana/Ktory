@@ -12,6 +12,13 @@ namespace Ktory.Core.Runtime
         public int LineNumber { get; set; }
 
         public string? Speaker { get; set; }
+
+        /// <summary>
+        /// The actual language of a declared speaker's localized display name.
+        /// Null for narration, literal undeclared speakers, or an ID without a localized name.
+        /// </summary>
+        public string? SpeakerActualLanguage { get; set; }
+
         public string Content { get; set; } = string.Empty;
 
         /// <summary>

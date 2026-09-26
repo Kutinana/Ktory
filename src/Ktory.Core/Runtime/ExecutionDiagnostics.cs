@@ -7,8 +7,8 @@ namespace Ktory.Core.Runtime
     public enum ExecutionTraceKind
     {
         Node = 1, Tag = 2, Choice = 4, Call = 8, Return = 16,
-        Jump = 32, End = 64, Error = 128,
-        All = Node | Tag | Choice | Call | Return | Jump | End | Error
+        Jump = 32, End = 64, Error = 128, Warning = 256, InputIgnored = 512,
+        All = Node | Tag | Choice | Call | Return | Jump | End | Error | Warning | InputIgnored
     }
 
     /// <summary>A value-only diagnostic event. Tag events describe dispatch attempts, not host completion.</summary>

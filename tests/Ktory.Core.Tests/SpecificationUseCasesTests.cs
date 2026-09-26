@@ -161,17 +161,17 @@ namespace Ktory.Core.Tests
             string script = @"
 === Room_Investigation ===
 
-#choice.loop
-  * [查看书桌]
-    #do .sfx(""paper"")
-    主角: 桌上有一张泛黄的日记碎片。
-  * [检查窗户]
-    主角: 窗户被铁栅栏焊死了。
-  + [尝试撞门]
-    主角: 门纹丝不动，撞得肩膀生疼。
-  + [放弃思考] -> break
+  #choice.loop
+    * [查看书桌]
+      #do .sfx(""paper"")
+      主角: 桌上有一张泛黄的日记碎片。
+    * [检查窗户]
+      主角: 窗户被铁栅栏焊死了。
+    + [尝试撞门]
+      主角: 门纹丝不动，撞得肩膀生疼。
+    + [放弃思考] -> break
 
-主角: 我们离开这里吧。
+  主角: 我们离开这里吧。
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);

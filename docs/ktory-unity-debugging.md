@@ -18,15 +18,17 @@ registration = Ktory.Unity.Debugging.KtoryDebugRegistry.Register(this);
 
 `this` 须实现 `IKtoryDebugTarget`。可直接参考并导入 Package Manager 的 **Debugging host probe** sample：[`DebuggableKtoryProbe.cs`](../src/Ktory.Unity/Samples~/Debugging/DebuggableKtoryProbe.cs)。这是可编译的日志宿主示例，不是完整对话框。已有项目应在自己的播放器上实现接口，复用已有 Sequencer，不再启动这个示例播放器。
 
+示例保留调试窗口的同步接口，并为游戏排队输入提供完整令牌重载。创建打字机任务时调用 `CapturePrintingCompletion()` 得到捕获旧控制器与旧令牌的完成回调；任务结束后调用这份回调，不能临时读取新会话的令牌。`OnDisable` 与重启先调用 `InvalidateSession()`，使仍持有旧对象的闭包失效，再清理宿主订阅。
+
 接口成员的关键约定：
 
 - `Owner` 是此会话所属的存活 Unity 对象；`DisplayName` 区分场景中的实例。`SourceAsset` 指向导入的 `.ktr` TextAsset；动态脚本没有资源时可以为空，源码定位不可用。
 - `Sequencer` 是真实会话，注册期间不替换。替换前 Dispose，替换后重新 Register；每次新 Play 会话重新注册。`Presentation` 返回当前真实控制器；自定义呈现方案返回 null，窗口明确显示标准计时不可用。
 - 所有 getter 和 `CollectDebugInfo` 都只能读取状态，不能求值推进、发送标签或更新时钟。
 - `RequestAdvance(id)` 走游戏原始点击路径，先检查宿主门禁及呈现 ID，再调用真实控制器的 `HandleUserClick()` 或项目对应实现。窗口不直接调用 `Step()`。快显与自动计时继续遵循现有规则，包括显示完成后零延时 AUTO 的行为。
-- `SubmitChoice(optionId, id)` 走游戏合法提交路径。`SubmitChoice` 已到分支第一拍，之后仅建立呈现和重绘，不能再 Step。项目仍负责异步／排队输入的会话世代检查。
+- `SubmitChoice(optionId, id)` 走游戏合法提交路径。`SubmitChoice` 已到分支第一拍，之后仅建立呈现和重绘，不能再 Step。上述仅拍号调试接口用于窗口同步调用；异步／排队的游戏输入须在创建时捕获完整会话／呈现令牌，不能把旧拍号配上执行时的当前会话来冒充有效输入。
 - `SetLanguage(null)` 表示跟随 `DefaultLanguage`，其余值保存为请求语言。调用 `Sequencer.SetLanguage`，再调用 `Presentation.RefreshLanguage(false)` 并重绘正文和选项。不要 Setup、Step、补发标签或重新消费选项。`false` 保持正在显示的阶段；项目按自己的打字机进度刷新文本。
-- `Restart()` 复用项目已有重启操作，保留入口及语言策略，撤销旧会话的计时、异步演出和排队输入；新建控制器可取消其残留自动批次。显式重启会重新触发剧情标签和宿主副作用。
+- `Restart()` 复用项目已有重启操作，保留入口及语言策略，撤销旧会话的计时、异步演出和排队输入；每次 Start 生成新会话标识，新建控制器可取消其残留自动批次。显式重启会重新触发剧情标签和宿主副作用。
 - `InputBlockReason` 在宿主不接受输入时返回可读原因（例如“资源仍在加载”）。这个值同时用于窗口说明与禁用按钮；实际操作方法也必须自行检查，不能依靠窗口保证合法性。
 
 可选项目扩展示例（同样置于 `#if UNITY_EDITOR`）：
@@ -44,15 +46,19 @@ public void CollectDebugInfo(
 
 ## 显示与生命周期
 
-语言栏分别显示剧本默认、当前请求、正文实际语言和回退；选项各自显示实际语言。正文实际语言不代表 Speaker 名字一定使用同一语言。没有本地化文本的指令拍不伪报输出语言。取消“Follow script default”后可输入 locale，确认输入即时刷新。
+语言栏分别显示剧本默认、当前请求、正文实际语言和回退；选项各自显示实际语言。已声明名字有 `SpeakerActualLanguage` 时另列 Speaker output，不用正文语言代替名字语言。没有本地化文本的指令拍不伪报输出语言。取消“Follow script default”后可输入 locale，确认输入即时刷新。
+
+正文、选项和已声明名字在请求／默认语言都缺失时按已有有效译文顺序选取第三语言，报告 `Warning` 并保留真实语言。`TextPayload.SpeakerActualLanguage` 单独标记已声明名字；未声明名字按字面显示，不伪报语言。如 `@speaker alice:` 的空名字声明须加载时报错并指出行号；正文／选项空声明不据此新增规则。内置游戏求值器对未知条件 `Warning + false`，独立试读才显式启用宽容模式。
 
 文字显示中，最低停留与自动延迟展示的是**显示结束后才开始的时长**；显示完成后才展示倒计时。两者并行，自动推进等待两者都满足。`.skippable(false)` 显示“等待自然显示完成”；宿主未使用共享控制器时，不推测其私有计时和 AUTO。
 
 标签记录表示 Core 派发尝试，行号指向所属节点或选项锚点，不代表项目演出已经成功或结束；出错不回滚已有副作用。
 
+过期或重复操作仅记录后台 `InputIgnored` 并忽略，不中断剧情；不要将它作为玩家错误弹窗。`Warning` 用于第三语言回退、未知条件或未知容器等可恢复诊断。当前令牌有效但选项本身非法仍报错，不属于可忽略的过期输入。悬空修饰符属于加载期语法错误，须显示行号并停止加载。
+
 历史在注册后开始收集；窗口开关、切换选中实例、复制和清空不会推进。全部实例合计最多 2000 条，单条消息最多 4096 字符，超出丢弃最旧记录。日志支持类别及实例筛选、复制当前筛选结果、点击定位和清空全部；已销毁实例的记录在本次 Play 会话内可用“All players”查看。退出 Play Mode 或重新编译清空历史及订阅。
 
-宿主在 OnDisable/OnDestroy 或替换会话时 Dispose 注册令牌。Editor 也会定期清理已销毁 Owner，以及退出 Play Mode 的注册，即使禁用了 Domain Reload。若同时禁用 Scene Reload，项目仍须在每次实际会话初始化时重新注册，不能只依赖不再执行的 Start；窗口不会重新启动项目会话。
+宿主在 OnDisable/OnDestroy 或替换会话时先 `Sequencer.InvalidateSession()`，再 Dispose 注册令牌并清理自己的异步工作。仅 Dispose 调试注册并不会使 Core 会话失效。Editor 也会定期清理已销毁 Owner，以及退出 Play Mode 的注册，即使禁用了 Domain Reload。若同时禁用 Scene Reload，项目仍须在每次实际会话初始化时重新注册，不能只依赖不再执行的 Start；窗口不会重新启动项目会话。
 
 源码定位使用 Unity 的 [AssetDatabase.OpenAsset(asset, line)](https://docs.unity3d.com/2021.3/Documentation/ScriptReference/AssetDatabase.OpenAsset.html)，具体跳行支持取决于项目关联的外部编辑器。注册清理遵循 Unity 的 [Domain Reloading 生命周期说明](https://docs.unity3d.com/2021.3/Documentation/Manual/DomainReloading.html)。
 
@@ -66,10 +72,12 @@ UPM 带有 `Tests/Editor/DebuggingTests.cs`。在游戏 `Packages/manifest.json`
 | --- | --- |
 | 两个已运行播放器，反复开关窗口和切换实例 | 位置、标签数、计时不因窗口变化；按钮只作用于所选实例 |
 | 打字中快显锁、`.wait(2).next(5)`、`#AUTO.wait` | 原始输入被正确丢弃／快显／推进，剩余时间与游戏一致 |
-| 打字、停留、选择三个阶段切语言；请求缺译语言；跟随默认 | 当前节点及 ID 不变、标签不重放、消费不变、真实回退，固定计时不重启 |
+| 打字、停留、选择三个阶段切语言；请求／默认双缺译；跟随默认 | 当前节点及 ID 不变、标签不重放、消费不变；第三语言回退有 Warning、正文／名字／选项各自报告实际语言，固定计时不重启 |
 | 宿主额外门禁、自定义呈现（Presentation=null） | 显示项目原因或计时不可用，操作仍经过游戏门禁 |
 | 提交一次性选项并循环重入；调用／返回／break | 首拍停顿、选项消费、栈和循环计数与实际执行一致 |
 | 销毁、场景切换、重启、退出／再次进入 Play，关闭 Domain Reload | 无旧实例和旧订阅；项目正常重启，新会话可重新注册 |
+| 重启后投递旧点击、旧选择、旧计时及打印完成；重复提交 | 新会话不推进、不重放标签；只有后台 InputIgnored，当前合法操作仍正常 |
+| 游戏运行未知条件，再以独立试读模式运行同一脚本 | 游戏 Warning + false；试读显式宽容，已知条件不被忽略 |
 | 超过 2000 条日志，筛选、复制、清空 | 有界保留；复制含时间、实例和资源／行号 |
 | 构建正式 Player | 不含 Editor UI、IKtoryDebugTarget 或注册与日志代码 |
 

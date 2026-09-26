@@ -35,7 +35,8 @@ exports.run = async () => {
     }
     throw new Error(`${label}: timed out; last event = ${JSON.stringify(api.lastEvent)}`);
   };
-  const action = data => api.panel.webview.postMessage({ type: 'action', revision: api.lastEvent.revision, ...data });
+  const action = data => api.panel.webview.postMessage({ type: 'action', revision: api.lastEvent.revision,
+    sessionId: api.lastEvent.snapshot?.sessionId, presentationId: api.lastEvent.snapshot?.presentationId, ...data });
   const first = await waitFor(e => e?.snapshot?.payload?.content === '开场。', 'offline WASM boot and first beat');
   assert.equal(first.version, document.version);
   assert.equal(first.snapshot.recentTags.length, 1);
@@ -46,7 +47,8 @@ exports.run = async () => {
 
   await action({ action: 'advance' });
   const choice = await waitFor(e => e?.snapshot?.status === 'AwaitingChoice', 'choice boundary');
-  const choiceAction = { action: 'choice', id: choice.snapshot.choice.options[0].id, presentationId: choice.snapshot.presentationId };
+  const choiceAction = { action: 'choice', id: choice.snapshot.choice.options[0].id,
+    sessionId: choice.snapshot.sessionId, presentationId: choice.snapshot.presentationId };
   await action(choiceAction);
   await action(choiceAction);
   const branch = await waitFor(e => e?.snapshot?.payload?.content === 'First branch.', 'choice first beat');
@@ -71,6 +73,21 @@ exports.run = async () => {
   await api.panel.webview.postMessage({ type: 'action', revision: choice.revision, ...choiceAction });
   await sleep(100);
   assert.equal(api.lastEvent, reloaded, 'old-session input is ignored');
+
+  const beforeRestart = api.lastEvent;
+  await action({ action: 'restart' });
+  const restarted = await waitFor(e => e?.snapshot?.sessionId && e.snapshot.sessionId !== beforeRestart.snapshot.sessionId, 'new session identity');
+  await action({ action: 'advance', sessionId: beforeRestart.snapshot.sessionId,
+    presentationId: beforeRestart.snapshot.presentationId });
+  await sleep(100);
+  assert.equal(api.lastEvent, restarted, 'old-session input is ignored even within the same document revision');
+
+  await edit('@speaker alice: ja="アリス"\nalice:\n  @fr: Bonjour');
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  const missing = await waitFor(e => e?.snapshot?.payload?.content === 'Bonjour', 'third-language fallback');
+  assert.equal(missing.snapshot.payload.actualLanguage, 'fr');
+  assert.equal(missing.snapshot.payload.speakerActualLanguage, 'ja');
+  assert.equal(missing.snapshot.diagnostics.filter(item => item.kind === 256).length, 2);
 
   await edit('-> Missing');
   await vscode.commands.executeCommand('ktory.reloadPreview');

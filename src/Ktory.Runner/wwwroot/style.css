@@ -339,6 +339,21 @@ body.font-size-lg .dialogue-text {
 /* ==========================================================================
    Main Reader Viewport
    ========================================================================== */
+.runtime-diagnostics {
+  flex: none;
+  margin: 0.5rem 1rem;
+  padding: 0.65rem 0.85rem;
+  max-height: 10rem;
+  overflow: auto;
+  border: 1px solid var(--accent-gold);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.runtime-diagnostics[hidden] { display: none; }
+.runtime-diagnostics summary { cursor: pointer; color: var(--accent-gold); }
+.runtime-diagnostics pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.6rem 0 0; }
+
 .reader-viewport {
   flex: 1;
   overflow-y: auto;

@@ -44,28 +44,10 @@ namespace Ktory.Core.Ast
             => GetLabel(requestedLocale, defaultLocale, out _);
 
         public string GetLabel(string requestedLocale, string defaultLocale, out string actualLocale)
-        {
-            if (LabelVariants.TryGetValue(requestedLocale, out var text) && !string.IsNullOrEmpty(text))
-            {
-                actualLocale = requestedLocale;
-                return text;
-            }
-            if (LabelVariants.TryGetValue(defaultLocale, out var defaultText) && !string.IsNullOrEmpty(defaultText))
-            {
-                actualLocale = defaultLocale;
-                return defaultText;
-            }
-            foreach (var kvp in LabelVariants)
-            {
-                if (!string.IsNullOrEmpty(kvp.Value))
-                {
-                    actualLocale = kvp.Key;
-                    return kvp.Value;
-                }
-            }
-            actualLocale = defaultLocale;
-            return string.Empty;
-        }
+            => GetLabel(requestedLocale, defaultLocale, out actualLocale, out _);
+
+        internal string GetLabel(string requestedLocale, string defaultLocale, out string actualLocale, out bool usedAvailableFallback)
+            => LocalizedValueSelector.Select(LabelVariants, requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback);
 
         public override string ToString()
         {

@@ -27,28 +27,16 @@ namespace Ktory.Core.Ast
         public Dictionary<string, string> DisplayNames { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public string GetDisplayName(string requestedLocale, string defaultLocale)
+            => GetDisplayName(requestedLocale, defaultLocale, out _, out _);
+
+        public string GetDisplayName(string requestedLocale, string defaultLocale, out string? actualLocale)
+            => GetDisplayName(requestedLocale, defaultLocale, out actualLocale, out _);
+
+        internal string GetDisplayName(string requestedLocale, string defaultLocale, out string? actualLocale, out bool usedAvailableFallback)
         {
-            if (DisplayNames.TryGetValue(requestedLocale, out var name) && !string.IsNullOrEmpty(name))
-            {
-                return name;
-            }
-
-            if (DisplayNames.TryGetValue(defaultLocale, out var defaultName) && !string.IsNullOrEmpty(defaultName))
-            {
-                return defaultName;
-            }
-
-            // Fallback to any available display name
-            foreach (var kvp in DisplayNames)
-            {
-                if (!string.IsNullOrEmpty(kvp.Value))
-                {
-                    return kvp.Value;
-                }
-            }
-
-            // Fallback to Id or empty
-            return Id ?? string.Empty;
+            var name = LocalizedValueSelector.Select(DisplayNames, requestedLocale, defaultLocale, out var selectedLocale, out usedAvailableFallback);
+            actualLocale = string.IsNullOrEmpty(name) ? null : selectedLocale;
+            return string.IsNullOrEmpty(name) ? Id ?? string.Empty : name;
         }
 
         public override string ToString()

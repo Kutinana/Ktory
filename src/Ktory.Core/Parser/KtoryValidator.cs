@@ -27,15 +27,14 @@ namespace Ktory.Core.Parser
                 {
                     var step = block.Steps[i];
 
-                    // Check unindented named section body capturing lines after terminal
+                    // A named section cannot execute another step after return/end.
                     if (!block.IsRoot)
                     {
                         if (terminalEncountered)
                         {
                             throw new KtoryException(
-                                $"Unreachable code or conflicting section boundary in section '=== {block.Label} ===' at line {step.LineNumber}. " +
-                                $"Step appears after terminal control flow statement at line {terminalLine}. " +
-                                $"This usually occurs when a named section body is not indented, causing subsequent lines to be unexpectedly captured. Please indent the section body.",
+                                $"Unreachable code in section '=== {block.Label} ===' at line {step.LineNumber}. " +
+                                $"Step appears after terminal control flow statement at line {terminalLine}.",
                                 step.LineNumber, 1);
                         }
 

@@ -47,6 +47,12 @@ public sealed class DebuggableKtoryProbe : MonoBehaviour
 
     private void OnDisable()
     {
+        _sequencer?.InvalidateSession();
+        if (_presentation != null)
+        {
+            _presentation.OnBeatChanged -= Render;
+            _presentation.OnFastForwardRequested -= RevealText;
+        }
 #if UNITY_EDITOR
         _registration?.Dispose();
         _registration = null;
@@ -58,34 +64,61 @@ public sealed class DebuggableKtoryProbe : MonoBehaviour
         if (_presentation == null) return;
         _presentation.Update(Time.unscaledDeltaTime);
         // This probe has no typewriter. A real renderer notifies with its actual completion.
-        if (_presentation.Phase == PresentationPhase.Printing) _presentation.NotifyPrintingFinished();
+        if (_presentation.Phase == PresentationPhase.Printing)
+            _presentation.NotifyPrintingFinished(_presentation.CurrentPresentationToken);
     }
 
+    // The editor interface invokes this synchronously. Queued game UI uses the token overload.
     public void RequestAdvance(long expectedPresentationId)
     {
         if (!isActiveAndEnabled || expectedPresentationId != _sequencer.CurrentPresentationId) return;
+        RequestAdvance(_sequencer.CurrentPresentationToken);
+    }
+
+    public void RequestAdvance(PresentationToken token)
+    {
+        if (!isActiveAndEnabled) return;
         // Apply the game's own additional input gates here, in the same method its UI uses.
-        _presentation.HandleUserClick();
+        _presentation.HandleUserClick(token);
     }
 
     public void SubmitChoice(string optionId, long expectedPresentationId)
     {
         if (!isActiveAndEnabled || expectedPresentationId != _sequencer.CurrentPresentationId) return;
-        _sequencer.SubmitChoice(optionId, expectedPresentationId);
+        SubmitChoice(optionId, _sequencer.CurrentPresentationToken);
+    }
+
+    public void SubmitChoice(string optionId, PresentationToken token)
+    {
+        if (!isActiveAndEnabled) return;
+        bool current = token == _sequencer.CurrentPresentationToken && token.PresentationId > 0;
+        _sequencer.SubmitChoice(optionId, token);
+        if (!current) return; // An ignored input must not reset the new presentation's timers.
         _presentation.SetupForCurrentBeat();
         Render(); // SubmitChoice already entered the first branch beat. Never append Step().
     }
 
     public void SetLanguage(string? requestedLocale)
     {
+        SetLanguage(requestedLocale, _sequencer.CurrentPresentationToken);
+    }
+
+    public void SetLanguage(string? requestedLocale, PresentationToken token)
+    {
+        if (!isActiveAndEnabled) return;
+        bool current = !string.IsNullOrEmpty(token.SessionId) && token.SessionId == _sequencer.CurrentSessionId &&
+            _sequencer.Status != ExecutionStatus.Error;
+        _sequencer.SetLanguage(requestedLocale ?? _sequencer.DefaultLanguage, token);
+        if (!current) return;
         _requestedLocale = requestedLocale;
-        _sequencer.SetLanguage(requestedLocale ?? _sequencer.DefaultLanguage);
-        _presentation.RefreshLanguage(completePrintingOnLanguageSwitch: false);
+        if (_sequencer.Status != ExecutionStatus.Completed)
+            _presentation.RefreshLanguage(completePrintingOnLanguageSwitch: false);
         Render(); // Also redraw current choices. Do not call SetupForCurrentBeat or dispatch tags.
     }
 
     public void Restart()
     {
+        _sequencer.InvalidateSession();
         // Replace the timing controller to cancel any deferred work from the previous session.
         _presentation.OnBeatChanged -= Render;
         _presentation.OnFastForwardRequested -= RevealText;
@@ -95,6 +128,15 @@ public sealed class DebuggableKtoryProbe : MonoBehaviour
         _sequencer.Start(requestedLocale: _requestedLocale ?? _sequencer.DefaultLanguage);
         _presentation.SetupForCurrentBeat();
         Render();
+    }
+
+    // Capture when starting a typewriter job; invoke when that same job completes.
+    // Keeping both objects prevents an old callback from acquiring the new session's token.
+    public System.Action CapturePrintingCompletion()
+    {
+        var presentation = _presentation;
+        var token = presentation.CurrentPresentationToken;
+        return () => presentation.NotifyPrintingFinished(token);
     }
 
     private void RevealText() => Render();

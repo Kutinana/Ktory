@@ -41,9 +41,6 @@ namespace Ktory.Core.Runtime
         private int _currentStepIndex;
         private StepNode? _currentStep;
 
-        // Sequence of sections for root continuation
-        private readonly List<KtoryBlock> _sectionOrder = new List<KtoryBlock>();
-
         public event Action<IReadOnlyList<TagData>>? OnTagsDispatched;
 
         public KtorySequencer(KtoryFile file)
@@ -53,26 +50,24 @@ namespace Ktory.Core.Runtime
             _currentBlock = file.RootBlock;
             _currentSteps = _currentBlock.Steps;
             _currentStepIndex = 0;
-
-            // Track block ordering
-            _sectionOrder.Add(file.RootBlock);
-            foreach (var kvp in file.Blocks)
-            {
-                if (kvp.Value != file.RootBlock)
-                {
-                    _sectionOrder.Add(kvp.Value);
-                }
-            }
         }
 
         public void Start(string? entryLabel = null, string requestedLocale = "zh")
         {
             try { StartCore(entryLabel, requestedLocale); }
-            catch (Exception error) { TraceError(error); throw; }
+            catch (Exception error)
+            {
+                TraceError(error);
+                InvalidateSession();
+                Status = ExecutionStatus.Error;
+                throw;
+            }
         }
 
         private void StartCore(string? entryLabel = null, string requestedLocale = "zh")
         {
+            BeginSession();
+            _reportedFallbackWarnings.Clear();
             _currentStep = null;
             RequestedLanguage = requestedLocale;
             VisitedItemIds.Clear();
@@ -96,34 +91,20 @@ namespace Ktory.Core.Runtime
             }
             else
             {
-                if (File.RootBlock.Steps.Count == 0)
-                {
-                    var firstNamed = _sectionOrder.Find(b => !b.IsRoot);
-                    if (firstNamed != null)
-                    {
-                        _currentBlock = firstNamed;
-                        _currentSteps = _currentBlock.Steps;
-                        _currentStepIndex = 0;
-                    }
-                    else
-                    {
-                        _currentBlock = File.RootBlock;
-                        _currentSteps = _currentBlock.Steps;
-                        _currentStepIndex = 0;
-                    }
-                }
-                else
-                {
-                    _currentBlock = File.RootBlock;
-                    _currentSteps = _currentBlock.Steps;
-                    _currentStepIndex = 0;
-                }
+                // Named sections require an explicit entry, jump or call, even when root is empty.
+                _currentBlock = File.RootBlock;
+                _currentSteps = _currentBlock.Steps;
+                _currentStepIndex = 0;
             }
 
             Status = ExecutionStatus.Ready;
             Advance();
         }
 
+        /// <summary>
+        /// Synchronous compatibility input. For delayed work capture CurrentPresentationToken
+        /// and use Step(token); a numeric presentation id alone cannot identify a session.
+        /// </summary>
         public void Step(long? expectedPresentationId = null)
         {
             try { StepCore(expectedPresentationId); }
@@ -134,6 +115,7 @@ namespace Ktory.Core.Runtime
         {
             if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
             {
+                TraceIgnoredInput(nameof(Step), new PresentationToken(CurrentSessionId, expectedPresentationId.Value));
                 return;
             }
 
@@ -155,6 +137,7 @@ namespace Ktory.Core.Runtime
             Advance();
         }
 
+        /// <summary>Synchronous compatibility input; asynchronous choices must carry the full presentation token.</summary>
         public void SubmitChoice(string choiceIdentifier, long? expectedPresentationId = null)
         {
             try { SubmitChoiceCore(choiceIdentifier, expectedPresentationId); }
@@ -165,7 +148,8 @@ namespace Ktory.Core.Runtime
         {
             if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
             {
-                throw new KtoryControlFlowException($"Choice submission ignored: stale presentation id {expectedPresentationId.Value}, current is {CurrentPresentationId}.");
+                TraceIgnoredInput(nameof(SubmitChoice), new PresentationToken(CurrentSessionId, expectedPresentationId.Value));
+                return;
             }
 
             if (Status != ExecutionStatus.AwaitingChoice || CurrentChoice == null)
@@ -299,11 +283,7 @@ namespace Ktory.Core.Runtime
             // If currently suspended at text beat, update text content and speaker without side-effects
             if (Status == ExecutionStatus.SuspendedAtBeat && _currentStep is TextStep textStep && CurrentPayload != null)
             {
-                var content = textStep.GetText(RequestedLanguage, DefaultLanguage, out var actualLang);
-                CurrentPayload.Speaker = File.ResolveSpeaker(textStep.Speaker, RequestedLanguage, DefaultLanguage);
-                CurrentPayload.Content = content;
-                CurrentPayload.ActualLanguage = actualLang;
-                CurrentPayload.RequestedLanguage = RequestedLanguage;
+                RefreshTextPayload(textStep, CurrentPayload);
             }
             else if (Status == ExecutionStatus.AwaitingChoice && _currentStep is ContainerStep containerStep)
             {
@@ -324,6 +304,7 @@ namespace Ktory.Core.Runtime
             CurrentPayload = null;
             CurrentChoice = null;
             CurrentPresentationId = 0;
+            _reportedFallbackWarnings.Clear();
 
             int executedInstructions = 0;
             var executionTrail = new Queue<string>();
@@ -435,7 +416,7 @@ namespace Ktory.Core.Runtime
                 // Guard evaluation
                 if (!string.IsNullOrEmpty(_currentStep.GuardCondition))
                 {
-                    bool guardPass = Evaluator.EvaluateCondition(_currentStep.GuardCondition!);
+                    bool guardPass = EvaluateGuard(_currentStep.GuardCondition!, _currentStep.LineNumber);
                     if (!guardPass)
                     {
                         continue; // Skip this node
@@ -516,6 +497,16 @@ namespace Ktory.Core.Runtime
                             }
                         }
 
+                        // Only the built-in choice behavior is currently implemented. Other names
+                        // retain their identity and use the same fallback, with an observable warning
+                        // on each real entry (never on payload refresh or an exhausted loop).
+                        if (!string.Equals(containerStep.Name, "choice", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Trace(ExecutionTraceKind.Warning,
+                                $"No handler for container '#{containerStep.Name}' at line {containerStep.LineNumber}; falling back to choice behavior.",
+                                containerStep.LineNumber);
+                        }
+
                         // Dispatch container tags
                         if (containerStep.Tags.Count > 0)
                         {
@@ -568,21 +559,16 @@ namespace Ktory.Core.Runtime
                     DispatchTags(textStep.Tags, textStep.LineNumber);
                 }
 
-                var content = textStep.GetText(RequestedLanguage, DefaultLanguage, out var actualLang);
-                var resolvedSpeaker = File.ResolveSpeaker(textStep.Speaker, RequestedLanguage, DefaultLanguage);
                 CurrentPresentationId = ++_presentationCounter;
                 CurrentPayload = new TextPayload
                 {
                     PresentationId = CurrentPresentationId,
                     StepType = StepType.Text,
                     LineNumber = textStep.LineNumber,
-                    Speaker = resolvedSpeaker,
-                    Content = content,
-                    ActualLanguage = actualLang,
-                    RequestedLanguage = RequestedLanguage,
                     Tags = textStep.Tags,
                     AutoPolicy = ActiveAutoPolicy
                 };
+                RefreshTextPayload(textStep, CurrentPayload);
 
                 Status = ExecutionStatus.SuspendedAtBeat;
             }
@@ -772,14 +758,16 @@ namespace Ktory.Core.Runtime
             foreach (var item in container.Items)
             {
                 bool isConsumed = VisitedItemIds.Contains(item.Id);
-                bool conditionPass = string.IsNullOrEmpty(item.GuardCondition) || Evaluator.EvaluateCondition(item.GuardCondition);
+                bool conditionPass = string.IsNullOrEmpty(item.GuardCondition) || EvaluateGuard(item.GuardCondition!, item.LineNumber);
 
                 bool canSelect = conditionPass && (!item.IsOneTime || !isConsumed);
+                string label = item.GetLabel(RequestedLanguage, DefaultLanguage, out var actualLanguage, out var labelFallback);
+                if (labelFallback) WarnMissingTranslations("Choice label", item.LineNumber, actualLanguage);
 
                 options.Add(new ChoiceOption
                 {
                     Id = item.Id,
-                    Label = item.GetLabel(RequestedLanguage, DefaultLanguage, out var actualLanguage),
+                    Label = label,
                     ActualLanguage = actualLanguage,
                     RequestedLanguage = RequestedLanguage,
                     LineNumber = item.LineNumber,
