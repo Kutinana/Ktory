@@ -45,3 +45,9 @@ test('the offline bundle contains Core and the real WASM host', () => {
     fs.readFileSync(path.resolve(root, '../Ktory.Runner/wwwroot/app.js'), 'utf8'));
   assert.match(JSON.parse(fs.readFileSync(path.join(root, 'reader/build-info.json'), 'utf8')).sourceCommit, /^[a-f0-9]{40}$/);
 });
+
+test('the package manifest declares an icon file that exists on disk', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.ok(manifest.icon, 'package.json must declare an icon');
+  assert.ok(fs.existsSync(path.join(root, manifest.icon)), 'the icon file must exist');
+});

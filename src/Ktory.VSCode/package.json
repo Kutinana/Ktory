@@ -2,8 +2,9 @@
   "name": "ktory",
   "displayName": "Ktory — Script & Preview",
   "description": "Ktory syntax highlighting and offline, in-editor reading powered by the shared C# core.",
-  "version": "0.1.0",
+  "version": "0.1.0-preview.1",
   "publisher": "Kutinana",
+  "icon": "icon.png",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
