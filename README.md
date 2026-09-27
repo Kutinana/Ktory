@@ -19,7 +19,7 @@
 
 Ktory aims to keep text and story flow together in `.ktr`, reducing repeated presentation settings and scene-specific integration code. The recommended workflow keeps dialogue order, choices and branches in the script while the host provides rendering, world state and actual event detection.
 
-- [Try Ktory Web Reader](https://ktory.vercel.app)
+- [Try Ktory Web Reader](https://reader.ktory.ink/)
 
 The repository contains the shared core (`src/Ktory.Core`), local and WASM Reader hosts (`src/Ktory.Runner`, `src/Ktory.Web`), Unity package sources (`src/Ktory.Unity`), the VS Code extension (`src/Ktory.VSCode`), and the portal (`website`). The extension bundles the same WASM core and Reader frontend for offline use; its single TextMate grammar is also used by the portal, landing page and Reader source editor. Generated packages and deployed sites are distribution artifacts, not independently maintained core implementations.
 
@@ -27,9 +27,7 @@ The repository contains the shared core (`src/Ktory.Core`), local and WASM Reade
 
 ### VS Code
 
-If you use Visual Studio Code as IDE, you can search for Ktory in the Marketplace, or use the following link to install it:
-
-<a href="vscode:extension/ktory.ktory">Install Ktory Extension in VS Code</a>
+If you use Visual Studio Code or other derived versions (including Cursor, Antigravity IDE) as IDE, you can search for Ktory in the marketplace directly for installation.
 
 ### Unity
 
