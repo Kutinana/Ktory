@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<RunnerSessionService>();
@@ -22,6 +23,16 @@ var app = builder.Build();
 app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+// Linked build assets live beside the executable when running from the source tree.
+var highlightingRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot", "highlighting");
+if (Directory.Exists(highlightingRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(highlightingRoot),
+        RequestPath = "/highlighting"
+    });
+}
 
 // Session APIs
 app.MapPost("/api/session/start", (StartSessionRequest req, RunnerSessionService sessionService) =>

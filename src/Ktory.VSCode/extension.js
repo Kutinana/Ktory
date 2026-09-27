@@ -14,7 +14,7 @@ function previewHtml(webview, extensionUri) {
   // No CDN, server or second copy of the reader UI. All runtime assets ship in the VSIX.
   html = html.replace(/<link\b[^>]*href="https:[^>]*>/g, '');
   html = html.replace(/<script>[\s\S]*?<\/script>/g, '');
-  html = html.replace(/\b(src|href)="(app\.js|style\.css|favicon\.ico|ktory_logo\.webp)"/g,
+  html = html.replace(/\b(src|href)="(app\.js|style\.css|favicon\.ico|ktory_logo\.webp|editor-highlighting\.mjs|highlighting\/[\w.-]+)"/g,
     (_, attribute, file) => `${attribute}="${resource('reader', file)}"`);
   html = html.replace('<head>', `<head>
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${csp} data:; style-src ${csp} 'unsafe-inline'; font-src ${csp}; script-src ${csp} 'wasm-unsafe-eval'; connect-src ${csp}; worker-src ${csp} blob:;">

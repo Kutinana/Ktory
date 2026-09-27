@@ -27,7 +27,7 @@ A **beat is a logical stopping point**, not a complete animation lifecycle. Curr
 
 ## Confirmed goals awaiting implementation
 
-Shared settings should cover localized names, a default dialogue box, default sound or sound group, and expression resource mappings. Authors should write only local changes. Names and resources can be maintained separately and optionally associated, without requiring a complete game character entity. Current `@speaker` declarations still provide only names and aliases.
+Shared settings should cover localized names, a default dialogue box, default sound or sound group, and expression resource mappings. Authors should write only local changes. Names and resources can be maintained separately and optionally associated, without requiring a complete game character entity. Current `@speaker` declarations provide names, aliases and file-scoped default decorators with per-line overrides; cross-file resources and editor bindings remain pending.
 
 The confirmed expression rule is **current line → applicable global default → no expression**. A previous line's local setting never participates in fallback. No expression must actually clear the old display, rather than merely omit a tag. This remains to be implemented and does not imply that omitted BGM stops music. Explicitly cancelling a default, invalid-resource handling and shared-definition scope remain undecided.
 

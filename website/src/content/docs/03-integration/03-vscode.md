@@ -1,19 +1,23 @@
 ---
-title: VS Code 高亮与试读
+title: VS Code 扩展安装
 description: 安装 VSIX，在编辑器中离线试读当前 Ktory 剧本
 sidebar:
   order: 3
 ---
 
-本页遵循 [Ktory 设计原则](/01-overview/03-design-principles/)。扩展使用同一 C# 核心和 Reader 前端，不另外解释剧情。
+本节将介绍如何安装 Ktory for VS Code 插件，让您能够在 VS Code 中快速编辑 Ktory 剧本，并进行便捷的离线试读。
 
-## 安装与打开
+## 安装插件
 
-使用 VS Code 1.97 或更新版本。在命令面板执行 **Extensions: Install from VSIX…**，选择构建得到的 `ktory-vscode-<version>.vsix`。打开 `.ktr` 或 `.ktory` 文件，点击编辑器右上角的试读图标，或执行 **Ktory: Open Preview to the Side**。
+若您使用的是 VS Code，您可以直接在 <a href="https://marketplace.visualstudio.com/items?itemName=Kutinana.ktory" target="_blank">Extension Marketplace</a> 中搜索 "Ktory" 来安装插件。或直接 <a href="vscode:extension/ktory.ktory" target="_blank">点此链接以安装</a>。
 
-VSIX 已内置 WebAssembly 运行时；试读不需要安装 .NET、启动 Unity、运行本地服务或连接在线试读器。当前提供本地 VSIX 构建，未因此宣称已发布 Marketplace。
+若您使用的是衍生自 VS Code 的编辑器，如 Cursor, Antigravity IDE 等，您可以在其扩展市场中搜索 "Ktory" 来安装扩展。
+
+若您的编辑器不支持 Marketplace 安装，您可以从 <a href="https://open-vsx.org/extension/ktory/ktory" target="_blank">Open VSX</a> 中下载 VSIX 文件，然后手动安装。
 
 ## 写作与试读
+
+扩展已内置 WebAssembly 运行时；试读不需要安装 .NET、启动 Unity、运行本地服务或连接在线试读器。
 
 - 点击阅读区或按空格／Enter 快显和推进；用按钮或数字键提交选择。
 - 选择入口小节、切换语言；缺译由核心按默认语言回退。

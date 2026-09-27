@@ -86,6 +86,21 @@ public class ReaderBridgeContractTests
         Assert.Equal("after", Content(host.Break(Token(translated))));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SpeakerDefaultsResolveBeforeSerializationAndRefreshDoesNotReplay(bool wasm)
+    {
+        var host = new Host(wasm);
+        var first = host.Start("@speaker alice: zh=Alice\n  .emotion(normal).voice(soft)\nalice: first .emotion(happy)\nalice: second");
+        var tags = first.GetProperty("payload").GetProperty("tags");
+        Assert.Equal("happy", tags[1].GetProperty("positionalArgs")[0].GetString());
+        var refreshed = host.Language("en", Token(first));
+        Assert.Equal(first.GetProperty("recentTags").GetArrayLength(), refreshed.GetProperty("recentTags").GetArrayLength());
+        var second = host.Step(Token(refreshed));
+        Assert.Equal("normal", second.GetProperty("payload").GetProperty("tags")[0].GetProperty("positionalArgs")[0].GetString());
+    }
+
     private static JsonElement Option(JsonElement state, int index) => state.GetProperty("choice").GetProperty("options")[index];
     private static string? Content(JsonElement state) => state.GetProperty("payload").GetProperty("content").GetString();
     private static PresentationToken Token(JsonElement state) => new(

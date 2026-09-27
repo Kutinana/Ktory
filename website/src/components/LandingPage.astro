@@ -1,7 +1,8 @@
 ---
 import "../styles/custom.css";
+import "../../../src/Ktory.Highlighting/colors.css";
 import { ArrowRight, BookOpen, Terminal, Sparkles, Layers, Globe, ExternalLink, Moon, Sun, RotateCcw, ChevronDown, Check } from "@lucide/astro";
-import { highlightKtoryLine } from "../lib/highlighter";
+import { highlightKtoryLines } from "../lib/highlighter";
 import { translations, supportedLocales, type LocaleKey } from "../i18n/translations";
 import sampleZhRaw from "../assets/sample.ktr?raw";
 import sampleEnRaw from "../assets/sample.en.ktr?raw";
@@ -15,6 +16,7 @@ const { lang } = Astro.props;
 const t = translations[lang] || translations.zh;
 
 const sampleKtrRaw = lang === 'en' ? sampleEnRaw : lang === 'ja' ? sampleJaRaw : sampleZhRaw;
+const highlightedLines = highlightKtoryLines(sampleKtrRaw);
 const sampleLines = sampleKtrRaw.split('\n');
 
 const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLocales[0];
@@ -228,7 +230,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
                       <span class="code-num w-8 text-[11px] font-mono text-[var(--color-ink-faint)] select-none text-right pr-3 shrink-0 tabular-nums">
                         {idx + 1}
                       </span>
-                      <span class="font-mono text-xs whitespace-pre select-text" set:html={highlightKtoryLine(line)} />
+                      <span class="font-mono text-xs whitespace-pre select-text" set:html={highlightedLines[idx]} />
                     </div>
                   ))
                 }

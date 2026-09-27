@@ -4,7 +4,10 @@ const { spawnSync, execFileSync } = require('node:child_process');
 const vsce = require('@vscode/vsce');
 const { sourceRoot, repoRoot, extensionRoot, buildRoot } = require('./paths.cjs');
 
-async function build() {
+async function build({ version } = {}) {
+  for (const file of ['extension.js', 'webview.js']) {
+    execFileSync(process.execPath, ['--check', path.join(sourceRoot, file)], { stdio: 'inherit' });
+  }
   const output = path.join(buildRoot, 'publish');
   const stagedExtension = path.join(buildRoot, 'extension');
   const reader = path.join(stagedExtension, 'reader');
@@ -28,6 +31,7 @@ async function build() {
       fs.readFileSync(path.join(sourceRoot, '.vscodeignore'), 'utf8') + '\n!reader/**\n');
     const manifestPath = path.join(stagedExtension, 'package.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (version) manifest.version = version;
     // Build tooling stays in src; the staged directory is a self-contained runtime.
     delete manifest.scripts;
     delete manifest.devDependencies;

@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
+import { themes as ktoryThemes } from '../src/Ktory.Highlighting/theme.mjs';
 
 const ktoryGrammar = JSON.parse(
   fs.readFileSync(new URL('../src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json', import.meta.url), 'utf-8')
@@ -43,8 +44,11 @@ export default defineConfig({
       components: {
         LanguageSelect: './src/components/starlight/LanguageSelect.astro',
         ThemeSelect: './src/components/starlight/ThemeSelect.astro',
+        TableOfContents: './src/components/starlight/TableOfContents.astro',
+        PageTitle: './src/components/starlight/PageTitle.astro',
       },
       expressiveCode: {
+        themes: ktoryThemes,
         shiki: {
           langs: [ktoryGrammar],
         },

@@ -31,6 +31,7 @@ namespace Ktory.Core.Parser
         {
             var parser = new KtoryParser();
             var file = parser.ParseInternal(source);
+            file.BindSpeakerDefaults();
             file.BindLexicalAutoScopes();
             KtoryValidator.Validate(file);
             return file;
@@ -77,8 +78,7 @@ namespace Ktory.Core.Parser
                 // Check @speaker declaration
                 if (line.Text.StartsWith("@speaker"))
                 {
-                    ParseSpeakerDeclaration(line, file);
-                    index++;
+                    ParseSpeakerDeclaration(lines, ref index, file);
                     continue;
                 }
 
@@ -119,8 +119,7 @@ namespace Ktory.Core.Parser
             // 0. Check @speaker declaration
             if (line.Text.StartsWith("@speaker"))
             {
-                ParseSpeakerDeclaration(line, file);
-                index++;
+                ParseSpeakerDeclaration(lines, ref index, file);
                 return null;
             }
 
@@ -172,8 +171,9 @@ namespace Ktory.Core.Parser
             return trimmed;
         }
 
-        private static void ParseSpeakerDeclaration(SourceLine line, KtoryFile file)
+        private static void ParseSpeakerDeclaration(List<SourceLine> lines, ref int index, KtoryFile file)
         {
+            var line = lines[index];
             var match = SpeakerDeclarationRegex.Match(line.Text);
             if (!match.Success)
             {
@@ -233,6 +233,17 @@ namespace Ktory.Core.Parser
                     line.LineNumber, line.Indent + 1);
             }
 
+            index++;
+            while (index < lines.Count && lines[index].Indent > line.Indent)
+            {
+                var child = lines[index];
+                if (!TagParser.TryParseTagSequence(child.Text, 0, out var defaults, out _))
+                    throw new KtoryException("A speaker default block accepts only decorator lines.", child.LineNumber, child.Indent + 1);
+                speakerDef.DefaultTags.AddRange(defaults);
+                index++;
+            }
+            if (index < lines.Count && lines[index].Indent == line.Indent && lines[index].Text.StartsWith("."))
+                throw new KtoryException("Speaker default decorators must be indented below the declaration.", lines[index].LineNumber, lines[index].Indent + 1);
             file.AddSpeaker(speakerDef);
         }
 

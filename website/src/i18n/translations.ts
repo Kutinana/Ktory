@@ -167,7 +167,7 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
     hero: {
       slogan: 'Narrative Authoring & Integration',
       description1: 'An authoring and integration system for dialogue-driven games.',
-      description2: 'Keep story flow in .ktr. Shared defaults and explicit presentation handoffs are pending goals to reduce repeated settings and scene-specific wiring.',
+      description2: 'Keep story flow in .ktr. Speaker default decorators reduce repeated settings; configurable resources and explicit presentation handoffs remain planned.',
       quickstart: 'Quickstart',
       quickstartHref: '/en/01-overview/02-quickstart/',
       reader: 'Online Reader',
@@ -241,7 +241,7 @@ export const translations: Record<LocaleKey, TranslationDictionary> = {
     hero: {
       slogan: '対話を中心とする物語制作と接続',
       description1: '対話を中心とするゲームのための物語制作・接続システム。',
-      description2: '.ktr に物語を集約。共通設定と明示的な演出の受け渡しは実装待ちの目標で、設定の繰り返しと場面ごとの接続作業を減らします。',
+      description2: '.ktr に物語を集約。話者の既定修飾子で繰り返しの設定を減らします。リソースの関連付けと明示的な演出の受け渡しは今後の目標です。',
       quickstart: 'クイックスタート',
       quickstartHref: '/ja/01-overview/02-quickstart/',
       reader: 'オンライン試読器',

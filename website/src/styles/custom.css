@@ -6,7 +6,7 @@
 @theme {
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Noto Serif SC", "Noto Serif JP", "Source Han Serif SC", "Source Han Serif JP", "Songti SC", "SimSun", "Times New Roman", Times, serif;
-  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --animate-fade-in: fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-slide-up: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -53,12 +53,16 @@
   --color-accent-contrast: var(--theme-primary-contrast);
   --color-border: var(--theme-border);
   --color-border-hover: var(--theme-border-strong);
+  --color-link: #525252;
+  --color-link-hover: #171717;
+  --color-link-underline: rgba(82, 82, 82, 0.45);
+  --color-link-underline-hover: #171717;
 
   /* Starlight overrides - Typography & Dimensions */
   --sl-font-system: var(--font-serif);
   --sl-font: var(--font-serif);
   --sl-font-mono: var(--font-mono);
-  --sl-sidebar-width: 15.5rem;
+  --sl-sidebar-width: 17.5rem;
   --sl-toc-width: 12.5rem;
 
   /* Starlight overrides - Light Theme Colors */
@@ -99,6 +103,11 @@
   --theme-selection: rgba(255, 255, 255, 0.16);
   --theme-ring: rgba(255, 255, 255, 0.8);
 
+  --color-link: #a3a3a3;
+  --color-link-hover: #ffffff;
+  --color-link-underline: rgba(163, 163, 163, 0.45);
+  --color-link-underline-hover: #ffffff;
+
   /* Starlight overrides - Dark Theme Colors */
   --sl-color-bg: #0a0a0a;
   --sl-color-bg-nav: rgba(10, 10, 10, 0.9);
@@ -120,6 +129,12 @@
   --sl-color-accent-high: #ffffff;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth !important;
+  }
+}
+
 body {
   background-color: var(--theme-canvas);
   color: var(--theme-text);
@@ -129,27 +144,85 @@ body {
   line-height: 1.5;
 }
 
-/* Headings font */
+/* Headings typography: Serif font with strong editorial weight */
 h1, h2, h3, h4, h5, h6,
 .sl-markdown-content h1,
 .sl-markdown-content h2,
 .sl-markdown-content h3,
 .sl-markdown-content h4,
 .sl-markdown-content h5,
-.sl-markdown-content h6 {
+.sl-markdown-content h6,
+.sl-heading-wrapper h1,
+.sl-heading-wrapper h2,
+.sl-heading-wrapper h3,
+.sl-heading-wrapper h4 {
   font-family: var(--font-serif) !important;
-  font-weight: 400 !important;
+  font-weight: 600 !important;
   letter-spacing: -0.02em !important;
-  line-height: 1.25 !important;
+  line-height: 1.3 !important;
+  color: var(--color-ink) !important;
+}
+
+/* Page Title Description (frontmatter description displayed under h1) */
+.page-description {
+  font-family: var(--font-serif) !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.6 !important;
+  color: var(--color-ink-muted) !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0 !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* Headings vertical breathing space: generous breathing room & clear hierarchy */
+.sl-markdown-content .sl-heading-wrapper {
+  margin-top: 2.5rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.sl-markdown-content .sl-heading-wrapper:first-child,
+.sl-markdown-content > :first-child .sl-heading-wrapper {
+  margin-top: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2,
+.sl-markdown-content h2:not(.sl-heading-wrapper *) {
+  margin-top: 2.75rem !important;
+  margin-bottom: 1.125rem !important;
+  font-size: 1.5rem !important;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h3,
+.sl-markdown-content h3:not(.sl-heading-wrapper *) {
+  margin-top: 2rem !important;
+  margin-bottom: 0.875rem !important;
+  font-size: 1.25rem !important;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h4,
+.sl-markdown-content h4:not(.sl-heading-wrapper *) {
+  margin-top: 1.6rem !important;
+  margin-bottom: 0.75rem !important;
+  font-size: 1.1rem !important;
+}
+
+/* Ensure following element does not collapse or stick into the heading */
+.sl-markdown-content :is(.sl-heading-wrapper, h1, h2, h3, h4, h5, h6):not(:where(.not-content, .not-content *)) + * {
+  margin-top: 0 !important;
 }
 
 .font-serif {
   font-family: var(--font-serif) !important;
 }
 
-/* 1. Doc full-text styling: All body text in documentation uses serif */
+/* 1. Doc prose styling: Editorial serif for narrative body text */
 .sl-markdown-content {
-  font-family: var(--font-serif) !important;
+  font-family: var(--font-serif);
+}
+
+.sl-markdown-content p {
+  line-height: 1.7 !important;
 }
 
 .sl-markdown-content p,
@@ -158,26 +231,95 @@ h1, h2, h3, h4, h5, h6,
 .sl-markdown-content td,
 .sl-markdown-content th,
 .sl-markdown-content blockquote,
-.sl-markdown-content div:not(.expressive-code):not([class*="code"]),
-.sl-markdown-content span:not(.font-mono):not([class*="token"]):not([class*="code"]),
 .sl-markdown-content strong,
 .sl-markdown-content em,
-.sl-markdown-content a:not(.font-mono),
-.sl-markdown-content figcaption,
 .sl-markdown-content dt,
 .sl-markdown-content dd {
   font-family: var(--font-serif) !important;
 }
 
-/* Code blocks strictly retain monospace */
-.sl-markdown-content code,
-.sl-markdown-content pre,
-.sl-markdown-content kbd,
-.sl-markdown-content samp,
+/* Hyperlinks in markdown body prose: Dark gray (light theme) / Light gray (dark theme) with underline */
+.sl-markdown-content :is(p, li, blockquote, td, th, dt, dd) a:not(.sl-anchor-link):not(.button):not(:where(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper, .not-content, pre, .expressive-code) *) {
+  font-family: var(--font-serif) !important;
+  color: var(--color-link) !important;
+  text-decoration: underline !important;
+  text-decoration-color: var(--color-link-underline) !important;
+  text-decoration-thickness: 1.5px !important;
+  text-underline-offset: 3px !important;
+  font-weight: 500;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease !important;
+}
+
+.sl-markdown-content :is(p, li, blockquote, td, th, dt, dd) a:not(.sl-anchor-link):not(.button):not(:where(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper, .not-content, pre, .expressive-code) *):hover {
+  color: var(--color-link-hover) !important;
+  text-decoration-color: var(--color-link-underline-hover) !important;
+}
+
+.sl-markdown-content :is(p, li, blockquote, td, th, dt, dd) a:not(.sl-anchor-link):not(.button):not(:where(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper, .not-content, pre, .expressive-code) *) code {
+  color: var(--color-link) !important;
+  text-decoration: underline !important;
+  text-decoration-color: var(--color-link-underline) !important;
+  text-underline-offset: 3px !important;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease !important;
+}
+
+.sl-markdown-content :is(p, li, blockquote, td, th, dt, dd) a:not(.sl-anchor-link):not(.button):not(:where(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper, .not-content, pre, .expressive-code) *):hover code {
+  color: var(--color-link-hover) !important;
+  text-decoration-color: var(--color-link-underline-hover) !important;
+}
+
+/* 1.1. Markdown lists (Bullet & Numbered lists): Restore bullets and indentation after Tailwind reset */
+.sl-markdown-content ul:not(:where(.not-content, .not-content *)) {
+  list-style-type: disc !important;
+  padding-inline-start: 1.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.sl-markdown-content ol:not(:where(.not-content, .not-content *)) {
+  list-style-type: decimal !important;
+  padding-inline-start: 1.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.sl-markdown-content li:not(:where(.not-content, .not-content *)) {
+  display: list-item !important;
+  line-height: 1.7 !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  padding-inline-start: 0.25rem !important;
+}
+
+.sl-markdown-content ul ul:not(:where(.not-content, .not-content *)) {
+  list-style-type: circle !important;
+  margin-top: 0.375rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+.sl-markdown-content ol ol:not(:where(.not-content, .not-content *)) {
+  list-style-type: lower-alpha !important;
+  margin-top: 0.375rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+.sl-markdown-content li.task-list-item {
+  list-style-type: none !important;
+}
+
+/* 2. Code blocks & inline code: Strictly standard monospace code font */
 .expressive-code,
-.expressive-code code,
-.expressive-code pre {
+.expressive-code *,
+.sl-markdown-content pre,
+.sl-markdown-content pre *,
+.sl-markdown-content code,
+.sl-markdown-content code *,
+.sl-markdown-content kbd,
+.sl-markdown-content kbd *,
+.sl-markdown-content samp,
+.sl-markdown-content samp * {
   font-family: var(--font-mono) !important;
+  font-style: normal;
 }
 
 blockquote,
@@ -205,6 +347,77 @@ starlight-menu-button {
   font-family: var(--font-serif) !important;
 }
 
+/* 2.0. Left sidebar: Enhanced typography, comfortable sizing & breathing room */
+.sidebar-content {
+  padding: 1rem 0.75rem 1.25rem 0.75rem !important;
+}
+
+/* Group container spacing */
+.sidebar-content .top-level > li + li {
+  margin-top: 1.25rem !important;
+}
+
+/* Group header (summary) */
+.sidebar-content summary {
+  padding: 0.4rem 0.6rem !important;
+  margin-bottom: 0.35rem !important;
+  line-height: 1.5 !important;
+  border-radius: 0.5rem !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.sidebar-content summary:hover {
+  background-color: var(--color-surface) !important;
+}
+
+.sidebar-content summary .large,
+.sidebar-content .group-label .large {
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--color-ink) !important;
+}
+
+/* Sub-items list & guide line */
+.sidebar-content ul ul {
+  padding-left: 0.25rem !important;
+}
+
+.sidebar-content ul ul li {
+  margin-inline-start: 0.6rem !important;
+  border-inline-start: 1px solid var(--color-border) !important;
+  padding-inline-start: 0.5rem !important;
+}
+
+/* Link items */
+.sidebar-content a {
+  font-size: 0.875rem !important;
+  line-height: 1.55 !important;
+  padding: 0.45rem 0.75rem !important;
+  margin-block: 0.15rem !important;
+  border-radius: 0.5rem !important;
+  color: var(--color-ink-muted) !important;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease !important;
+}
+
+.sidebar-content a:hover {
+  color: var(--color-ink) !important;
+  background-color: var(--color-surface) !important;
+  transform: translateX(2px);
+}
+
+.sidebar-content a[aria-current="page"] {
+  color: var(--color-accent-contrast) !important;
+  background-color: var(--color-accent) !important;
+  font-weight: 600 !important;
+  transform: none !important;
+}
+
+.sidebar-content a[aria-current="page"]:hover {
+  color: var(--color-accent-contrast) !important;
+  background-color: var(--color-accent) !important;
+}
+
 .right-sidebar,
 .right-sidebar-container,
 .right-sidebar-panel,
@@ -220,6 +433,281 @@ mobile-starlight-toc summary,
 mobile-starlight-toc a,
 mobile-starlight-toc span {
   font-family: var(--font-serif) !important;
+}
+
+/* 2.1. Bottom pagination (Previous / Next) & footer: Refined typography & spacing */
+.pagination-links,
+.pagination-links * {
+  font-family: var(--font-serif) !important;
+}
+
+.pagination-links a {
+  border-color: var(--color-border) !important;
+  background-color: var(--color-canvas) !important;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease !important;
+}
+
+.pagination-links a:hover {
+  border-color: var(--color-border-hover) !important;
+  background-color: var(--color-surface) !important;
+}
+
+/* Direction label: "上一页" / "下一页" - 缩小一个字号、颜色更浅、与标题拉开距离 */
+.pagination-links a > span {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.45rem !important; /* 与标题拉开间距 */
+  font-size: 0.8125rem !important; /* 缩小一个字号 */
+  line-height: 1.3 !important;
+  color: var(--color-ink-muted) !important; /* 颜色更浅 */
+  opacity: 0.85;
+  transition: opacity 0.15s ease, color 0.15s ease !important;
+}
+
+.pagination-links a:hover > span {
+  opacity: 1;
+}
+
+.pagination-links a[rel="prev"] > span {
+  align-items: flex-start !important;
+  text-align: start !important;
+}
+
+.pagination-links a[rel="next"] > span {
+  align-items: flex-end !important;
+  text-align: end !important;
+}
+
+.pagination-links a > span br {
+  display: none !important;
+}
+
+.pagination-links .link-title {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--color-ink) !important;
+  line-height: 1.35 !important;
+}
+
+.pagination-links svg {
+  color: var(--color-ink-muted) !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease !important;
+}
+
+.pagination-links a[rel="prev"]:hover svg {
+  transform: translateX(-3px);
+  color: var(--color-ink) !important;
+}
+
+.pagination-links a[rel="next"]:hover svg {
+  transform: translateX(3px);
+  color: var(--color-ink) !important;
+}
+
+/* 2.2. Mobile Menus Animations: Sidebar Navigation Popover & On-This-Page TOC Dropdown */
+
+/* Caret rotation for sidebar accordion groups */
+.sidebar-content summary .caret {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* A. Mobile Table of Contents (TOC) Dropdown */
+mobile-starlight-toc nav {
+  background-color: var(--color-canvas) !important;
+  border-top: 1px solid var(--color-border) !important;
+}
+
+mobile-starlight-toc summary {
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+mobile-starlight-toc .toggle {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-ink-muted) !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease !important;
+}
+
+mobile-starlight-toc .toggle:hover,
+mobile-starlight-toc details[open] .toggle {
+  background-color: var(--color-surface-hover) !important;
+  border-color: var(--color-border-hover) !important;
+  color: var(--color-ink) !important;
+}
+
+mobile-starlight-toc .toggle:active {
+  transform: scale(0.97);
+}
+
+mobile-starlight-toc .caret {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transform-origin: center;
+}
+
+mobile-starlight-toc .dropdown {
+  background-color: var(--color-canvas) !important;
+  border: 1px solid var(--color-border) !important;
+  border-top-color: var(--color-border) !important;
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.14) !important;
+}
+
+mobile-starlight-toc details[open] .dropdown {
+  animation: mobile-toc-slide-down 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+}
+
+@keyframes mobile-toc-slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+mobile-starlight-toc details[open] .dropdown ul {
+  animation: mobile-toc-list-in 0.22s ease 0.04s both;
+}
+
+@keyframes mobile-toc-list-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+mobile-starlight-toc .dropdown a {
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease !important;
+}
+
+mobile-starlight-toc .dropdown a:hover {
+  background-color: var(--color-surface) !important;
+  color: var(--color-ink) !important;
+}
+
+mobile-starlight-toc .dropdown a[aria-current="true"] {
+  color: var(--color-ink) !important;
+  font-weight: 600 !important;
+}
+
+/* B. Mobile Navigation Sidebar Drawer (Popover API) */
+@media (max-width: 49.99rem) {
+  .sl-menu-button {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.2s ease,
+                color 0.2s ease !important;
+  }
+
+  .sl-menu-button:active {
+    transform: scale(0.9);
+  }
+
+  .sl-menu-button .open-menu,
+  .sl-menu-button .close-menu {
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease !important;
+  }
+
+  button:has(~ :popover-open) .close-menu {
+    animation: mobile-menu-icon-spin 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  button:not(:has(~ :popover-open)) .open-menu {
+    animation: mobile-menu-icon-spin 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes mobile-menu-icon-spin {
+    0% {
+      transform: rotate(-90deg) scale(0.75);
+      opacity: 0;
+    }
+    100% {
+      transform: rotate(0) scale(1);
+      opacity: 1;
+    }
+  }
+
+  #starlight__sidebar {
+    background-color: var(--color-canvas) !important;
+    border-bottom: 1px solid var(--color-border) !important;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18) !important;
+    transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                display 0.28s allow-discrete,
+                overlay 0.28s allow-discrete !important;
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+
+  #starlight__sidebar:popover-open {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @starting-style {
+    #starlight__sidebar:popover-open {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+  }
+
+  @supports not (@starting-style {}) {
+    #starlight__sidebar:popover-open {
+      animation: mobile-sidebar-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+  }
+
+  @keyframes mobile-sidebar-slide-in {
+    0% {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  #starlight__sidebar:popover-open .sidebar-content {
+    animation: mobile-sidebar-content-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes mobile-sidebar-content-in {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  #starlight__sidebar:popover-open .sidebar-content > div:last-child {
+    animation: mobile-sidebar-content-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  #starlight__sidebar,
+  #starlight__sidebar:popover-open,
+  #starlight__sidebar .sidebar-content,
+  mobile-starlight-toc details[open] .dropdown,
+  mobile-starlight-toc details[open] .dropdown ul,
+  .sl-menu-button,
+  mobile-starlight-toc .caret,
+  .sidebar-content details summary .caret {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* 3. Shorten the right sidebar width */
@@ -256,17 +744,70 @@ mobile-starlight-toc span {
     margin-bottom: 0.5rem !important;
   }
 
+  /* 3. Shorten the right sidebar width & TOC sliding track */
+  .right-sidebar-panel starlight-toc nav {
+    position: relative;
+  }
+
+  .right-sidebar-panel starlight-toc nav > ul {
+    position: relative;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .ktory-toc-track {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--color-border);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .ktory-toc-marker {
+    position: absolute;
+    left: -0.5px;
+    top: 0;
+    width: 2px;
+    height: 1.5rem;
+    background-color: var(--color-ink);
+    border-radius: 9999px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(0);
+    will-change: transform, height, opacity;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                height 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.2s ease;
+    z-index: 2;
+  }
+
   .right-sidebar-panel a {
     font-size: 0.8125rem !important;
     font-family: var(--font-serif) !important;
     line-height: 1.4 !important;
-    padding: 0.25rem 0 !important;
+    padding-top: 0.28rem !important;
+    padding-bottom: 0.28rem !important;
+    padding-left: calc(0.875rem + 0.75rem * var(--depth, 0)) !important;
+    padding-right: 0.25rem !important;
     color: var(--color-ink-muted) !important;
-    transition: color 0.15s ease !important;
+    transition: color 0.15s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    display: block !important;
+    text-decoration: none !important;
   }
 
   .right-sidebar-panel a:hover {
     color: var(--color-ink) !important;
+    transform: translateX(2px);
+  }
+
+  .right-sidebar-panel a[aria-current="true"] {
+    color: var(--color-ink) !important;
+    font-weight: 500 !important;
+    transform: translateX(4px);
   }
 
   /* Main content pane expands to fill the space saved by shortening TOC */

@@ -52,9 +52,9 @@
 | VS Code 扩展 | `build-vscode.yml` / `VS Code - Build VSIX` | `artifacts/vscode/packages/ktory-vscode-<version>.vsix`；Actions 下载包 `ktory-vscode-vsix-<源提交>` | VS Code 安装 VSIX；完整扩展位于 `artifacts/vscode/extension/`，其中 `reader/` 是内置 Reader |
 | 门户与文档 | Vercel 从 `main` 的 `website/` 构建 | `website/dist/`；无单独的 Actions 产物分支 | Vercel `ktory-home`；Root Directory 为 `website` |
 
-VSIX 的唯一版本来源是 `src/Ktory.VSCode/package.json` 的 `version`。打包文件名由 `scripts/package.cjs` 派生，安装测试共用同一路径；常规构建不自动递增版本，发新版时显式更新 manifest 版本。Actions 下载包末尾的源提交用于区分构建，不是扩展版本号。
+VSIX 的唯一版本来源是 `src/Ktory.VSCode/package.json` 的 `version`。打包文件名由 `scripts/package.cjs` 派生，安装测试共用同一路径；常规 `package` 不递增版本，本地 `package:patch` 在成功生成下一 patch 的 VSIX 后写回 manifest。Actions 下载包末尾的源提交用于区分构建，不是扩展版本号。
 
-Reader 的触发路径只覆盖 Core、Web、共用 Reader 前端、样例和相关构建配置；单独修改 Unity 接入或 VS Code 扩展不触发独立 Reader 发布。各 workflow 保持自身原有验证步骤，不因一次产品修正增加全局专项测试步骤。
+Reader 的触发路径覆盖 Core、Web、共用 Reader 前端、样例、共享高亮规则／引擎依赖和相关构建配置；单独修改 Unity 接入或 VS Code 专用适配不触发独立 Reader 发布。用户已确认现阶段保留 Reader／UPM 发布方式，不将新增 CI 门禁作为本轮任务；各 workflow 保持原有验证步骤。
 
 **从旧分支迁移**：`deploy-web` 是 Reader 发布分支的旧名。此改动合入后，Reader workflow 首次运行会生成 `deploy-reader`；随后将 Vercel `ktory` 的生产分支改为 `deploy-reader`，Root Directory 继续使用仓库根目录。确认新分支部署成功后再决定是否清理旧分支；workflow 不再更新 `deploy-web`。
 
@@ -104,6 +104,7 @@ Vercel `ktory-home` 应仅接收门户源码分支的部署，排除 `deploy-rea
 基础命令：
 
 ```sh
+pnpm --dir src/Ktory.VSCode install --frozen-lockfile
 dotnet test tests/Ktory.Core.Tests/Ktory.Core.Tests.csproj -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet build Ktory.sln -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet publish src/Ktory.Web -c Release
@@ -120,7 +121,7 @@ dotnet run --project src/Ktory.Runner
 
 ### 新增目标的代表性验证场景（待落实）
 
-本轮以「分析漏洞与Ink区别」最后一轮提出的灯塔素材为代表性验收方向。以下为建议新增的用例，尚未编写或运行，不作为当前第一阶段完成门槛，也不直接采用历史灯塔脚本中的未支持语法。工程方案冻结后再形成最小 `.ktr`、配置、操作序列及可区分的断言。
+本轮以「分析漏洞与Ink区别」最后一轮提出的灯塔素材为代表性验收方向。文件内默认修饰符与局部覆盖现已有核心、桥接及 Webview 回归，其余资源绑定和信号场景仍为待落实的验收方向，不自动增加第一阶段完成门槛，也不直接采用历史灯塔脚本中的未支持语法。
 
 | 场景 | 预期收益／行为 | 核心与接入可验证部分 | Unity 实机补充 |
 | --- | --- | --- | --- |
@@ -138,7 +139,7 @@ dotnet run --project src/Ktory.Runner
 
 | 能力 | 契约状态 | 实现状态 | 验证证据 |
 | --- | --- | --- | --- |
-| 共享默认呈现与表情省略规则 | 产品目标与表情优先级已确认；配置／载荷未冻结 | 当前已有名字本地化；新增默认呈现及清除输出待落实 | 本轮无新能力运行证据 |
+| 共享默认呈现与表情省略规则 | 文件内声明、同名整组覆盖、逐句重算已确认；跨文件与资源绑定待设计 | 文件内 speaker 默认修饰符已实现，沿用有效 `Tags` 载荷；实际资源清除由宿主落实 | 默认修饰符、桥接及已安装 VSIX 回归通过；Unity 实机另验 |
 | 编辑器绑定与显式信号依赖 | 目标已确认；引用、匹配、等待承载及输入组合未决 | 通用产品能力待落实；项目自定义处理器不等于标准交付 | 本轮无新能力运行证据；未来须分别绑定源提交 S、包提交 P 与环境 |
 | 独立试读交接策略 | 不伪造真实事件已确认；具体交互未决 | 待设计 | 不能用当前跳过未知标签的检查代替 |
 | 按情况选择剧情／交还玩家操作后继续 | 已确认需求、延期 | 不在当前冻结 API；待设计 | 无本轮验收结果 |
@@ -173,17 +174,17 @@ pnpm test:vsix
 
 构建复用 Web/Runner/Core，所有扩展生成物统一放在 `artifacts/vscode/`，源码目录不再生成 `reader/`。`extension.js` 管理文档与面板生命周期，`webview.js` 负责共享 Reader 的编辑器消息及本地资源适配；剧情执行仍归 Core，时序与输入归 Reader。`reader/build-info.json` 记录源提交、dirty 标记和构建时间；dirty 构建不能作为该提交的干净发布证据。
 
-`package` 自动先构建完整扩展，再生成 `artifacts/vscode/packages/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前发布者为 `ktory`，扩展标识为 `ktory.ktory`；版本 `0.1.0` 通过打包选项 `preRelease: true` 写入 VSIX 预发布标记，不使用版本字符串后缀。将来发布正式版时须显式调整渠道，并使用不同的三段数字版本。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。
+`package` 自动先构建完整扩展，再生成 `artifacts/vscode/packages/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前发布者为 `ktory`，扩展标识为 `ktory.ktory`；打包选项 `preRelease: true` 写入 VSIX 预发布标记，不使用版本字符串后缀。将来发布正式版时须显式调整渠道，并使用不同的三段数字版本。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。
 
 扩展使用 [专有许可证](../src/Ktory.VSCode/LICENSE.txt)，允许个人和商业使用，修改或再分发扩展须另获书面许可；用户原创剧本不受这些限制。该许可仅覆盖扩展及其包内 Ktory 组件的使用，不自动授权独立 Core／Unity 分发。第三方组件保留各自许可证，包内包含 `reader/notices/`。`package.json` 引用 `LICENSE.txt`，打包必须包含许可文件。
 
-首次上架：对准备发布的固定源码版本完成验证，在 Marketplace 发布者后台选择 `ktory`，创建 Visual Studio Code 扩展并上传已验证的 VSIX，确认显示为 Pre-release。本地 dirty 包须注明来自工作区，不能冒充干净提交的构建。`build-vscode.yml` 验证核心、扩展语法与包并上传 VSIX；原有 Reader/UPM 发布 workflow 的门禁仍须分别补齐。
+手动上架时使用已验证的 VSIX；本地 dirty 包须注明来自工作区，不能冒充干净提交的构建。`build-vscode.yml` 验证核心、扩展语法与包并上传 Actions 产物；Reader／UPM 暂沿用原发布检查，市场自动上传也暂缓。
 
 ### 当前优先落实的工程项
 
 - **保持契约与测试一致**：2026-09-27 已修复默认入口、命名节归属、悬空修饰符、未知容器回退警告和失败重载，并落实本轮确认的缺译、条件与输入生命周期规则；对应本机证据见[修复记录](ktory-v1-status-2026-09-26.md#8-2026-09-27-后续修复与确认记录)。完整 Handler 扩展仍未实现，不把基础 choice 降级描述为已有通用插件系统。
 - **补核心组合回归**：普通文本与参数词法、多语言与选项、调用与循环、语言刷新与计时、会话重启与过期输入；发现问题先缩减用例。
-- **建立同提交 CI 门禁**：原有两条发布 workflow 分别发布 Reader 和 UPM，没有 `dotnet test` 门禁。新扩展的构建 workflow 已包含核心测试，但并不替这两条发布链路提供门禁；二者仍应先通过相关测试再分发。
+- **保留现阶段发布方式**：Reader 和 UPM 尚无 `dotnet test` 门禁；用户确认当前方式足够，本轮不新增该门禁。扩展构建 workflow 已有核心测试；本地新增 `package:patch`，减少等待 Actions 和下载包的步骤。已有验证要求继续执行，远端运行结果另记。
 - **补桥接、包与浏览器验收**：构建成功不足以证明 WASM 启动、页面操作或 Unity 包导入成功。没有相应环境时明确留待该环境验证。
 
 HTTP／WASM Reader 的请求与状态现携带 `sessionId` 和 `presentationId`；异步输入须使用来源会话的标识，不能仅按相同拍号匹配。桥接保留最近 50 条 `Warning`／`InputIgnored` 诊断；Reader 仅将 `Warning` 显示在剧本警告区，过期输入留在后台。独立 Reader 显式启用未知条件宽容模式，游戏内置求值器默认将未知条件警告后视为不满足。核心和接入 API 的详细规则见 implementation §5.2.2–5.2.3。
@@ -240,3 +241,11 @@ Unity 版本、目标平台、Editor/Player、脚本后端（相关时）：
 对外示例只能使用真实公开 API；完整例子应能编译运行，片段应明确上下文。选择提交后不额外 Step；呈现控制器的两种推进模式不能混接。门户的三个语言版本在同一次语义变更中更新。
 
 发布说明至少记录源提交、包提交、涉及模块、行为或 API 变化、已运行检查及待验证环境。独立发布门户不等于升级核心；发布 Reader 不等于完成 Unity 验收；文档中的设计承诺不等于已实现能力。
+
+### 2026-09-27：本地 patch 打包与高亮来源
+
+用户确认现阶段保留 Reader／UPM 发布方式，市场自动上传暂缓。运行 `pnpm --dir src/Ktory.VSCode package:patch` 自动计算下一 patch、生成 VSIX，成功后写回源 manifest；失败不递增。`pnpm package` 保留按当前版本打包。主／次版本由维护者明确修改，不由 CI 每次构建递增。
+
+语法高亮唯一规则源为 `src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json`。文档站通过 Shiki 引用；网站首页和 Reader 通过同版本 TextMate/Oniguruma 加共享 HTML 渲染器引用。Reader 发布前安装扩展目录内的锁定依赖；`Directory.Build.targets` 链接 grammar、引擎、WASM 与许可证到两种 Reader，全部随离线 VSIX 分发。新增此依赖不改变 Core 的零外部运行依赖边界。
+
+网站和 Reader 的明暗配色统一由 `src/Ktory.Highlighting/theme.mjs` 定义：文件设置淡蓝、speaker 声明紫色、说话人青绿、语言标记琥珀、执行锚点蓝色、修饰符金色、字符串暖棕。VS Code 使用对应标准 scope，具体颜色尊重用户主题。匿名 `#` 与命名锚点同类；引号内文件名不识别为修饰符。

@@ -79,6 +79,39 @@ namespace Ktory.Core.Ast
             return Blocks.TryGetValue(label, out block!);
         }
 
+        internal void BindSpeakerDefaults()
+        {
+            foreach (var block in Blocks.Values) BindSpeakerDefaults(block.Steps);
+        }
+
+        private void BindSpeakerDefaults(List<StepNode> steps)
+        {
+            foreach (var step in steps)
+            {
+                if (step is TextStep text && !string.IsNullOrEmpty(text.Speaker)
+                    && SpeakersByAlias.TryGetValue(text.Speaker!, out var speaker))
+                {
+                    var localNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var tag in text.Tags) localNames.Add(tag.Name);
+                    var effective = new List<TagData>();
+                    foreach (var tag in speaker.DefaultTags)
+                    {
+                        if (localNames.Contains(tag.Name)) continue;
+                        effective.Add(new TagData(tag.Name)
+                        {
+                            PositionalArgs = new List<object>(tag.PositionalArgs),
+                            NamedArgs = new Dictionary<string, object>(tag.NamedArgs, StringComparer.OrdinalIgnoreCase)
+                        });
+                    }
+                    effective.AddRange(text.Tags);
+                    text.Tags = effective;
+                }
+                if (step is ContainerStep container)
+                    foreach (var item in container.Items)
+                        BindSpeakerDefaults(item.InlineSteps);
+            }
+        }
+
         public void BindLexicalAutoScopes()
         {
             BindBlockAutoScopes(RootBlock);

@@ -15,6 +15,9 @@ namespace Ktory.Core.Ast
 
         public int LineNumber { get; set; }
 
+        /// <summary>File-scoped defaults, expanded independently into each matching dialogue.</summary>
+        public List<TagData> DefaultTags { get; } = new List<TagData>();
+
         /// <summary>
         /// Set of all valid alias tokens (including Id and localized names) that resolve to this speaker.
         /// Strictly case-sensitive.

@@ -1,0 +1,17 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Ktory.Runner' Or '$(MSBuildProjectName)' == 'Ktory.Web'">
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json" Link="wwwroot/highlighting/ktory.tmLanguage.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.Highlighting/renderer.mjs" Link="wwwroot/highlighting/renderer.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.Highlighting/theme.mjs" Link="wwwroot/highlighting/theme.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.Highlighting/colors.css" Link="wwwroot/highlighting/colors.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-textmate/release/main.js" Link="wwwroot/highlighting/textmate.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/release/main.js" Link="wwwroot/highlighting/oniguruma.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/release/onig.wasm" Link="wwwroot/highlighting/onig.wasm" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-textmate/LICENSE.md" Link="wwwroot/highlighting/textmate-LICENSE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/LICENSE.txt" Link="wwwroot/highlighting/oniguruma-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/NOTICES.txt" Link="wwwroot/highlighting/oniguruma-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CheckReaderHighlightingDependencies" BeforeTargets="PrepareForBuild" Condition="'$(MSBuildProjectName)' == 'Ktory.Runner' Or '$(MSBuildProjectName)' == 'Ktory.Web'">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/release/onig.wasm')" Text="Install Reader highlighting dependencies first: pnpm --dir src/Ktory.VSCode install --frozen-lockfile" />
+  </Target>
+</Project>

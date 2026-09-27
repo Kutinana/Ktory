@@ -16,16 +16,18 @@ test('the contributed TextMate grammar highlights a representative .ktr document
   });
   const grammar = await registry.loadGrammar('source.ktory');
   for (const [line, expected] of [
+    ['@defaultLang: zh', 'variable.language.metadata.ktory'],
     ['// author note', 'comment.line.double-slash.ktory'],
     ['=== Start ===', 'keyword.control.section.ktory'],
-    ['  #choice.loop', 'keyword.other.container.ktory'],
+    ['  #choice.loop', 'keyword.control.anchor.ktory'],
+    ['#.sfx("wind.ogg").wait(1).next()', 'keyword.control.anchor.ktory'],
     ['  * [继续] => Next', 'string.quoted.choice.ktory'],
-    ['    .sfx("bell")', 'entity.name.tag.decorator.ktory'],
-    ['    @en: Hello.', 'constant.language.locale.ktory'],
+    ['    .sfx("bell")', 'entity.name.function.decorator.ktory'],
+    ['    @en: Hello.', 'constant.other.locale.ktory'],
     ['@speaker alice: zh="爱丽丝" | en="Alice"', 'keyword.declaration.speaker.ktory'],
-    ['  @speaker alice_2-id ： zh="爱丽丝"', 'entity.name.function.speaker.ktory'],
+    ['  @speaker alice_2-id ： zh="爱丽丝"', 'entity.name.type.speaker.ktory'],
     ['@speaker: zh="爱丽丝"', 'keyword.declaration.speaker.ktory'],
-    ['Alice: Hello.', 'entity.name.function.speaker.ktory'],
+    ['Alice: Hello.', 'entity.name.type.speaker.ktory'],
     ['-> end', 'keyword.control.flow.ktory']
   ]) {
     assert.ok(grammar.tokenizeLine(line, tm.INITIAL).tokens.some(token => token.scopes.includes(expected)), `${line}: ${expected}`);
@@ -33,14 +35,22 @@ test('the contributed TextMate grammar highlights a representative .ktr document
   const declaration = '@speaker alice: zh="爱丽丝"';
   const tokens = grammar.tokenizeLine(declaration, tm.INITIAL).tokens;
   const scopeAt = index => tokens.find(token => token.startIndex <= index && token.endIndex > index).scopes;
-  assert.ok(scopeAt(declaration.indexOf('alice')).includes('entity.name.function.speaker.ktory'));
-  assert.ok(!scopeAt(declaration.indexOf('zh=')).includes('entity.name.function.speaker.ktory'), 'declaration header ends at the colon');
+  assert.ok(scopeAt(declaration.indexOf('alice')).includes('entity.name.type.speaker.ktory'));
+  assert.ok(!scopeAt(declaration.indexOf('zh=')).includes('entity.name.type.speaker.ktory'), 'declaration header ends at the colon');
   for (const line of ['  @en: Hello.', '@speakerName: Hello.']) {
     const scopes = grammar.tokenizeLine(line, tm.INITIAL).tokens.flatMap(token => token.scopes);
-    assert.ok(scopes.includes('constant.language.locale.ktory'));
+    assert.ok(scopes.includes('constant.other.locale.ktory'));
     assert.ok(!scopes.includes('keyword.declaration.speaker.ktory'));
-    assert.ok(!scopes.includes('entity.name.function.speaker.ktory'));
+    assert.ok(!scopes.includes('entity.name.type.speaker.ktory'));
   }
+  assert.ok(scopeAt(declaration.indexOf('zh=')).includes('constant.other.locale.ktory'));
+  const anonymous = '#.sfx("wind.ogg").wait(1).next()';
+  const anonymousTokens = grammar.tokenizeLine(anonymous, tm.INITIAL).tokens;
+  const anonymousScope = index => anonymousTokens.find(t => t.startIndex <= index && t.endIndex > index).scopes;
+  assert.ok(anonymousScope(0).includes('keyword.control.anchor.ktory'));
+  assert.ok(anonymousScope(anonymous.indexOf('.sfx')).includes('entity.name.function.decorator.ktory'));
+  assert.ok(anonymousScope(anonymous.indexOf('.ogg')).includes('string.quoted.double.ktory'));
+  assert.ok(!anonymousScope(anonymous.indexOf('.ogg')).includes('entity.name.function.decorator.ktory'));
   registry.dispose();
 });
 
@@ -48,6 +58,11 @@ test('the portal consumes the extension grammar instead of maintaining another c
   const config = fs.readFileSync(path.resolve(root, '../../website/astro.config.mjs'), 'utf8');
   assert.ok(config.includes('../src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json'));
   assert.equal(fs.existsSync(path.resolve(root, '../../website/src/grammars/ktory.tmLanguage.json')), false);
+  const homepage = fs.readFileSync(path.resolve(root, '../../website/src/lib/highlighter.ts'), 'utf8');
+  assert.ok(homepage.includes('../../../src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json'));
+  assert.ok(homepage.includes('Ktory.Highlighting/renderer.mjs'));
+  const readerGrammar = fs.readFileSync(path.join(readerRoot, 'highlighting/ktory.tmLanguage.json'), 'utf8');
+  assert.equal(readerGrammar, fs.readFileSync(path.join(root, 'syntaxes/ktory.tmLanguage.json'), 'utf8'));
 });
 
 test('the offline bundle contains Core and the real WASM host', () => {
@@ -79,4 +94,17 @@ test('the package manifest declares an icon file that exists on disk', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   assert.ok(manifest.icon, 'package.json must declare an icon');
   assert.ok(fs.existsSync(path.join(root, manifest.icon)), 'the icon file must exist');
+});
+
+test('shared HTML renderer preserves anonymous anchors, quoted filenames and escaped source', async () => {
+  const { createKtoryHighlighter } = await import('../../Ktory.Highlighting/renderer.mjs');
+  const grammar = JSON.parse(fs.readFileSync(path.join(root, 'syntaxes/ktory.tmLanguage.json'), 'utf8'));
+  const highlighter = await createKtoryHighlighter(tm, onig, grammar);
+  try {
+    const [line, escaped] = highlighter.highlightLines('#.sfx("wind.ogg").wait(1).next()\n: <img src=x onerror=alert(1)>');
+    assert.match(line, /^<span class="ktr-token ktr-keyword"[^>]*>#<\/span>/);
+    assert.match(line, /<span class="ktr-token ktr-string"[^>]*>&quot;wind\.ogg&quot;<\/span>/);
+    assert.ok(!escaped.includes('<img'));
+    assert.ok(escaped.includes('&lt;img'));
+  } finally { highlighter.dispose(); }
 });

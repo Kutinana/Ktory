@@ -1,6 +1,6 @@
 # Ktory for VS Code
 
-`.ktr` / `.ktory` syntax highlighting and an offline reading panel powered by the same C# core as Ktory's Web Reader. Ktory is an authoring and integration system for dialogue-driven games; its current runtime uses host-driven beats. Shared presentation defaults, configurable bindings and explicit signal dependencies are pending goals, not current preview features. The preview does not simulate your game's world state or presentation resources; see the [design charter](../../docs/ktory-design-charter.md).
+`.ktr` / `.ktory` syntax highlighting and an offline reading panel powered by the same C# core as Ktory's Web Reader. Ktory is an authoring and integration system for dialogue-driven games; its current runtime uses host-driven beats. File-scoped speaker default decorators and per-line overrides are supported. Resource bindings and explicit signal dependencies remain pending. The preview does not simulate your game's world state or presentation resources; see the [design charter](../../docs/ktory-design-charter.md).
 
 ## Install and read
 
@@ -29,3 +29,13 @@ This extension is proprietary software. The [license](LICENSE.txt) permits perso
 ## Troubleshooting
 
 If the offline runtime fails to load, inspect **Output → Ktory Preview**, then close and reopen the panel. If the package is missing runtime files, rebuild and reinstall the complete VSIX. The syntax contribution still works independently of the reading panel.
+
+## Local patch packages
+
+Run `pnpm --dir src/Ktory.VSCode package:patch` from the repository root. It builds the shared Reader and creates `artifacts/vscode/packages/ktory-vscode-<version>.vsix`, then updates the source `package.json` patch version only after packaging succeeds. Existing VSIX versions in the same major/minor line are skipped; a lock prevents simultaneous patch builds. A failed build keeps the source version unchanged. If the process crashes, check that no build is running before removing the reported lock file. Major/minor changes remain explicit edits to the source manifest.
+
+`pnpm package` still builds the current version without incrementing it. Packages retain the existing pre-release channel. Neither command uploads to Marketplace or Open VSX. Automatic market publishing is deferred by the current decision; the generated VSIX can be uploaded to both markets.
+
+## One highlighting grammar
+
+`syntaxes/ktory.tmLanguage.json` is the only lexical rule source: VS Code consumes it natively, the documentation site imports it through Shiki, and the landing page and Reader use TextMate/Oniguruma with the same grammar. `../Ktory.Highlighting` only maps token scopes to HTML/colors. Reader assets, engines and license notices are copied during .NET builds and ship offline in the VSIX. Install extension dependencies before building either Reader host: `pnpm --dir src/Ktory.VSCode install --frozen-lockfile`.

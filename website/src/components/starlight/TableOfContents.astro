@@ -1,0 +1,145 @@
+---
+import Default from '@astrojs/starlight/components/TableOfContents.astro';
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<script>
+  function initTocSlider() {
+    const toc = document.querySelector('.right-sidebar-panel starlight-toc');
+    if (!toc) return;
+
+    const rootUl = toc.querySelector('nav > ul');
+    if (!rootUl) return;
+
+    // Avoid duplicate initialization on the same element
+    if (toc.getAttribute('data-slider-ready') === 'true') {
+      const activeLink = rootUl.querySelector('a[aria-current="true"]');
+      const marker = rootUl.querySelector('.ktory-toc-marker') as HTMLElement | null;
+      if (marker && activeLink) {
+        const rootRect = rootUl.getBoundingClientRect();
+        const linkRect = activeLink.getBoundingClientRect();
+        marker.style.transform = `translateY(${linkRect.top - rootRect.top}px)`;
+        marker.style.height = `${linkRect.height}px`;
+        marker.style.opacity = '1';
+      }
+      return;
+    }
+    toc.setAttribute('data-slider-ready', 'true');
+
+    // Create track and marker elements
+    let track = rootUl.querySelector('.ktory-toc-track') as HTMLElement | null;
+    let marker = rootUl.querySelector('.ktory-toc-marker') as HTMLElement | null;
+
+    if (!track) {
+      track = document.createElement('div');
+      track.className = 'ktory-toc-track';
+      track.setAttribute('aria-hidden', 'true');
+      rootUl.appendChild(track);
+    }
+
+    if (!marker) {
+      marker = document.createElement('div');
+      marker.className = 'ktory-toc-marker';
+      marker.setAttribute('aria-hidden', 'true');
+      rootUl.appendChild(marker);
+    }
+
+    let isInitialized = false;
+
+    function updateMarker(activeLink?: Element | null, immediate = false) {
+      if (!marker || !rootUl) return;
+
+      const link = activeLink || rootUl.querySelector('a[aria-current="true"]');
+      if (!link) {
+        marker.style.opacity = '0';
+        return;
+      }
+
+      const rootRect = rootUl.getBoundingClientRect();
+      const linkRect = link.getBoundingClientRect();
+      const top = linkRect.top - rootRect.top;
+      const height = linkRect.height;
+
+      if (immediate || !isInitialized) {
+        marker.style.transition = 'none';
+        marker.style.transform = `translateY(${top}px)`;
+        marker.style.height = `${height}px`;
+        marker.style.opacity = '1';
+        void marker.offsetHeight; // Force reflow
+        marker.style.transition = '';
+        isInitialized = true;
+      } else {
+        marker.style.transform = `translateY(${top}px)`;
+        marker.style.height = `${height}px`;
+        marker.style.opacity = '1';
+      }
+    }
+
+    // Observe Starlight's aria-current updates on TOC links
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type === 'attributes' && m.attributeName === 'aria-current') {
+          const target = m.target as HTMLElement;
+          if (target.getAttribute('aria-current') === 'true') {
+            updateMarker(target);
+            break;
+          }
+        }
+      }
+    });
+
+    observer.observe(rootUl, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['aria-current'],
+    });
+
+    // Smooth sliding navigation on click
+    rootUl.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null;
+      const link = target?.closest('a');
+      if (!link || !link.hash) return;
+
+      const targetId = decodeURIComponent(link.hash.slice(1));
+      const targetEl = document.getElementById(targetId);
+      if (!targetEl) return;
+
+      e.preventDefault();
+
+      // 1. Instantly slide the TOC indicator bar to the selected link
+      updateMarker(link);
+
+      // 2. Smoothly glide the viewport to the target heading with navbar offset
+      const header = document.querySelector('header');
+      const headerHeight = header ? header.getBoundingClientRect().height : 56;
+      const targetTop = targetEl.getBoundingClientRect().top + window.pageYOffset - (headerHeight + 20);
+
+      window.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: 'smooth',
+      });
+
+      // 3. Update browser history URL
+      history.pushState(null, '', link.hash);
+    });
+
+    // Initial positioning
+    requestAnimationFrame(() => {
+      const initialLink = rootUl.querySelector('a[aria-current="true"]') || rootUl.querySelector('a');
+      if (initialLink) {
+        updateMarker(initialLink, true);
+      }
+    });
+
+    window.addEventListener('resize', () => updateMarker(), { passive: true });
+    window.addEventListener('load', () => updateMarker(), { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTocSlider);
+  } else {
+    initTocSlider();
+  }
+  document.addEventListener('astro:page-load', initTocSlider);
+</script>

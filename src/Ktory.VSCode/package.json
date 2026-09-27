@@ -2,7 +2,7 @@
   "name": "ktory",
   "displayName": "Ktory — Script & Preview",
   "description": "Ktory syntax highlighting and offline, in-editor reading powered by the shared C# core.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "ktory",
   "icon": "icon.png",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -93,9 +93,10 @@
     "build": "node scripts/build.cjs",
     "clean": "node scripts/clean.cjs",
     "package": "node scripts/package.cjs",
-    "test": "node --test test/unit.test.cjs",
+    "test": "node --test test/unit.test.cjs test/packaging.test.cjs",
     "test:integration": "node test/run-integration.cjs",
-    "test:vsix": "node test/run-integration.cjs --vsix"
+    "test:vsix": "node test/run-integration.cjs --vsix",
+    "package:patch": "node scripts/package-patch.cjs"
   },
   "devDependencies": {
     "@vscode/vsce": "3.6.0",

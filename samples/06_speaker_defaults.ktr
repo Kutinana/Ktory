@@ -1,0 +1,24 @@
+// File-scoped defaults: arbitrary decorator names, overridden per dialogue.
+@defaultLang: zh
+@speaker alice: zh="爱丽丝" | en="Alice" | ja="アリス"
+  .emotion(normal).portrait(alice_normal).voice(soft)
+
+alice:
+  @zh: 这句使用 normal 和默认立绘。
+  @en: This line uses the normal expression and default portrait.
+  @ja: この文では通常の表情と既定の立ち絵を使います。
+
+alice:
+  @zh: 这句临时改成开心。
+  @en: This line overrides the expression and portrait.
+  @ja: この文だけ表情と立ち絵を変えます。
+  .emotion(happy).portrait(alice_happy)
+
+Alice:
+  @zh: 下一句恢复默认，名字别名同样适用。
+  @en: The next line restores the defaults, including through an alias.
+  @ja: 次の文では既定値に戻ります。別名でも同じです。
+
+#.sfx("wind.ogg").wait(1).next()
+
+: 修饰符的实际资源由宿主绑定。旁白不继承 speaker 默认值。

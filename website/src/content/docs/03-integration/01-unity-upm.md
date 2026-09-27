@@ -5,15 +5,13 @@ sidebar:
   order: 1
 ---
 
-> 本页遵循 [Ktory 设计原则](/01-overview/03-design-principles/)，实现边界与长期目标以该原则及其权威文档为准。
+Ktory 核心与 Unity 包分开组织。
 
-# Unity UPM 接入
+## 安装 UPM 包
 
-共享核心与 Unity 包分开组织。仓库的 `scripts/publish-upm.ps1` 将 `src/Ktory.Core` 源码、Unity 导入器与程序集定义合成 `com.ktory.unity`，发布到 `upm` 分支。
+使用 Package Manager，使用 "Add package from git URL ..." 添加 `"https://github.com/Kutinana/Ktory.git#upm"`。
 
-## 安装生成的包
-
-将以下依赖合并到工程的 `Packages/manifest.json`，保留已有依赖：
+或者将以下依赖合并到工程的 `Packages/manifest.json`，保留已有依赖：
 
 ```json
 {
@@ -22,8 +20,6 @@ sidebar:
   }
 }
 ```
-
-`#upm` 是方便跟随更新的浮动分支。跨设备复现或固定版本时，将片段换成**生成后的 UPM 包提交或该包的标签**，例如 `#<upm-package-commit>`；不要拿源代码 `main` 提交当作生成包。`?path=/src/Ktory.Core` 不是当前发布包入口。
 
 ## 核心调用顺序
 

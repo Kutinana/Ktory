@@ -136,6 +136,7 @@
       error.hidden = true;
       if (changedFile) el.sectionSelect.value = '';
       el.scriptInput.value = message.text;
+      document.dispatchEvent(new Event('ktory:source-changed'));
       updateLanguages(message.text);
       updateSectionSelector(message.text);
       entry.replaceChildren(...Array.from(el.sectionSelect.options, option => option.cloneNode(true)));

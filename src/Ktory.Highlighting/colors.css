@@ -1,0 +1,3 @@
+.ktr-token { color: var(--ktr-light); }
+:root[data-theme="dark"] .ktr-token, .theme-ink .ktr-token { color: var(--ktr-dark); }
+.ktr-comment { font-style: italic; }

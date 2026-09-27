@@ -5,10 +5,6 @@ sidebar:
   order: 2
 ---
 
-> 本页遵循 [Ktory 设计原则](/01-overview/03-design-principles/)，实现边界与长期目标以该原则及其权威文档为准。
-
-# C# 独立应用接入
-
 `Ktory.Core` 目标框架为 `netstandard2.1`，无外部 NuGet 依赖。宿主需提供兼容运行时；仓库的控制台式示例与 Web 工具使用 .NET 9。其他引擎可以探索接入，但核心可移植不代表对应适配已经交付。
 
 完整的手动控制台程序见 [快速上手](/01-overview/02-quickstart/)。核心调用契约如下：

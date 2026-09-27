@@ -89,6 +89,16 @@ exports.run = async () => {
   assert.equal(missing.snapshot.payload.speakerActualLanguage, 'ja');
   assert.equal(missing.snapshot.diagnostics.filter(item => item.kind === 256).length, 2);
 
+  await edit('@speaker alice: zh="Alice"\n  .emotion(normal).voice(soft)\nalice: first .emotion(happy)\nalice: second');
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  const defaultFirst = await waitFor(e => e?.snapshot?.payload?.content === 'first', 'speaker local override');
+  assert.equal(defaultFirst.snapshot.payload.tags.find(tag => tag.name === 'emotion').positionalArgs[0], 'happy');
+  // State arrives before the five-character typewriter finishes; a click during typing only fast-forwards.
+  await sleep(450);
+  await action({ action: 'advance', sessionId: defaultFirst.snapshot.sessionId, presentationId: defaultFirst.snapshot.presentationId });
+  const defaultSecond = await waitFor(e => e?.snapshot?.payload?.content === 'second', 'speaker default restored');
+  assert.equal(defaultSecond.snapshot.payload.tags.find(tag => tag.name === 'emotion').positionalArgs[0], 'normal');
+
   await edit('-> Missing');
   await vscode.commands.executeCommand('ktory.reloadPreview');
   await waitFor(e => e?.type === 'error' && e.version === document.version, 'parse error', true);
