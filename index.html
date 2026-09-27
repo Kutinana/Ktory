@@ -15,6 +15,7 @@
 
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="highlighting/colors.css" />
 </head>
 
 <body class="theme-ink font-serif font-size-md">
@@ -196,7 +197,10 @@
 
         <div class="drawer-form-group flex-1">
           <label for="scriptInput">脚本源码 (.ktr):</label>
-          <textarea id="scriptInput" class="drawer-textarea" spellcheck="false"></textarea>
+          <div class="source-editor">
+            <pre id="scriptHighlight" class="source-highlight" aria-hidden="true"></pre>
+            <textarea id="scriptInput" class="drawer-textarea" spellcheck="false" wrap="off"></textarea>
+          </div>
         </div>
 
         <div class="drawer-actions">
@@ -214,6 +218,9 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="highlighting/textmate.js"></script>
+  <script src="highlighting/oniguruma.js"></script>
+  <script type="module" src="editor-highlighting.mjs"></script>
   <!-- Optional WebAssembly Runtime (auto-boots on static hosts like Vercel / GitHub Pages) -->
   <script>
     (function () {

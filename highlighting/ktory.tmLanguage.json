@@ -1,0 +1,121 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "ktory",
+  "scopeName": "source.ktory",
+  "fileTypes": [
+    "ktr",
+    "ktory"
+  ],
+  "displayName": "Ktory",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.ktory",
+      "match": "//.*$"
+    },
+    {
+      "name": "string.quoted.double.ktory",
+      "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+    },
+    {
+      "name": "string.quoted.single.ktory",
+      "match": "(?<![\\p{L}\\p{N}])'(?:[^'\\\\]|\\\\.)*'"
+    },
+    {
+      "match": "^[ \\t]*((?i:@?defaultLang))([ \\t]*[:=])[ \\t]*([a-zA-Z0-9_-]+)",
+      "captures": {
+        "1": {
+          "name": "variable.language.metadata.ktory"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.ktory"
+        },
+        "3": {
+          "name": "constant.other.locale.ktory"
+        }
+      }
+    },
+    {
+      "begin": "^[ \\t]*(@speaker)(?:[ \\t]+([a-zA-Z0-9_-]+))?[ \\t]*([:：])",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.declaration.speaker.ktory"
+        },
+        "2": {
+          "name": "entity.name.type.speaker.ktory"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.ktory"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.ktory",
+          "match": "//.*$"
+        },
+        {
+          "name": "string.quoted.double.ktory",
+          "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+        },
+        {
+          "name": "string.quoted.single.ktory",
+          "match": "(?<![\\p{L}\\p{N}])'(?:[^'\\\\]|\\\\.)*'"
+        },
+        {
+          "match": "([a-zA-Z0-9_-]+)([ \\t]*[=:])",
+          "captures": {
+            "1": {
+              "name": "constant.other.locale.ktory"
+            },
+            "2": {
+              "name": "punctuation.separator.key-value.ktory"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "match": "^[ \\t]*(@[a-zA-Z0-9_-]+)([:：])",
+      "captures": {
+        "1": {
+          "name": "constant.other.locale.ktory"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.ktory"
+        }
+      }
+    },
+    {
+      "name": "keyword.control.section.ktory",
+      "match": "===.*?==="
+    },
+    {
+      "name": "keyword.control.flow.ktory",
+      "match": "(->|=>)"
+    },
+    {
+      "name": "entity.name.function.decorator.ktory",
+      "match": "\\.[a-zA-Z0-9_]+"
+    },
+    {
+      "match": "^[ \\t]*(#[a-zA-Z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.anchor.ktory"
+        }
+      }
+    },
+    {
+      "name": "string.quoted.choice.ktory",
+      "match": "\\[.*?\\]"
+    },
+    {
+      "name": "keyword.control.choice.ktory",
+      "match": "^\\s*[*+]"
+    },
+    {
+      "name": "entity.name.type.speaker.ktory",
+      "match": "^[ \\t]*[^\\s:：@#.*+=>-][^:：\\n]*(?=[:：])"
+    }
+  ]
+}

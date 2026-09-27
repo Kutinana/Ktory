@@ -118,6 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sampleKeys.length > 0) {
     state.currentSampleKey = sampleKeys[0];
     el.scriptInput.value = state.samples[state.currentSampleKey];
+    document.dispatchEvent(new Event('ktory:source-changed'));
     syncSampleSelect(state.currentSampleKey);
     updateSectionSelector(state.samples[state.currentSampleKey]);
     await startSession(state.samples[state.currentSampleKey], 'zh');
@@ -218,6 +219,7 @@ function setupEventListeners() {
     if (selected && state.samples[selected]) {
       state.currentSampleKey = selected;
       el.scriptInput.value = state.samples[selected];
+      document.dispatchEvent(new Event('ktory:source-changed'));
       syncSampleSelect(selected);
       updateSectionSelector(state.samples[selected]);
     }
@@ -244,6 +246,7 @@ function setupEventListeners() {
       try {
         const content = await file.text();
         el.scriptInput.value = content;
+        document.dispatchEvent(new Event('ktory:source-changed'));
         updateSectionSelector(content);
 
         // Extract title from comment or file name
@@ -668,6 +671,7 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
       if (sampleKeys.length > 0 && !state.payload) {
         state.currentSampleKey = sampleKeys[0];
         el.scriptInput.value = state.samples[state.currentSampleKey];
+        document.dispatchEvent(new Event('ktory:source-changed'));
         syncSampleSelect(state.currentSampleKey);
         startSession(state.samples[state.currentSampleKey], 'zh');
       }
