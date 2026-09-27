@@ -1,8 +1,8 @@
 {
   "name": "ktory",
-  "displayName": "Ktory — Script & Preview",
-  "description": "Ktory syntax highlighting and offline, in-editor reading powered by the shared C# core.",
-  "version": "0.1.1",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.1.2",
   "publisher": "ktory",
   "icon": "icon.png",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -14,6 +14,7 @@
   "engines": {
     "vscode": "^1.97.0"
   },
+  "l10n": "./l10n",
   "categories": [
     "Programming Languages",
     "Other"
@@ -58,16 +59,39 @@
         "path": "./syntaxes/ktory.tmLanguage.json"
       }
     ],
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "ktory.preview.uiLanguage": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "zh-cn",
+            "en",
+            "ja"
+          ],
+          "enumItemLabels": [
+            "%config.uiLanguage.auto%",
+            "%config.uiLanguage.zhCn%",
+            "%config.uiLanguage.en%",
+            "%config.uiLanguage.ja%"
+          ],
+          "default": "auto",
+          "description": "%config.uiLanguage.description%",
+          "scope": "window"
+        }
+      }
+    },
     "commands": [
       {
         "command": "ktory.openPreview",
-        "title": "Open Preview to the Side",
+        "title": "%command.openPreview%",
         "category": "Ktory",
         "icon": "$(open-preview)"
       },
       {
         "command": "ktory.reloadPreview",
-        "title": "Reload Preview from Editor",
+        "title": "%command.reloadPreview%",
         "category": "Ktory",
         "icon": "$(refresh)"
       }

@@ -19,10 +19,7 @@
   padding: 12px 16px; flex-wrap: wrap; gap: 10px;
 }
 .vscode-reader .nav-right { flex-wrap: wrap; gap: 8px; min-width: 0; }
-.vscode-reader .nav-divider { display: none; }
-.vscode-language { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.vscode-language label { display: flex; align-items: center; }
-.vscode-language select { width: 80px; }
+.vscode-reader .nav-divider, .vscode-reader #langSwitcher { display: none !important; }
 .vscode-reader .brand-logo { width: 28px; height: 28px; }
 .vscode-reader .brand-title { font-size: 18px; }
 .vscode-reader .app-layout { height: 100vh; display: flex; flex-direction: column; background: var(--bg-app); }
@@ -31,19 +28,185 @@
 .vscode-reader .floating-dock { width: calc(100% - 24px); bottom: 12px; }
 .vscode-reader .dock-content { flex-wrap: wrap; gap: 8px; }
 .vscode-reader .dock-center { display: none; }
-.vscode-toolbar { flex: 0 0 auto; min-width: 0; padding: 12px 16px; border-bottom: 1px solid var(--vscode-panel-border, #444); font: 12px/1.5 var(--vscode-font-family, sans-serif); }
-.vscode-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.vscode-controls button, .vscode-controls select, .vscode-language select {
-  padding: 5px 8px; border: 1px solid var(--vscode-input-border, #666); border-radius: 3px;
-  color: var(--vscode-input-foreground, #ddd); background: var(--vscode-input-background, #333); font: inherit;
+
+/* Refined, modern toolbar */
+.vscode-toolbar {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 8px 16px;
+  background: var(--vscode-editorWidget-background, rgba(30, 30, 30, 0.45));
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.08));
+  font: 12px/1.4 var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
 }
-.vscode-entry { display: flex; flex: 1 1 220px; align-items: center; gap: 8px; min-width: 0; }
-.vscode-entry label { flex: 0 0 auto; }
-.vscode-entry select { flex: 1; min-width: 0; width: 100%; }
-#vscodeSource { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vscode-controls button { cursor: pointer; }
-.vscode-controls button:disabled { opacity: .5; cursor: default; }
-.vscode-controls :focus-visible, .vscode-language :focus-visible { outline: 1px solid var(--vscode-focusBorder, #8ad); }
-#vscodeStatus { margin: 10px 0 4px; overflow-wrap: anywhere; }
-.vscode-note { color: var(--vscode-descriptionForeground, #aaa); margin: 0; }
-#vscodeError { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; color: var(--vscode-errorForeground, #f88); margin-bottom: 0; }
+.vscode-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.vscode-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.vscode-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* File badge button */
+#vscodeSource {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--vscode-badge-background, rgba(255, 255, 255, 0.06));
+  color: var(--vscode-editor-foreground, #ddd);
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  max-width: 240px;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#vscodeSource .file-icon {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+#vscodeSource .vscode-source-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#vscodeSource .vscode-source-dirty {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+  font-size: 10px;
+  line-height: 1;
+}
+#vscodeSource:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.12));
+  border-color: var(--vscode-focusBorder, rgba(255, 255, 255, 0.25));
+  color: #fff;
+  transform: translateY(-0.5px);
+}
+#vscodeSource:active {
+  transform: translateY(0);
+}
+
+/* Script Language dropdown pill */
+.vscode-language {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  transition: all 0.18s ease;
+}
+.vscode-language:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.vscode-language label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--vscode-descriptionForeground, #aaa);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  flex: 0 0 auto;
+}
+.vscode-language label svg {
+  opacity: 0.8;
+}
+.vscode-language select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--vscode-dropdown-foreground, #ddd);
+  font: inherit;
+  font-weight: 500;
+  font-size: 11px;
+  padding: 1px 16px 1px 4px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 2px center;
+}
+.vscode-language select option {
+  background: var(--vscode-dropdown-background, #252526);
+  color: var(--vscode-dropdown-foreground, #ccc);
+}
+
+/* Reload button */
+#vscodeReload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--vscode-button-secondaryBackground, rgba(255, 255, 255, 0.07));
+  color: var(--vscode-button-secondaryForeground, #ddd);
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.14));
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#vscodeReload .reload-icon {
+  flex: 0 0 auto;
+  transition: transform 0.3s ease;
+}
+#vscodeReload:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(255, 255, 255, 0.13));
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+#vscodeReload:hover:not(:disabled) .reload-icon {
+  transform: rotate(45deg);
+}
+#vscodeReload:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+#vscodeReload:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#vscodeReload.is-outdated {
+  border-color: var(--vscode-focusBorder, #007acc);
+  background: rgba(0, 122, 204, 0.15);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(0, 122, 204, 0.25);
+}
+
+#vscodeSource:focus-visible, .vscode-language:focus-within, #vscodeReload:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: 1px;
+}
+
+#vscodeError {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: rgba(255, 85, 85, 0.1);
+  border: 1px solid rgba(255, 85, 85, 0.3);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+  color: var(--vscode-errorForeground, #ff6b6b);
+}

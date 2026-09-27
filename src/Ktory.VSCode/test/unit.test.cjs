@@ -80,7 +80,12 @@ test('the staged extension includes current runtime sources and no build tooling
   const manifest = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
   assert.equal(manifest.scripts, undefined);
   assert.equal(manifest.devDependencies, undefined);
-  for (const file of ['extension.js', 'webview.js', 'webview.css', 'LICENSE.txt', 'syntaxes/ktory.tmLanguage.json']) {
+  for (const file of [
+    'extension.js', 'webview.js', 'webview.css', 'LICENSE.txt', 'syntaxes/ktory.tmLanguage.json',
+    'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
+    'package.nls.json', 'package.nls.zh-cn.json', 'package.nls.ja.json',
+    'l10n/bundle.l10n.json', 'l10n/bundle.l10n.zh-cn.json', 'l10n/bundle.l10n.ja.json'
+  ]) {
     assert.equal(fs.readFileSync(path.join(extensionRoot, file), 'utf8'), fs.readFileSync(path.join(root, file), 'utf8'));
   }
   for (const directory of ['node_modules', 'scripts', 'test']) {
@@ -88,6 +93,29 @@ test('the staged extension includes current runtime sources and no build tooling
   }
   assert.equal(fs.existsSync(buildRoot), false, 'temporary publish output is cleaned after building');
   assert.equal(fs.existsSync(path.join(root, 'reader')), false, 'generated Reader stays outside the source tree');
+});
+
+test('the extension contributes localization files and bundles for zh-cn, en, and ja', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(manifest.l10n, './l10n');
+  assert.ok(manifest.contributes.configuration);
+  assert.ok(manifest.contributes.configuration.properties['ktory.preview.uiLanguage']);
+
+  const nlsEn = JSON.parse(fs.readFileSync(path.join(root, 'package.nls.json'), 'utf8'));
+  const nlsZh = JSON.parse(fs.readFileSync(path.join(root, 'package.nls.zh-cn.json'), 'utf8'));
+  const nlsJa = JSON.parse(fs.readFileSync(path.join(root, 'package.nls.ja.json'), 'utf8'));
+  for (const key of Object.keys(nlsEn)) {
+    assert.ok(nlsZh[key], `missing zh-cn nls key: ${key}`);
+    assert.ok(nlsJa[key], `missing ja nls key: ${key}`);
+  }
+
+  const l10nEn = JSON.parse(fs.readFileSync(path.join(root, 'l10n/bundle.l10n.json'), 'utf8'));
+  const l10nZh = JSON.parse(fs.readFileSync(path.join(root, 'l10n/bundle.l10n.zh-cn.json'), 'utf8'));
+  const l10nJa = JSON.parse(fs.readFileSync(path.join(root, 'l10n/bundle.l10n.ja.json'), 'utf8'));
+  for (const key of Object.keys(l10nEn)) {
+    assert.ok(l10nZh[key], `missing zh-cn l10n key: ${key}`);
+    assert.ok(l10nJa[key], `missing ja l10n key: ${key}`);
+  }
 });
 
 test('the package manifest declares an icon file that exists on disk', () => {

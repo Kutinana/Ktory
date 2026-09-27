@@ -1,0 +1,12 @@
+{
+  "extension.displayName": "Ktory — スクリプトとプレビュー",
+  "extension.description": "Ktory 構文ハイライトと共有 C# コアによるオフラインエディタ内プレビュー。",
+  "command.openPreview": "プレビューを横に開く",
+  "command.reloadPreview": "エディタからプレビューを再読み込み",
+  "config.title": "Ktory",
+  "config.uiLanguage.description": "Ktory 拡張およびプレビューパネルの UI 表示言語（脚本の対話言語とは独立）。",
+  "config.uiLanguage.auto": "自動（VS Code の表示言語に従う）",
+  "config.uiLanguage.zhCn": "簡体字中国語 (简体中文)",
+  "config.uiLanguage.en": "英語 (English)",
+  "config.uiLanguage.ja": "日本語"
+}

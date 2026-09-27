@@ -6,19 +6,40 @@ function escapeAttribute(value) {
   return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function l10nText(message, ...args) {
+  if (vscode.l10n && typeof vscode.l10n.t === 'function') {
+    return vscode.l10n.t(message, ...args);
+  }
+  return message;
+}
+
+function getEffectiveUiLocale() {
+  const config = vscode.workspace.getConfiguration('ktory');
+  const configured = config.get('preview.uiLanguage', 'auto');
+  if (configured && configured !== 'auto') {
+    return configured.toLowerCase();
+  }
+  const lang = (vscode.env.language || 'en').toLowerCase();
+  if (lang.startsWith('zh')) return 'zh-cn';
+  if (lang.startsWith('ja')) return 'ja';
+  return 'en';
+}
+
 function previewHtml(webview, extensionUri) {
   const readerUri = vscode.Uri.joinPath(extensionUri, 'reader');
   const resource = (...parts) => escapeAttribute(webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, ...parts)).toString());
   const csp = escapeAttribute(webview.cspSource);
+  const uiLocale = getEffectiveUiLocale();
   let html = fs.readFileSync(vscode.Uri.joinPath(readerUri, 'index.html').fsPath, 'utf8');
   // No CDN, server or second copy of the reader UI. All runtime assets ship in the VSIX.
   html = html.replace(/<link\b[^>]*href="https:[^>]*>/g, '');
   html = html.replace(/<script>[\s\S]*?<\/script>/g, '');
   html = html.replace(/\b(src|href)="(app\.js|style\.css|favicon\.ico|ktory_logo\.webp|editor-highlighting\.mjs|highlighting\/[\w.-]+)"/g,
     (_, attribute, file) => `${attribute}="${resource('reader', file)}"`);
+  html = html.replace(/<html\b[^>]*>/, `<html lang="${escapeAttribute(uiLocale)}">`);
   html = html.replace('<head>', `<head>
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${csp} data:; style-src ${csp} 'unsafe-inline'; font-src ${csp}; script-src ${csp} 'wasm-unsafe-eval'; connect-src ${csp}; worker-src ${csp} blob:;">
-    <script src="${resource('webview.js')}" data-reader-root="${resource('reader')}"></script>`);
+    <script src="${resource('webview.js')}" data-reader-root="${resource('reader')}" data-ui-locale="${escapeAttribute(uiLocale)}"></script>`);
   // Load host styles after the shared stylesheet.
   html = html.replace('</head>', `<link rel="stylesheet" href="${resource('webview.css')}"></head>`);
   html = html.replace('</body>', `<script src="${resource('reader', '_framework', 'blazor.webassembly.js')}" autostart="false"></script></body>`);
@@ -32,13 +53,15 @@ function activate(context) {
   let revision = 0;
   let lastEvent;
   let disposed = false;
-  const output = vscode.window.createOutputChannel('Ktory Preview');
+  const output = vscode.window.createOutputChannel(l10nText('Ktory Preview'));
   const diagnostics = vscode.languages.createDiagnosticCollection('ktory-preview');
 
   async function sendDocument() {
     if (!panel || !document || !ready) return;
     if (document.isClosed && document.uri.scheme === 'untitled') {
-      vscode.window.showInformationMessage('The unsaved source document is closed. Open a .ktr document to start another preview.');
+      vscode.window.showInformationMessage(
+        l10nText('The unsaved source document is closed. Open a .ktr document to start another preview.')
+      );
       return;
     }
     // Reopen by URI so a closed editor, Save As or external edit cannot leave a stale buffer.
@@ -58,10 +81,14 @@ function activate(context) {
 
   async function openPreview(uri) {
     const candidate = uri || vscode.window.activeTextEditor?.document.uri || document?.uri;
-    if (!candidate) { vscode.window.showInformationMessage('Open a .ktr file before starting Ktory Preview.'); return; }
+    if (!candidate) {
+      vscode.window.showInformationMessage(l10nText('Open a .ktr file before starting Ktory Preview.'));
+      return;
+    }
     const next = await vscode.workspace.openTextDocument(candidate);
     if (next.languageId !== 'ktory' && !/\.(ktr|ktory)$/i.test(next.uri.path)) {
-      vscode.window.showInformationMessage('Ktory Preview reads .ktr and .ktory documents.'); return;
+      vscode.window.showInformationMessage(l10nText('Ktory Preview reads .ktr and .ktory documents.'));
+      return;
     }
     document = next;
     if (panel) {
@@ -69,7 +96,7 @@ function activate(context) {
       await sendDocument();
       return;
     }
-    panel = vscode.window.createWebviewPanel('ktory.preview', 'Ktory Preview',
+    panel = vscode.window.createWebviewPanel('ktory.preview', l10nText('Ktory Preview'),
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
         enableScripts: true, retainContextWhenHidden: true,
         localResourceRoots: [context.extensionUri], enableCommandUris: false
@@ -118,6 +145,11 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('ktory.openPreview', openPreview),
     vscode.commands.registerCommand('ktory.reloadPreview', () => panel ? sendDocument() : openPreview()),
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('ktory.preview.uiLanguage') && panel) {
+        panel.webview.postMessage({ type: 'ui-locale', locale: getEffectiveUiLocale() });
+      }
+    }),
     vscode.workspace.onDidChangeTextDocument(event => {
       if (document?.uri.toString() !== event.document.uri.toString() || !event.contentChanges.length) return;
       document = event.document;
@@ -130,4 +162,4 @@ function activate(context) {
   return { get panel() { return panel; }, get lastEvent() { return lastEvent; }, diagnostics };
 }
 
-module.exports = { activate, previewHtml };
+module.exports = { activate, previewHtml, getEffectiveUiLocale };

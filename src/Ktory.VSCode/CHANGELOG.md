@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Support multi-language UI in the VS Code extension for English, Simplified Chinese, and Japanese (`en`, `zh-cn`, `ja`).
+- Decouple extension UI language from script dialogue language: UI language is strictly controlled via `ktory.preview.uiLanguage`, while dialogue language is switched in the preview toolbar.
+- Streamline preview toolbar: remove entry section selector to default to the story start, and remove redundant version/disclaimer text.
+- Rebuild toolbar layout: filename badge with dirty status indicator on the far left, script language dropdown on the left, and reload button on the right.
+- Redesign toolbar visual styling with modern translucent capsule containers, vector icons, hover transitions, and VS Code theme integration.
+- Add multilingual README documentation (`README.zh-CN.md` and `README.ja.md`).
+
 ## 0.1.1
 
 - Support file-scoped speaker default decorators and whole-group per-dialogue overrides through the shared core.

@@ -1,0 +1,12 @@
+{
+  "extension.displayName": "Ktory — 剧本与试读",
+  "extension.description": "Ktory 语法高亮与基于共享 C# 核心的离线编辑器内试读。",
+  "command.openPreview": "在侧边打开试读",
+  "command.reloadPreview": "从编辑器重新载入试读",
+  "config.title": "Ktory",
+  "config.uiLanguage.description": "Ktory 扩展与试读面板的界面 UI 语言（独立于剧本对白显示语言）。",
+  "config.uiLanguage.auto": "自动（跟随 VS Code 界面语言）",
+  "config.uiLanguage.zhCn": "简体中文",
+  "config.uiLanguage.en": "英语 (English)",
+  "config.uiLanguage.ja": "日语 (日本語)"
+}

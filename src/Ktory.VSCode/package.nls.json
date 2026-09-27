@@ -1,0 +1,12 @@
+{
+  "extension.displayName": "Ktory — Script & Preview",
+  "extension.description": "Ktory syntax highlighting and offline, in-editor reading powered by the shared C# core.",
+  "command.openPreview": "Open Preview to the Side",
+  "command.reloadPreview": "Reload Preview from Editor",
+  "config.title": "Ktory",
+  "config.uiLanguage.description": "UI language for the Ktory preview panel and extension interface (distinct from script dialogue language).",
+  "config.uiLanguage.auto": "Auto (Follow VS Code)",
+  "config.uiLanguage.zhCn": "Simplified Chinese (简体中文)",
+  "config.uiLanguage.en": "English",
+  "config.uiLanguage.ja": "Japanese (日本語)"
+}
