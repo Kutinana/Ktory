@@ -107,7 +107,39 @@
     },
     {
       "name": "string.quoted.choice.ktory",
-      "match": "\\[.*?\\]"
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.ktory"
+        }
+      },
+      "end": "\\]",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.ktory"
+        }
+      },
+      "patterns": [
+        {
+          "match": "(@[a-zA-Z0-9_-]+)([ \\t]*[:：])",
+          "captures": {
+            "1": {
+              "name": "constant.other.locale.ktory"
+            },
+            "2": {
+              "name": "punctuation.separator.key-value.ktory"
+            }
+          }
+        },
+        {
+          "name": "string.quoted.double.ktory",
+          "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+        },
+        {
+          "name": "string.quoted.single.ktory",
+          "match": "(?<![\\p{L}\\p{N}])'(?:[^'\\\\]|\\\\.)*'"
+        }
+      ]
     },
     {
       "name": "keyword.control.choice.ktory",
@@ -115,7 +147,7 @@
     },
     {
       "name": "entity.name.type.speaker.ktory",
-      "match": "^[ \\t]*[^\\s:：@#.*+=>-][^:：\\n]*(?=[:：])"
+      "match": "^[ \\t]*[^\\s:：@#.*+=>\\[\\]-][^:：\\n]*(?=[:：])"
     }
   ]
 }

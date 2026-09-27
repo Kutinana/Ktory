@@ -967,7 +967,10 @@ function updateState(serverState, isLanguageSwitch = false) {
   renderDiagnostics();
   state.autoPolicy = serverState.autoPolicy || serverState.payload?.autoPolicy || null;
 
-  if (el.dockLocaleTag) el.dockLocaleTag.textContent = (serverState.payload?.actualLanguage || state.requestedLocale || 'ZH').toUpperCase();
+  if (el.dockLocaleTag) {
+    const act = serverState.payload?.actualLanguage;
+    el.dockLocaleTag.textContent = act ? act.toUpperCase() : 'RAW';
+  }
 
   updateDockStatus(state.status);
 
@@ -1723,10 +1726,10 @@ function tokenizeHtml(html) {
   return tokens;
 }
 
-function estimateReadingTime(text, lang = 'zh') {
+function estimateReadingTime(text, lang = null) {
   if (!text) return 1.0;
   const l = (lang || '').toLowerCase();
-  if (l.startsWith('zh') || l.startsWith('ja')) {
+  if (l.startsWith('zh') || l.startsWith('ja') || (!l && /[\u4e00-\u9fff\u3040-\u30ff]/.test(text))) {
     return Math.max(1.0, text.length / 7.0);
   }
   const words = text.trim().split(/\s+/).length;
