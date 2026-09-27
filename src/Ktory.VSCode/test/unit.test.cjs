@@ -43,6 +43,12 @@ test('the contributed TextMate grammar highlights a representative .ktr document
     assert.ok(!scopes.includes('keyword.declaration.speaker.ktory'));
     assert.ok(!scopes.includes('entity.name.type.speaker.ktory'));
   }
+  for (const line of ['  * [@zh: "继续"]', '    [@en: "Continue"]', '    [@ja: 続ける]']) {
+    const scopes = grammar.tokenizeLine(line, tm.INITIAL).tokens.flatMap(token => token.scopes);
+    assert.ok(scopes.includes('string.quoted.choice.ktory'), `${line} must be scoped as choice`);
+    assert.ok(scopes.includes('constant.other.locale.ktory'), `${line} must recognize locale tag`);
+    assert.ok(!scopes.includes('entity.name.type.speaker.ktory'), `${line} must not be misidentified as speaker`);
+  }
   assert.ok(scopeAt(declaration.indexOf('zh=')).includes('constant.other.locale.ktory'));
   const anonymous = '#.sfx("wind.ogg").wait(1).next()';
   const anonymousTokens = grammar.tokenizeLine(anonymous, tm.INITIAL).tokens;

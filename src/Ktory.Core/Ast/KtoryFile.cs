@@ -6,7 +6,9 @@ namespace Ktory.Core.Ast
 {
     public class KtoryFile
     {
-        public string DefaultLang { get; set; } = "zh";
+        public string? DefaultLang { get; set; } = null;
+        public bool HasExplicitDefaultLang { get; set; }
+        public bool HasLocalization { get; set; }
         public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, KtoryBlock> Blocks { get; set; } = new Dictionary<string, KtoryBlock>(StringComparer.OrdinalIgnoreCase);
         public KtoryBlock RootBlock { get; set; } = new KtoryBlock("root", isRoot: true);
@@ -38,7 +40,7 @@ namespace Ktory.Core.Ast
             Speakers.Add(speaker);
         }
 
-        public string? ResolveSpeaker(string? rawSpeaker, string requestedLocale, string defaultLocale)
+        public string? ResolveSpeaker(string? rawSpeaker, string? requestedLocale, string? defaultLocale)
         {
             if (string.IsNullOrEmpty(rawSpeaker)) return null;
 

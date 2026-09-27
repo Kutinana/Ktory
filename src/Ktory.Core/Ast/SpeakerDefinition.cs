@@ -29,13 +29,13 @@ namespace Ktory.Core.Ast
         /// </summary>
         public Dictionary<string, string> DisplayNames { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        public string GetDisplayName(string requestedLocale, string defaultLocale)
+        public string GetDisplayName(string? requestedLocale, string? defaultLocale)
             => GetDisplayName(requestedLocale, defaultLocale, out _, out _);
 
-        public string GetDisplayName(string requestedLocale, string defaultLocale, out string? actualLocale)
+        public string GetDisplayName(string? requestedLocale, string? defaultLocale, out string? actualLocale)
             => GetDisplayName(requestedLocale, defaultLocale, out actualLocale, out _);
 
-        internal string GetDisplayName(string requestedLocale, string defaultLocale, out string? actualLocale, out bool usedAvailableFallback)
+        internal string GetDisplayName(string? requestedLocale, string? defaultLocale, out string? actualLocale, out bool usedAvailableFallback)
         {
             var name = LocalizedValueSelector.Select(DisplayNames, requestedLocale, defaultLocale, out var selectedLocale, out usedAvailableFallback);
             actualLocale = string.IsNullOrEmpty(name) ? null : selectedLocale;

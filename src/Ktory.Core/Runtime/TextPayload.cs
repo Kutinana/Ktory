@@ -23,13 +23,14 @@ namespace Ktory.Core.Runtime
 
         /// <summary>
         /// The actual language of the content (after fallback if requested was missing).
+        /// Null for unlocalized content when script has no @defaultLang and no @locale.
         /// </summary>
-        public string ActualLanguage { get; set; } = string.Empty;
+        public string? ActualLanguage { get; set; }
 
         /// <summary>
         /// The locale that was originally requested by host/session.
         /// </summary>
-        public string RequestedLanguage { get; set; } = string.Empty;
+        public string? RequestedLanguage { get; set; }
 
         public IReadOnlyList<TagData> Tags { get; set; } = Array.Empty<TagData>();
 
@@ -45,7 +46,8 @@ namespace Ktory.Core.Runtime
                 return $"[Directive #{Content}] ({Tags.Count} tags)";
             }
             var sp = IsNarration ? "Narration" : Speaker;
-            return $"[{ActualLanguage}] {sp}: {Content}";
+            var lang = ActualLanguage ?? "unlocalized";
+            return $"[{lang}] {sp}: {Content}";
         }
     }
 }

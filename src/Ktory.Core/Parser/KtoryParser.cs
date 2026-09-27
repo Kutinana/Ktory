@@ -50,6 +50,7 @@ namespace Ktory.Core.Parser
                 if (match.Success)
                 {
                     file.DefaultLang = match.Groups[1].Value;
+                    file.HasExplicitDefaultLang = true;
                     index++;
                 }
                 else
@@ -108,6 +109,11 @@ namespace Ktory.Core.Parser
                 }
             }
 
+            if (!file.HasExplicitDefaultLang)
+            {
+                file.DefaultLang = file.HasLocalization ? "zh" : null;
+            }
+
             return file;
         }
 
@@ -158,7 +164,7 @@ namespace Ktory.Core.Parser
             }
 
             // 4. Text dialogue or narration (including ? {expr} guard)
-            return ParseTextStep(lines, ref index, file.DefaultLang);
+            return ParseTextStep(lines, ref index, file);
         }
 
         private static string Unquote(string str)
@@ -224,6 +230,7 @@ namespace Ktory.Core.Parser
 
                 speakerDef.DisplayNames[lang] = val;
                 speakerDef.Aliases.Add(val);
+                file.HasLocalization = true;
             }
 
             if (speakerDef.DisplayNames.Count == 0)
@@ -247,11 +254,12 @@ namespace Ktory.Core.Parser
             file.AddSpeaker(speakerDef);
         }
 
-        private static void ParseOptionLabelVariant(string rawLabel, ContainerItem item, string defaultLang, int lineNumber)
+        private static void ParseOptionLabelVariant(string rawLabel, ContainerItem item, KtoryFile file, int lineNumber)
         {
             var match = OptionVariantRegex.Match(rawLabel);
             if (match.Success)
             {
+                file.HasLocalization = true;
                 string locale = match.Groups[1].Value.Trim();
                 string text = match.Groups[2].Value.Trim();
                 text = Unquote(text);
@@ -260,7 +268,7 @@ namespace Ktory.Core.Parser
             else
             {
                 string text = Unquote(rawLabel);
-                item.LabelVariants[defaultLang] = TextDesugarer.Desugar(text, lineNumber);
+                item.LabelVariants[""] = TextDesugarer.Desugar(text, lineNumber);
             }
         }
 
@@ -411,7 +419,7 @@ namespace Ktory.Core.Parser
                 if (labelStart >= 0 && labelEnd > labelStart)
                 {
                     string rawLabel = content.Substring(labelStart + 1, labelEnd - labelStart - 1).Trim();
-                    ParseOptionLabelVariant(rawLabel, item, file.DefaultLang, line.LineNumber);
+                    ParseOptionLabelVariant(rawLabel, item, file, line.LineNumber);
                     content = content.Substring(labelEnd + 1).Trim();
                 }
                 else
@@ -453,7 +461,7 @@ namespace Ktory.Core.Parser
                     if (childLine.Text.StartsWith("[") && childLine.Text.EndsWith("]"))
                     {
                         string inside = childLine.Text.Substring(1, childLine.Text.Length - 2).Trim();
-                        ParseOptionLabelVariant(inside, item, file.DefaultLang, childLine.LineNumber);
+                        ParseOptionLabelVariant(inside, item, file, childLine.LineNumber);
                         index++;
                         continue;
                     }
@@ -492,7 +500,7 @@ namespace Ktory.Core.Parser
             return item;
         }
 
-        private TextStep ParseTextStep(List<SourceLine> lines, ref int index, string defaultLang)
+        private TextStep ParseTextStep(List<SourceLine> lines, ref int index, KtoryFile file)
         {
             var line = lines[index];
             int lineIndent = line.Indent;
@@ -543,7 +551,7 @@ namespace Ktory.Core.Parser
                 // Check if content ends with decorators, e.g. "Some text .emotion(smile)"
                 // Note: decorators must be separated by whitespace and start with .tag
                 ExtractTrailingTags(ref content, textStep.Tags);
-                textStep.TextVariants[defaultLang] = TextDesugarer.Desugar(content, line.LineNumber);
+                textStep.TextVariants[""] = TextDesugarer.Desugar(content, line.LineNumber);
             }
 
             index++;
@@ -562,6 +570,7 @@ namespace Ktory.Core.Parser
                 var locMatch = LocaleVariantRegex.Match(nextLine.Text);
                 if (locMatch.Success)
                 {
+                    file.HasLocalization = true;
                     string locale = locMatch.Groups[1].Value.Trim();
                     string locContent = locMatch.Groups[2].Value.Trim();
                     ExtractTrailingTags(ref locContent, textStep.Tags);

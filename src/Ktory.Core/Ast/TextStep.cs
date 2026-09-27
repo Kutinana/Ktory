@@ -18,11 +18,14 @@ namespace Ktory.Core.Ast
 
         public bool IsNarration => string.IsNullOrWhiteSpace(Speaker);
 
-        public string GetText(string requestedLocale, string defaultLocale, out string actualLocale)
-            => GetText(requestedLocale, defaultLocale, out actualLocale, out _);
+        public string GetText(string? requestedLocale, string? defaultLocale, out string? actualLocale)
+            => GetText(requestedLocale, defaultLocale, out actualLocale, out _, out _);
 
-        internal string GetText(string requestedLocale, string defaultLocale, out string actualLocale, out bool usedAvailableFallback)
-            => LocalizedValueSelector.Select(TextVariants, requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback);
+        internal string GetText(string? requestedLocale, string? defaultLocale, out string? actualLocale, out bool usedAvailableFallback)
+            => GetText(requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback, out _);
+
+        internal string GetText(string? requestedLocale, string? defaultLocale, out string? actualLocale, out bool usedAvailableFallback, out bool usedUnlocalizedLiteral)
+            => LocalizedValueSelector.Select(TextVariants, requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback, out usedUnlocalizedLiteral);
 
         public override string ToString()
         {

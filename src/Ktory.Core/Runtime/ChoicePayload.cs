@@ -8,8 +8,8 @@ namespace Ktory.Core.Runtime
     {
         public string Id { get; set; } = string.Empty;
         public int LineNumber { get; set; }
-        public string ActualLanguage { get; set; } = string.Empty;
-        public string RequestedLanguage { get; set; } = string.Empty;
+        public string? ActualLanguage { get; set; }
+        public string? RequestedLanguage { get; set; }
         public string Label { get; set; } = string.Empty;
         public char Marker { get; set; } = '*';
         public bool IsConsumed { get; set; }

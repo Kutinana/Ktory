@@ -106,6 +106,69 @@ public class LocalizationFallbackTests
         Assert.Null(actual);
     }
 
+    [Fact]
+    public void UnlocalizedScript_WithoutDefaultLangOrLocale_OutputsNullActualLanguageAndNoWarnings()
+    {
+        const string source = "Alice: Hello world\n#choice\n  * [Continue]\n    : branch";
+        var file = KtoryParser.Parse(source);
+        Assert.Null(file.DefaultLang);
+        Assert.False(file.HasExplicitDefaultLang);
+        Assert.False(file.HasLocalization);
+
+        var seq = new KtorySequencer(file);
+        var warnings = ObserveWarnings(seq);
+        seq.Start();
+
+        Assert.Equal("Hello world", seq.CurrentPayload!.Content);
+        Assert.Null(seq.CurrentPayload.ActualLanguage);
+        Assert.Null(seq.CurrentPayload.SpeakerActualLanguage);
+        Assert.Equal("zh", seq.CurrentPayload.RequestedLanguage);
+        Assert.Empty(warnings);
+
+        seq.Step();
+        var opt = Assert.Single(seq.CurrentChoice!.Options);
+        Assert.Equal("Continue", opt.Label);
+        Assert.Null(opt.ActualLanguage);
+        Assert.Empty(warnings);
+
+        seq.SetLanguage("en");
+        Assert.Equal("Continue", seq.CurrentChoice.Options[0].Label);
+        Assert.Null(seq.CurrentChoice.Options[0].ActualLanguage);
+        Assert.Empty(warnings);
+
+        seq.SubmitChoice(opt.Id);
+        Assert.Equal("branch", seq.CurrentPayload.Content);
+        Assert.Null(seq.CurrentPayload.ActualLanguage);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void ScriptWithLocale_WithoutDefaultLang_PreservesBackwardCompatibleZhDefault()
+    {
+        const string source = "Alice:\n  @en: Hello\n  @zh: 你好";
+        var file = KtoryParser.Parse(source);
+        Assert.Equal("zh", file.DefaultLang);
+        Assert.False(file.HasExplicitDefaultLang);
+        Assert.True(file.HasLocalization);
+
+        var seq = new KtorySequencer(file);
+        seq.Start(requestedLocale: "en");
+        Assert.Equal("en", seq.CurrentPayload!.ActualLanguage);
+    }
+
+    [Fact]
+    public void ScriptWithExplicitDefaultLang_OutputsDeclaredLanguage()
+    {
+        const string source = "@defaultLang: en\nAlice: Hello";
+        var file = KtoryParser.Parse(source);
+        Assert.Equal("en", file.DefaultLang);
+        Assert.True(file.HasExplicitDefaultLang);
+
+        var seq = new KtorySequencer(file);
+        seq.Start();
+        Assert.Equal("en", seq.CurrentPayload!.ActualLanguage);
+    }
+
     private static List<ExecutionTrace> ObserveWarnings(KtorySequencer seq)
     {
         var result = new List<ExecutionTrace>();

@@ -1212,14 +1212,14 @@ namespace Ktory.Core.Tests
             string script1 = @": 请打开 .ktr 文件。";
             var file1 = KtoryParser.Parse(script1);
             var step1 = Assert.IsType<TextStep>(file1.RootBlock.Steps[0]);
-            Assert.Equal("请打开 .ktr 文件。", step1.TextVariants["zh"]);
+            Assert.Equal("请打开 .ktr 文件。", step1.TextVariants[""]);
             Assert.Empty(step1.Tags);
 
             // Case 2: Extension in middle followed by genuine trailing tag
             string script2 = @": 请打开 .ktr 文件。 .wait(2)";
             var file2 = KtoryParser.Parse(script2);
             var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
-            Assert.Equal("请打开 .ktr 文件。", step2.TextVariants["zh"]);
+            Assert.Equal("请打开 .ktr 文件。", step2.TextVariants[""]);
             Assert.Single(step2.Tags);
             Assert.Equal("wait", step2.Tags[0].Name);
             Assert.Equal(2L, step2.Tags[0].PositionalArgs[0]);
@@ -1228,7 +1228,7 @@ namespace Ktory.Core.Tests
             string script3 = @": 请查看config.ktr文件";
             var file3 = KtoryParser.Parse(script3);
             var step3 = Assert.IsType<TextStep>(file3.RootBlock.Steps[0]);
-            Assert.Equal("请查看config.ktr文件", step3.TextVariants["zh"]);
+            Assert.Equal("请查看config.ktr文件", step3.TextVariants[""]);
             Assert.Empty(step3.Tags);
         }
 
@@ -1239,13 +1239,13 @@ namespace Ktory.Core.Tests
             string script = @": 文档地址 https://example.com/guide // 真实注释";
             var file = KtoryParser.Parse(script);
             var step = Assert.IsType<TextStep>(file.RootBlock.Steps[0]);
-            Assert.Equal("文档地址 https://example.com/guide", step.TextVariants["zh"]);
+            Assert.Equal("文档地址 https://example.com/guide", step.TextVariants[""]);
 
             // http and file URLs
             string script2 = @": 下载地址 http://ktory.org 以及 file:///root/doc";
             var file2 = KtoryParser.Parse(script2);
             var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
-            Assert.Equal("下载地址 http://ktory.org 以及 file:///root/doc", step2.TextVariants["zh"]);
+            Assert.Equal("下载地址 http://ktory.org 以及 file:///root/doc", step2.TextVariants[""]);
         }
 
         [Fact]
@@ -1256,7 +1256,7 @@ namespace Ktory.Core.Tests
             var file1 = KtoryParser.Parse(script1);
             var step1 = Assert.IsType<TextStep>(file1.RootBlock.Steps[0]);
             Assert.Equal("Alice", step1.Speaker);
-            Assert.Equal("I'm ready.", step1.TextVariants["zh"]);
+            Assert.Equal("I'm ready.", step1.TextVariants[""]);
             Assert.Single(step1.Tags);
             Assert.Equal("emotion", step1.Tags[0].Name);
             Assert.Equal("smile", step1.Tags[0].PositionalArgs[0]);
@@ -1265,7 +1265,7 @@ namespace Ktory.Core.Tests
             string script2 = @": It's Bob's turn, don't rush. .wait(1) .sfx('chime')";
             var file2 = KtoryParser.Parse(script2);
             var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
-            Assert.Equal("It's Bob's turn, don't rush.", step2.TextVariants["zh"]);
+            Assert.Equal("It's Bob's turn, don't rush.", step2.TextVariants[""]);
             Assert.Equal(2, step2.Tags.Count);
             Assert.Equal("wait", step2.Tags[0].Name);
             Assert.Equal("sfx", step2.Tags[1].Name);
@@ -1275,7 +1275,7 @@ namespace Ktory.Core.Tests
             string script3 = @"Alice: I'm ready. // ready comment";
             var file3 = KtoryParser.Parse(script3);
             var step3 = Assert.IsType<TextStep>(file3.RootBlock.Steps[0]);
-            Assert.Equal("I'm ready.", step3.TextVariants["zh"]);
+            Assert.Equal("I'm ready.", step3.TextVariants[""]);
         }
 
         [Fact]

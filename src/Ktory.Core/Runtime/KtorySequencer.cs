@@ -9,7 +9,7 @@ namespace Ktory.Core.Runtime
     {
         public KtoryFile File { get; }
         public string RequestedLanguage { get; private set; } = "zh";
-        public string DefaultLanguage => File.DefaultLang;
+        public string? DefaultLanguage => File.DefaultLang;
 
         public ExecutionStatus Status { get; private set; } = ExecutionStatus.Ready;
         public TextPayload? CurrentPayload { get; private set; }
@@ -52,7 +52,7 @@ namespace Ktory.Core.Runtime
             _currentStepIndex = 0;
         }
 
-        public void Start(string? entryLabel = null, string requestedLocale = "zh")
+        public void Start(string? entryLabel = null, string? requestedLocale = null)
         {
             try { StartCore(entryLabel, requestedLocale); }
             catch (Exception error)
@@ -64,12 +64,12 @@ namespace Ktory.Core.Runtime
             }
         }
 
-        private void StartCore(string? entryLabel = null, string requestedLocale = "zh")
+        private void StartCore(string? entryLabel = null, string? requestedLocale = null)
         {
             BeginSession();
             _reportedFallbackWarnings.Clear();
             _currentStep = null;
-            RequestedLanguage = requestedLocale;
+            RequestedLanguage = requestedLocale ?? DefaultLanguage ?? "zh";
             VisitedItemIds.Clear();
             CallStack.Clear();
             _activeLoops.Clear();
@@ -267,18 +267,19 @@ namespace Ktory.Core.Runtime
             Advance();
         }
 
-        public void SetLanguage(string requestedLocale)
+        public void SetLanguage(string? requestedLocale)
         {
             try { SetLanguageCore(requestedLocale); }
             catch (Exception error) { TraceError(error); throw; }
         }
 
-        private void SetLanguageCore(string requestedLocale)
+        private void SetLanguageCore(string? requestedLocale)
         {
-            if (string.Equals(RequestedLanguage, requestedLocale, StringComparison.OrdinalIgnoreCase))
+            var target = requestedLocale ?? DefaultLanguage ?? "zh";
+            if (string.Equals(RequestedLanguage, target, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            RequestedLanguage = requestedLocale;
+            RequestedLanguage = target;
 
             // If currently suspended at text beat, update text content and speaker without side-effects
             if (Status == ExecutionStatus.SuspendedAtBeat && _currentStep is TextStep textStep && CurrentPayload != null)
@@ -762,7 +763,7 @@ namespace Ktory.Core.Runtime
 
                 bool canSelect = conditionPass && (!item.IsOneTime || !isConsumed);
                 string label = item.GetLabel(RequestedLanguage, DefaultLanguage, out var actualLanguage, out var labelFallback);
-                if (labelFallback) WarnMissingTranslations("Choice label", item.LineNumber, actualLanguage);
+                if (labelFallback) WarnMissingTranslations("Choice label", item.LineNumber, actualLanguage ?? string.Empty);
 
                 options.Add(new ChoiceOption
                 {

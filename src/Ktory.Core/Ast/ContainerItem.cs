@@ -40,14 +40,17 @@ namespace Ktory.Core.Ast
 
         public bool IsOneTime => Marker == '*';
 
-        public string GetLabel(string requestedLocale, string defaultLocale)
+        public string GetLabel(string? requestedLocale, string? defaultLocale)
             => GetLabel(requestedLocale, defaultLocale, out _);
 
-        public string GetLabel(string requestedLocale, string defaultLocale, out string actualLocale)
-            => GetLabel(requestedLocale, defaultLocale, out actualLocale, out _);
+        public string GetLabel(string? requestedLocale, string? defaultLocale, out string? actualLocale)
+            => GetLabel(requestedLocale, defaultLocale, out actualLocale, out _, out _);
 
-        internal string GetLabel(string requestedLocale, string defaultLocale, out string actualLocale, out bool usedAvailableFallback)
-            => LocalizedValueSelector.Select(LabelVariants, requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback);
+        internal string GetLabel(string? requestedLocale, string? defaultLocale, out string? actualLocale, out bool usedAvailableFallback)
+            => GetLabel(requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback, out _);
+
+        internal string GetLabel(string? requestedLocale, string? defaultLocale, out string? actualLocale, out bool usedAvailableFallback, out bool usedUnlocalizedLiteral)
+            => LocalizedValueSelector.Select(LabelVariants, requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback, out usedUnlocalizedLiteral);
 
         public override string ToString()
         {

@@ -161,7 +161,7 @@
 | 特性 | 规范定义 |
 | :--- | :--- |
 | **文件组织** | 同一脚本文件内通过 `@locale:` 维护文本多语言变体；通过 `@speaker` 维护说话人映射；允许单语言直接书写。 |
-| **默认语言** | 脚本由文件级元属性指定 `@defaultLang: <locale>`（缺省为 `zh`）。 |
+| **默认语言** | 脚本可通过文件级元属性指定 `@defaultLang: <locale>`。若显式指定，无修饰正文归入该默认语言；若未指定且全文包含 `@locale` 变体，为保持向后兼容缺省为 `zh`；若未指定且全文无任何 `@locale` 多语言声明，脚本视为未本地化（Unlocalized）单语言剧本，默认语言为 `null`，正文与选项的实际语言 `ActualLanguage` 均输出 `null`，不假定为特定语言。 |
 | **缺译回退** | 请求语言缺失时先回退 `defaultLang`；两者均无有效文本时，按已有译文顺序选取第一个有效译文，并发出包含源码位置的 `Warning`。正文、选项及已声明说话人的名字分别执行此规则。 |
 | **语言标签透传** | 正文与选项通过各自 `ActualLanguage`，已声明说话人通过 `SpeakerActualLanguage` 报告实际语言；保留请求语言，不将第三语言或默认语言伪标为请求语言。 |
 | **即时热切换** | 运行时切换语言时（`SetLanguage`），当前暂停节点的文本、说话人及选项内容即时重算更新，无多余副作用。 |
@@ -319,14 +319,14 @@ Alice: 这里恢复 normal。
 
 ### 4.1 已确认的数据要求
 
-- **文件默认语言**：`DefaultLang` 字符串（缺省为 `"zh"`）。
+- **文件默认语言**：`DefaultLang` 字符串（显式声明时为对应语言代码；缺省且存在 `@locale` 时为 `"zh"`；无任何 `@locale` 时为 `null`，表示未本地化）。
 - **说话人映射模型（SpeakerDefinition）**：
   - 维护唯一识别键、别名集合（`HashSet<string>`，严格区分大小写）、本地化显示名称字典（`Dictionary<string, string>`）。
   - `KtoryFile` 提供别名到说话人实体的 O(1) 映射表及安全反查与回退解析。
 - **选项文本本地化（ContainerItem）**：
   - 维护 `LabelVariants` 字典（`Dictionary<string, string>`），支持根据当前语言与默认语言获取本地化标签。
 - **对白与输出载荷（TextPayload）**：
-  - 包含当前语言下的 `Content`、正文实际语言 `ActualLanguage`、请求语言 `RequestedLanguage`、动态解析出的本地化 `Speaker` 及其独立的实际语言 `SpeakerActualLanguage`；名字与正文可能使用不同语言，未声明说话人的实际语言为空。
+  - 包含当前语言下的 `Content`、正文实际语言 `ActualLanguage`（未本地化脚本输出 `null`）、请求语言 `RequestedLanguage`、动态解析出的本地化 `Speaker` 及其独立的实际语言 `SpeakerActualLanguage`（未声明说话人或未本地化时为 `null`）；名字与正文可能使用不同语言，未声明说话人的实际语言为空。
 - **叙事记录**：会话内记录已消耗选项 ID；第一阶段不要求将其磁盘持久化。
 
 ### 4.2 待确认的数据契约

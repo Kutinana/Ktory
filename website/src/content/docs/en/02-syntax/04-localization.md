@@ -1,21 +1,25 @@
 ---
-title: Localization (I18N)
+title: Localization
 description: Native single-file multilingual variants and side-effect-free runtime hot reloading
 sidebar:
   order: 4
 ---
 
-> This page follows the [Ktory design principles](/en/01-overview/03-design-principles/), which distinguish current contracts from longer-term goals.
+This section introduces how to implement single-file multilingual authoring in Ktory.
 
-# Inline Localization
+## Single-file Localization
 
-`@defaultLang` sets the file's default language and defaults to `zh`. Text without an `@locale` marker belongs to that language. Dialogue, speaker display names and option labels can be maintained together.
+`@defaultLang` declares the default language used by this Ktory script. This is not a mandatory declaration: if left blank or omitted, Ktory still works normally. In this case, Ktory will not infer the language on its own. If you are certain your script or game uses only a single language, you can omit the `@defaultLang` declaration. Otherwise, this may cause inconvenience for subsequent multilingual localization.
+
+`@[locale]` explicitly declares the language of a specific text. This does not affect Ktory's default language. However, if you use `@[locale]` in your script to declare the language of any text, the `@defaultLang` declaration becomes mandatory. In this case, other texts without an `@[locale]` annotation are automatically treated as being in the `@defaultLang` language.
+
+Currently, `@[locale]` declarations are supported for dialogue lines and choice option labels.
 
 ```ktory
 @defaultLang: zh
-@speaker alice: zh="爱丽丝" | en="Alice" | ja="アリス"
 
-alice:
+爱丽丝
+:
   @zh: 你好，旅行者。
   @en: Hello, traveler.
   @ja: こんにちは、旅人さん。
@@ -28,22 +32,52 @@ alice:
     alice: 我们出发吧。
 ```
 
-## Output and fallback
+## Character Names and Aliases
 
-Each line prefers the requested language and falls back to `defaultLang` when its translation is missing. If neither has valid text, it selects the first valid entry in that node’s existing translation order and emits a source-located `Warning`. `TextPayload.ActualLanguage` describes the actual body text; `RequestedLanguage` preserves the request. In this example, requesting English still produces `zh` for the untranslated line in the option branch. Do not label that fallback text as English.
+Character names appear frequently throughout scripts. Therefore, Ktory provides a specialized syntax for defining character names and their translations.
 
-`@speaker` creates case-sensitive display-name aliases; undeclared speakers are displayed literally. It also supports file-scoped defaults and local overrides: see [speaker defaults](/en/02-syntax/05-speaker-defaults/). Resource binding remains the host’s responsibility.
+The `@speaker` declaration defines character names, translations, and aliases, and is case-sensitive. Once defined at the head of the file, Ktory will automatically return the correct defined translation for the character according to the requested language. Aliases are optional; they are never treated as output languages and can only be used as invocation inputs.
 
-The current `ChoiceOption` provides a localized `Label`, `RequestedLanguage` and `ActualLanguage`, reporting the actual language separately for each option. A menu label is not a replacement for the option's `Id`. `TextPayload.SpeakerActualLanguage` separately reports the actual language of a declared speaker name; it can differ from the body and is null for an undeclared speaker. Body text, options and declared names all follow the third-language fallback rule without inventing missing-text placeholders. A speaker declaration with no nonempty display name, such as `@speaker alice:`, stops loading with a source-located error. This decision does not define a new general rule for empty body or option declarations.
+```ktory
+@speaker en="Chtholly" | ja="クトリ" | cn="珂朵莉"
 
-## Switching during playback
+Chtholly:  // Whether you write Chtholly, クトリ, or 珂朵莉 here, it will automatically return the correct translation based on the requested language
+  @en: You must leave now.
+  @ja: 今すぐ離れて!
+  @cn: 快走!
+```
+
+To define an alias, simply add the alias followed by a colon after `@speaker`. However, declarations such as `@speaker alice:` that lack any non-empty display names will report the line number and halt loading.
+
+```ktory
+@speaker ktr: en="Chtholly" | ja="クトリ" | cn="珂朵莉"
+
+ktr: ...  // Can be called using the alias
+```
+
+This syntax also supports defining default decorators used when presenting the character.
+
+
+## Output and Fallback
+
+Ktory prioritizes returning the requested language; when a translation is missing for the requested language, it attempts to return the text in `defaultLang`. If neither has a valid translation, Ktory selects the first valid translation in the order of existing translations on that node and emits a source-located `Warning`.
+
+`TextPayload.ActualLanguage` describes the actual body text language, while `RequestedLanguage` preserves the requested language. For example, when English (`en`) is requested and `defaultLang` is `zh`, if a line lacks an `en` translation, its `ActualLanguage` will be `zh`, while `RequestedLanguage` remains `en`. In this case, Ktory will not label the `zh` text as English.
+
+Currently, `ChoiceOption` provides a localized `Label`, `RequestedLanguage`, and `ActualLanguage`, reporting the actual language separately for each option.
+
+`TextPayload.SpeakerActualLanguage` separately reports the actual language of a declared speaker's name; this may differ from the body text, and is empty for undeclared speakers.
+
+Body text, choice options, and declared names all follow the third-language fallback rule described above, without synthesizing missing-translation placeholders.
+
+## Switching Language During Playback
 
 ```csharp
 player.SetLanguage("en");
 ```
 
-`SetLanguage(locale, token)` changes a session preference: it accepts an earlier beat or natural completion within the same valid session, while rejecting requests from an old session.
+`SetLanguage(locale, token)` is a session setting: as long as the captured session remains valid, the language can still be changed even after the same session has moved to another beat or completed naturally; requests from an old session will be ignored.
 
-Switching updates the active text, speaker or menu labels without redispatching decorators or clearing session history. Refresh the host display afterwards. If using `PresentationController`, call its `RefreshLanguage()` to update the active presentation state; do not add a `Step()` for language switching.
+Switching updates the active text, speaker, or menu labels without redispatching presentation decorators or clearing session history. The host then refreshes its display; if using `PresentationController`, call its `RefreshLanguage()` to handle the active presentation timing, and do not make an extra call to `Step()` for switching language.
 
-Inline translations suit independent writing and translation. This phase does not promise automatic translation, extraction/import tools or cross-file synchronization.
+Maintaining translations in the same file is well-suited for independent writing and translation. However, Ktory does not prevent you from maintaining separate Ktory script files for different languages.

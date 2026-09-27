@@ -28,7 +28,7 @@ namespace Ktory.Core.Runtime
             payload.Content = step.GetText(RequestedLanguage, DefaultLanguage, out var actualLocale, out var textFallback);
             payload.ActualLanguage = actualLocale;
             payload.RequestedLanguage = RequestedLanguage;
-            if (textFallback) WarnMissingTranslations("Text", step.LineNumber, actualLocale);
+            if (textFallback) WarnMissingTranslations("Text", step.LineNumber, actualLocale ?? string.Empty);
 
             payload.SpeakerActualLanguage = null;
             if (!string.IsNullOrEmpty(step.Speaker) && File.SpeakersByAlias.TryGetValue(step.Speaker, out var speaker))

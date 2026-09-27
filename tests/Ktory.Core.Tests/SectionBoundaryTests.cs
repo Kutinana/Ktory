@@ -15,8 +15,8 @@ public class SectionBoundaryTests
 
         Assert.Empty(file.Blocks["Aside"].Steps);
         Assert.Collection(file.RootBlock.Steps,
-            step => Assert.Equal("root first", Assert.IsType<TextStep>(step).TextVariants["zh"]),
-            step => Assert.Equal("root second", Assert.IsType<TextStep>(step).TextVariants["zh"]));
+            step => Assert.Equal("root first", Assert.IsType<TextStep>(step).TextVariants[""]),
+            step => Assert.Equal("root second", Assert.IsType<TextStep>(step).TextVariants[""]));
 
         var sequencer = new KtorySequencer(file);
         sequencer.Start();

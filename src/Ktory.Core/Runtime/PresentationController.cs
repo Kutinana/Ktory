@@ -519,17 +519,28 @@ namespace Ktory.Core.Runtime
             HoldDuration = Math.Max(_minimumHoldDuration, _autoAdvanceDuration);
         }
 
-        private static double EstimateReadingTime(string text, string language)
+        private static double EstimateReadingTime(string text, string? language)
         {
             if (string.IsNullOrEmpty(text)) return 1.0;
-            // Chinese/Japanese: ~6-8 chars per second; English: ~3-4 words per second
+            // Chinese/Japanese or containing CJK characters: ~6-8 chars per second; English: ~3-4 words per second
             if (string.Equals(language, "zh", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(language, "ja", StringComparison.OrdinalIgnoreCase))
+                string.Equals(language, "ja", StringComparison.OrdinalIgnoreCase) ||
+                (string.IsNullOrEmpty(language) && ContainsCjk(text)))
             {
                 return Math.Max(1.0, text.Length / 7.0);
             }
             var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
             return Math.Max(1.0, words / 3.5);
+        }
+
+        private static bool ContainsCjk(string text)
+        {
+            foreach (var c in text)
+            {
+                if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3040 && c <= 0x30FF))
+                    return true;
+            }
+            return false;
         }
 
         private static TagData? FindTag(TextPayload payload, string name)

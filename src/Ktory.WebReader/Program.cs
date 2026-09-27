@@ -131,7 +131,7 @@ public class RunnerSessionState
     public TextPayload? Payload { get; set; }
     public ChoicePayload? Choice { get; set; }
     public string RequestedLanguage { get; set; } = "zh";
-    public string DefaultLanguage { get; set; } = "zh";
+    public string? DefaultLanguage { get; set; }
     public List<string> VisitedItems { get; set; } = new List<string>();
     public int CallStackDepth { get; set; }
     public List<TagData> RecentTags { get; set; } = new List<TagData>();
