@@ -4,41 +4,43 @@
    ========================================================================== */
 
 :root {
-  /* Color Palette */
-  --bg-app: #090a0c;
-  --bg-surface: #111215;
-  --bg-surface-elevated: #16181d;
-  --bg-surface-hover: #1c1e24;
-  --bg-dock: rgba(15, 16, 20, 0.88);
+  /* Color Palette - Monochrome Slate / Dark matching website */
+  --bg-app: #0a0a0a;
+  --bg-surface: #141414;
+  --bg-surface-elevated: #1a1a1a;
+  --bg-surface-hover: #262626;
+  --bg-dock: rgba(14, 14, 14, 0.92);
 
   /* Hairline Borders */
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.14);
-  --border-focus: rgba(255, 255, 255, 0.28);
-  --border-accent: rgba(212, 175, 55, 0.4);
+  --border-subtle: #262626;
+  --border-medium: #383838;
+  --border-focus: #525252;
+  --border-strong: #404040;
+  --border-accent: rgba(255, 255, 255, 0.2);
 
   /* Typography Colors */
-  --text-main: #eceff4;
-  --text-prose: #e4e7ed;
-  --text-muted: #8b909a;
-  --text-tertiary: #585c65;
-  --text-dim: #3e4249;
+  --text-main: #ededed;
+  --text-prose: #e5e5e5;
+  --text-muted: #a3a3a3;
+  --text-tertiary: #737373;
+  --text-dim: #525252;
 
-  /* Accents */
-  --accent-gold: #d4af37;
-  --accent-gold-soft: rgba(212, 175, 55, 0.12);
+  /* Accents - Monochrome Slate / Silver matching website */
+  --accent-gold: #ededed;
+  --accent-gold-soft: rgba(255, 255, 255, 0.08);
   --accent-crimson: #c94a4a;
   --accent-blue: #70a5ff;
   --accent-green: #5cdbb5;
 
-  /* Fonts */
-  --font-serif: 'Cormorant Garamond', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', Georgia, serif;
+  /* Fonts - Noto Serif Series across all languages */
+  --font-serif: "Noto Serif", "Noto Serif SC", "Noto Serif JP", "Source Han Serif SC", "Source Han Serif JP", "Songti SC", "SimSun", "Times New Roman", Times, serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
   --font-mono: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
 
   /* Sizing & Measures */
   --reader-max-width: 760px;
   --nav-height: 54px;
+  --dock-height: 80px;
 }
 
 /* Reset & Base */
@@ -172,10 +174,10 @@ body.font-size-lg .dialogue-text {
 }
 
 .brand-title {
-  font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+  font-family: var(--font-serif);
   font-size: 1.35rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: #ffffff;
 }
 
@@ -331,9 +333,218 @@ body.font-size-lg .dialogue-text {
   color: #ff7676;
 }
 
+.nav-home-link {
+  text-decoration: none;
+}
+
+.nav-home-link:hover {
+  border-color: var(--border-focus);
+  color: var(--text-main);
+}
+
 .btn-icon {
   font-size: 0.85rem;
   opacity: 0.8;
+}
+
+/* ==========================================================================
+   Portal Landing Overlay
+   ========================================================================== */
+.portal-overlay {
+  position: fixed;
+  inset: 0;
+  top: 56px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background-color: #0a0a0a;
+  background-image: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.04) 0%, rgba(10, 10, 10, 0.98) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.portal-overlay.portal-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(0.98) translateY(-8px);
+}
+
+.portal-hero {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  animation: portalHeroEntrance 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes portalHeroEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Logo on the left, Title and Tagline on the right in the same line */
+.portal-header-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.portal-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  object-fit: cover;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.portal-logo:hover {
+  transform: scale(1.05);
+}
+
+.portal-header-text {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.portal-title {
+  font-family: var(--font-serif);
+  font-size: 2.1rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.15;
+}
+
+.portal-tagline {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+/* Action Buttons (Icon on left of text) */
+.portal-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.portal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.portal-btn-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.portal-btn-title {
+  line-height: 1;
+}
+
+.portal-btn-primary {
+  background: #ededed;
+  color: #0a0a0a;
+  border: 1px solid #ffffff;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.portal-btn-primary:hover {
+  background: #ffffff;
+  color: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+}
+
+.portal-btn-primary:active {
+  transform: translateY(0);
+}
+
+.portal-btn-secondary {
+  background: #171717;
+  color: #ededed;
+  border: 1px solid #333333;
+}
+
+.portal-btn-secondary:hover {
+  background: #242424;
+  border-color: #525252;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.portal-btn-secondary:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .portal-hero {
+    padding: 24px 16px;
+    gap: 24px;
+  }
+  .portal-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .portal-header-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .portal-title {
+    font-size: 1.7rem;
+  }
+  .portal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .portal-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* ==========================================================================
@@ -363,7 +574,131 @@ body.font-size-lg .dialogue-text {
   position: relative;
 }
 
+/* ==========================================================================
+   Portrait Stage & Character Presentation
+   ========================================================================== */
+.portrait-stage {
+  position: fixed;
+  top: var(--nav-height, 54px);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(100vh - var(--nav-height, 54px));
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.portrait-slot {
+  position: absolute;
+  bottom: 0;
+  height: 80vh;
+  max-height: 80vh;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.portrait-slot img {
+  height: 100%;
+  max-height: 100%;
+  width: auto;
+  max-width: min(38vw, 480px);
+  object-fit: contain;
+  object-position: bottom;
+  filter: drop-shadow(0 16px 40px rgba(0, 0, 0, 0.65));
+  display: block;
+}
+
+/* Pull portraits outward towards screen sides */
+.portrait-slot.slot-left {
+  left: clamp(-30px, calc((100vw - 1500px) / 2), 2vw);
+}
+
+.portrait-slot.slot-right {
+  right: clamp(-30px, calc((100vw - 1500px) / 2), 2vw);
+}
+
+/* 进场动画：从两侧向中间运动淡入，使用柔和半透明 */
+.portrait-slot.slot-left.entering {
+  opacity: 0;
+  transform: translateX(-70px);
+}
+
+.portrait-slot.slot-left.active {
+  opacity: 0.85;
+  transform: translateX(0);
+  transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.52s ease-out;
+}
+
+.portrait-slot.slot-right.entering {
+  opacity: 0;
+  transform: translateX(70px);
+}
+
+.portrait-slot.slot-right.active {
+  opacity: 0.85;
+  transform: translateX(0);
+  transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.52s ease-out;
+}
+
+/* 淡出动画：原地淡出，保持当前位置不变 */
+.portrait-slot.slot-left.exiting,
+.portrait-slot.slot-right.exiting {
+  opacity: 0;
+  transform: translateX(0);
+  transition: opacity 0.38s ease-out;
+}
+
+@media (max-width: 900px) {
+  .portrait-slot {
+    height: 58vh;
+    max-height: 58vh;
+  }
+  .portrait-slot.slot-left.active,
+  .portrait-slot.slot-right.active {
+    opacity: 0.30;
+  }
+}
+
+/* ==========================================================================
+   Center Narrative Dimming Mask
+   Horizontal black gradient that shields the central text for optimal readability
+   while smoothly fading to transparent at the sides to let side portraits breathe.
+   Portraits extending towards the center are naturally dimmed and occluded by this mask.
+   ========================================================================== */
+.reader-backdrop-mask {
+  position: fixed;
+  top: var(--nav-height, 54px);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(9, 10, 12, 0.15) max(0px, calc(50% - 560px)),
+    rgba(9, 10, 12, 0.65) max(20px, calc(50% - 440px)),
+    rgba(9, 10, 12, 0.86) max(60px, calc(50% - 340px)),
+    rgba(9, 10, 12, 0.90) 50%,
+    rgba(9, 10, 12, 0.86) min(calc(100% - 60px), calc(50% + 340px)),
+    rgba(9, 10, 12, 0.65) min(calc(100% - 20px), calc(50% + 440px)),
+    rgba(9, 10, 12, 0.15) min(100%, calc(50% + 560px)),
+    transparent 100%
+  );
+}
+
 .reader-container {
+  position: relative;
+  z-index: 5;
   max-width: var(--reader-max-width);
   margin: 0 auto;
   padding: 42px 24px 160px 24px;
@@ -744,9 +1079,9 @@ rt {
   letter-spacing: 0.1em;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(212, 175, 55, 0.12);
-  border: 1px solid var(--border-accent);
-  color: var(--accent-gold);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-medium);
+  color: var(--text-main);
   text-transform: uppercase;
 }
 
@@ -1092,15 +1427,15 @@ rt {
 
 .drawer-pull-handle:hover {
   background: #1b1e26;
-  border-color: var(--accent-gold);
+  border-color: var(--border-focus);
   color: #ffffff;
-  box-shadow: 6px 0 22px rgba(212, 175, 55, 0.25);
+  box-shadow: 6px 0 22px rgba(0, 0, 0, 0.5);
   transform: translateY(-50%) translateX(2px);
 }
 
 .drawer-pull-handle .handle-icon {
   font-size: 0.9rem;
-  color: var(--accent-gold);
+  color: var(--text-main);
   line-height: 1;
 }
 
@@ -1157,8 +1492,8 @@ rt {
 
 .drawer-resizer:hover::after,
 body.is-resizing-drawer .drawer-resizer::after {
-  background: var(--accent-gold);
-  box-shadow: 0 0 10px var(--accent-gold);
+  background: var(--text-main);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 .drawer:not(.open) .drawer-resizer {
@@ -1316,8 +1651,8 @@ body.is-resizing-drawer * {
 
 .custom-select-trigger:hover {
   background: #181a22;
-  border-color: rgba(212, 175, 55, 0.45);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(212, 175, 55, 0.12);
+  border-color: var(--border-focus);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .custom-select-wrapper.open {
@@ -1325,9 +1660,9 @@ body.is-resizing-drawer * {
 }
 
 .custom-select-wrapper.open .custom-select-trigger {
-  border-color: var(--accent-gold);
+  border-color: var(--border-focus);
   background: #191c25;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.18), 0 4px 18px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12), 0 4px 18px rgba(0, 0, 0, 0.6);
 }
 
 .trigger-label-group {
@@ -1340,7 +1675,7 @@ body.is-resizing-drawer * {
 
 .trigger-icon {
   font-size: 0.88rem;
-  color: var(--accent-gold);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -1364,7 +1699,7 @@ body.is-resizing-drawer * {
 
 .custom-select-wrapper.open .trigger-chevron {
   transform: rotate(180deg);
-  color: var(--accent-gold);
+  color: var(--text-main);
 }
 
 /* Floating Popover */
@@ -1376,9 +1711,9 @@ body.is-resizing-drawer * {
   background: rgba(16, 18, 24, 0.97);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.85), 0 0 1px rgba(212, 175, 55, 0.35);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.85);
   z-index: 120;
   padding: 6px;
   opacity: 0;
@@ -1414,17 +1749,17 @@ body.is-resizing-drawer * {
 }
 
 .custom-select-option:hover {
-  background: rgba(212, 175, 55, 0.08);
+  background: var(--bg-surface-hover);
   color: #ffffff;
 }
 
 .custom-select-option.selected {
-  background: rgba(212, 175, 55, 0.14);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .custom-select-option .option-check {
   font-size: 0.75rem;
-  color: var(--accent-gold);
+  color: var(--text-main);
   width: 14px;
   text-align: center;
   flex-shrink: 0;

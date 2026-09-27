@@ -63,6 +63,9 @@ const el = {
   storyStream: document.getElementById('storyStream'),
   storyCompletedBanner: document.getElementById('storyCompletedBanner'),
   btnReplayStory: document.getElementById('btnReplayStory'),
+  portraitStage: document.getElementById('portraitStage'),
+  portraitSlotLeft: document.getElementById('portraitSlotLeft'),
+  portraitSlotRight: document.getElementById('portraitSlotRight'),
   runtimeDiagnostics: document.getElementById('runtimeDiagnostics'),
   runtimeDiagnosticSummary: document.getElementById('runtimeDiagnosticSummary'),
   runtimeDiagnosticMessages: document.getElementById('runtimeDiagnosticMessages'),
@@ -76,6 +79,16 @@ const el = {
   fontSizeLabel: document.getElementById('fontSizeLabel'),
   btnToggleEditor: document.getElementById('btnToggleEditor'),
   btnRestartSession: document.getElementById('btnRestartSession'),
+  btnGoHome: document.getElementById('btnGoHome'),
+  navHomeText: document.getElementById('navHomeText'),
+
+  // Portal Landing Overlay
+  portalOverlay: document.getElementById('portalOverlay'),
+  btnPortalSample: document.getElementById('btnPortalSample'),
+  btnPortalWrite: document.getElementById('btnPortalWrite'),
+  portalTagline: document.getElementById('portalTagline'),
+  portalSampleTitle: document.getElementById('portalSampleTitle'),
+  portalWriteTitle: document.getElementById('portalWriteTitle'),
 
   // Floating Dock
   floatingDock: document.getElementById('floatingDock'),
@@ -91,13 +104,54 @@ const el = {
   drawerBackdrop: document.getElementById('drawerBackdrop'),
   btnCloseEditor: document.getElementById('btnCloseEditor'),
   sampleSelect: document.getElementById('sampleSelect'),
-  sectionSelect: document.getElementById('sectionSelect'),
   scriptInput: document.getElementById('scriptInput'),
   btnUploadScript: document.getElementById('btnUploadScript'),
   fileInputKtr: document.getElementById('fileInputKtr'),
   btnRunScript: document.getElementById('btnRunScript'),
   drawerResizer: document.getElementById('drawerResizer')
 };
+
+const PORTAL_I18N = {
+  'zh': {
+    tagline: '轻量 · 优雅 · 对白驱动的叙事创作与接入系统',
+    sampleTitle: '尝试示例剧本',
+    writeTitle: '撰写我的剧本',
+    home: '官网'
+  },
+  'en': {
+    tagline: 'Lightweight, elegant, dialogue-driven narrative engine and runtime',
+    sampleTitle: 'Try Sample Script',
+    writeTitle: 'Write My Script',
+    home: 'Home'
+  },
+  'ja': {
+    tagline: '軽量・優雅・対話主導のシナリオ制作・接続システム',
+    sampleTitle: 'サンプルを試読',
+    writeTitle: '脚本を作成する',
+    home: '公式サイト'
+  }
+};
+
+function updatePortalLabels(locale) {
+  const texts = PORTAL_I18N[locale] || PORTAL_I18N['zh'];
+  if (el.portalTagline) el.portalTagline.textContent = texts.tagline;
+  if (el.portalSampleTitle) el.portalSampleTitle.textContent = texts.sampleTitle;
+  if (el.portalWriteTitle) el.portalWriteTitle.textContent = texts.writeTitle;
+  if (el.navHomeText) el.navHomeText.textContent = texts.home;
+}
+
+function hidePortal() {
+  if (el.portalOverlay) {
+    el.portalOverlay.classList.add('portal-hidden');
+  }
+}
+
+function showPortal() {
+  if (window.ktoryReaderHost) return;
+  if (el.portalOverlay) {
+    el.portalOverlay.classList.remove('portal-hidden');
+  }
+}
 
 // ==========================================================================
 // Initialization
@@ -106,26 +160,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupDrawerResizer();
   setupCustomSampleSelect();
-  setupCustomSectionSelect();
   if (window.ktoryReaderHost) {
+    hidePortal();
     window.ktoryReaderHost.onDomReady();
     return;
   }
   await loadSamples();
 
-  // Start with first catalog sample
+  // Populate first catalog sample into scriptInput without auto-starting session
   const sampleKeys = Object.keys(state.samples);
   if (sampleKeys.length > 0) {
     state.currentSampleKey = sampleKeys[0];
     el.scriptInput.value = state.samples[state.currentSampleKey];
     document.dispatchEvent(new Event('ktory:source-changed'));
     syncSampleSelect(state.currentSampleKey);
-    updateSectionSelector(state.samples[state.currentSampleKey]);
-    await startSession(state.samples[state.currentSampleKey], 'zh');
   }
 });
 
 function setupEventListeners() {
+  // Resume any pending audio on first user gesture
+  ['click', 'keydown', 'pointerdown', 'touchstart'].forEach(evt => {
+    window.addEventListener(evt, () => resumePendingAudio(), { passive: true });
+  });
+
   // Viewport / Reading area click
   el.readerViewport.addEventListener('click', (e) => {
     // Prevent advance if clicking on choices, drawers, top nav, or buttons
@@ -167,11 +224,44 @@ function setupEventListeners() {
       if (!isNaN(num) && num >= 1 && num <= state.choice.options.length) {
         const option = state.choice.options[num - 1];
         if (option && option.canSelect) {
-          submitChoice(option.id, state.currentPresentationId);
+          submitChoice(option.id, state.currentPresentationId, state.currentSessionId);
         }
       }
     }
   });
+
+  // Portal actions
+  if (el.btnPortalSample) {
+    el.btnPortalSample.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      resumePendingAudio();
+      hidePortal();
+      const sampleKey = state.currentSampleKey || Object.keys(state.samples)[0];
+      const script = (sampleKey && state.samples[sampleKey]) || el.scriptInput.value;
+      if (script) {
+        await startSession(script, state.requestedLocale || 'zh');
+      }
+    });
+  }
+
+  if (el.btnPortalWrite) {
+    el.btnPortalWrite.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resumePendingAudio();
+      hidePortal();
+      toggleEditorDrawer();
+      if (el.scriptInput) {
+        el.scriptInput.focus();
+      }
+    });
+  }
+
+  const brandEl = document.querySelector('.top-nav .brand');
+  if (brandEl) {
+    brandEl.addEventListener('click', () => {
+      showPortal();
+    });
+  }
 
   // Language buttons
   el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
@@ -221,16 +311,8 @@ function setupEventListeners() {
       el.scriptInput.value = state.samples[selected];
       document.dispatchEvent(new Event('ktory:source-changed'));
       syncSampleSelect(selected);
-      updateSectionSelector(state.samples[selected]);
     }
   });
-
-  // Script editor typing updates available entry sections
-  if (el.scriptInput) {
-    el.scriptInput.addEventListener('input', () => {
-      updateSectionSelector(el.scriptInput.value);
-    });
-  }
 
   // Upload .ktr script file
   if (el.btnUploadScript && el.fileInputKtr) {
@@ -247,7 +329,6 @@ function setupEventListeners() {
         const content = await file.text();
         el.scriptInput.value = content;
         document.dispatchEvent(new Event('ktory:source-changed'));
-        updateSectionSelector(content);
 
         // Extract title from comment or file name
         let title = file.name.replace(/\.(ktr|ktory|txt)$/i, '');
@@ -274,8 +355,7 @@ function setupEventListeners() {
         }
 
         closeAllDrawers();
-        const entryBlock = el.sectionSelect && el.sectionSelect.value ? el.sectionSelect.value : null;
-        await startSession(content, state.requestedLocale, entryBlock);
+        await startSession(content, state.requestedLocale);
       } catch (err) {
         console.error('Failed to read uploaded script file:', err);
         alert('读取剧本文件失败: ' + err.message);
@@ -286,9 +366,8 @@ function setupEventListeners() {
   // Run Script from editor
   el.btnRunScript.addEventListener('click', async () => {
     const script = el.scriptInput.value;
-    const entryBlock = el.sectionSelect && el.sectionSelect.value ? el.sectionSelect.value : null;
     closeAllDrawers();
-    await startSession(script, state.requestedLocale, entryBlock);
+    await startSession(script, state.requestedLocale);
   });
 }
 
@@ -508,105 +587,6 @@ function setupCustomSampleSelect() {
   renderOptions();
 }
 
-function setupCustomSectionSelect() {
-  const wrapper = document.getElementById('sectionSelectWrapper');
-  const trigger = document.getElementById('sectionSelectTrigger');
-  const triggerText = document.getElementById('sectionSelectTriggerText');
-  const list = document.getElementById('sectionSelectOptionsList');
-  if (!wrapper || !trigger || !list || !el.sectionSelect) return;
-
-  function renderOptions() {
-    list.innerHTML = '';
-    const options = Array.from(el.sectionSelect.options);
-    const selectedVal = el.sectionSelect.value;
-
-    let selectedText = '-- 默认入口（根节 / 主线）--';
-
-    options.forEach(opt => {
-      const isSelected = opt.value === selectedVal;
-      if (isSelected) selectedText = opt.textContent;
-
-      const item = document.createElement('div');
-      item.className = `custom-select-option ${isSelected ? 'selected' : ''}`;
-      item.setAttribute('role', 'option');
-      item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-      item.dataset.value = opt.value;
-      item.innerHTML = `
-        <span class="option-check">✓</span>
-        <span class="option-title">${escapeHtml(opt.textContent)}</span>
-      `;
-
-      item.addEventListener('click', (e) => {
-        e.stopPropagation();
-        el.sectionSelect.value = opt.value;
-        wrapper.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
-        renderOptions();
-      });
-
-      list.appendChild(item);
-    });
-
-    triggerText.textContent = selectedText;
-  }
-
-  trigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isOpen = wrapper.classList.toggle('open');
-    trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!wrapper.contains(e.target)) {
-      wrapper.classList.remove('open');
-      trigger.setAttribute('aria-expanded', 'false');
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' && wrapper.classList.contains('open')) {
-      wrapper.classList.remove('open');
-      trigger.setAttribute('aria-expanded', 'false');
-    }
-  });
-
-  window.refreshCustomSectionSelect = renderOptions;
-  renderOptions();
-}
-
-function updateSectionSelector(script) {
-  if (!el.sectionSelect) return;
-  const prevValue = el.sectionSelect.value;
-  el.sectionSelect.innerHTML = '<option value="">-- 默认入口（根节 / 主线）--</option>';
-
-  if (script) {
-    const sectionRegex = /^===\s*([a-zA-Z0-9_\-]+)\s*===$/gm;
-    let match;
-    const foundSections = [];
-    while ((match = sectionRegex.exec(script)) !== null) {
-      const sectionName = match[1];
-      if (!foundSections.includes(sectionName)) {
-        foundSections.push(sectionName);
-        const opt = document.createElement('option');
-        opt.value = sectionName;
-        opt.textContent = `=== ${sectionName} ===`;
-        el.sectionSelect.appendChild(opt);
-      }
-    }
-
-    if (prevValue && foundSections.includes(prevValue)) {
-      el.sectionSelect.value = prevValue;
-    } else {
-      el.sectionSelect.value = '';
-    }
-  } else {
-    el.sectionSelect.value = '';
-  }
-
-  if (window.refreshCustomSectionSelect) {
-    window.refreshCustomSectionSelect();
-  }
-}
 
 function toggleAutoPlay() {
   state.autoPlay = !state.autoPlay;
@@ -749,6 +729,7 @@ function enqueueSessionOp(opFn) {
 }
 
 async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
+  hidePortal();
   clearTimers();
   resetStoryStream();
   state.status = 'Loading';
@@ -897,6 +878,7 @@ async function submitChoice(choiceId, expectedPresentationId = null, expectedSes
 
 async function changeLanguage(locale) {
   state.requestedLocale = locale;
+  updatePortalLabels(locale);
   el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.locale === locale);
   });
@@ -937,8 +919,7 @@ async function changeLanguage(locale) {
 async function restartSession() {
   const script = (el.scriptInput && el.scriptInput.value) || (state.samples[state.currentSampleKey] || '');
   if (script) {
-    const entryBlock = el.sectionSelect && el.sectionSelect.value ? el.sectionSelect.value : null;
-    await startSession(script, state.requestedLocale, entryBlock);
+    await startSession(script, state.requestedLocale);
   }
 }
 
@@ -946,6 +927,8 @@ async function restartSession() {
 // Narrative Stream & State Management
 // ==========================================================================
 function resetStoryStream() {
+  clearAllPortraits();
+  stopBgm(0);
   el.storyStream.innerHTML = '';
   el.storyCompletedBanner.style.display = 'none';
   state.beatsCount = 0;
@@ -990,6 +973,7 @@ function updateState(serverState, isLanguageSwitch = false) {
 
   // If Completed
   if (state.status === 'Completed') {
+    clearAllPortraits();
     el.storyCompletedBanner.style.display = 'block';
     el.dockStepHint.textContent = '剧本演练已全部结束';
     scrollToBottom();
@@ -1018,6 +1002,425 @@ function renderDiagnostics() {
     `${item.block || 'Root'} · L${item.lineNumber}: ${item.message}`).join('\n');
 }
 
+// ==========================================================================
+// Portrait Stage & Character Presentation Manager
+// ==========================================================================
+const portraitState = {
+  left: { id: null, src: null, timer: null },
+  right: { id: null, src: null, timer: null }
+};
+
+const PORTRAIT_REGISTRY = {
+  'kutori': 'portraits/kutori.webp',
+  'william': 'portraits/william.webp',
+  'kutori_normal': 'portraits/kutori.webp',
+  'william_normal': 'portraits/william.webp',
+  'kutori.webp': 'portraits/kutori.webp',
+  'william.webp': 'portraits/william.webp'
+};
+
+function resolvePortraitUrl(id) {
+  if (!id) return '';
+  const cleanId = String(id).trim().toLowerCase();
+  return PORTRAIT_REGISTRY[cleanId] || (cleanId.endsWith('.webp') || cleanId.endsWith('.png') ? cleanId : `portraits/${cleanId}.webp`);
+}
+
+function extractPortraitsFromTags(tags, speakerName) {
+  if (!Array.isArray(tags)) return { left: null, right: null };
+
+  let leftTarget = null;
+  let rightTarget = null;
+
+  for (const tag of tags) {
+    if (!tag || !tag.name) continue;
+    const tagName = tag.name.toLowerCase();
+
+    // Match .portrait(...), .char(...), .portrait_left(...), .portrait_right(...)
+    if (tagName !== 'portrait' && tagName !== 'char' &&
+        tagName !== 'portrait_left' && tagName !== 'portrait_right' &&
+        tagName !== 'portraitleft' && tagName !== 'portraitright') {
+      continue;
+    }
+
+    const namedArgs = tag.namedArgs || {};
+    const posArgs = Array.isArray(tag.positionalArgs) ? tag.positionalArgs : [];
+
+    let slot = null;
+    let charId = null;
+
+    if (tagName.includes('left')) slot = 'left';
+    if (tagName.includes('right')) slot = 'right';
+
+    // Check named arguments: side, slot, pos, id, char, name
+    if (namedArgs.side) slot = String(namedArgs.side).toLowerCase();
+    else if (namedArgs.slot) slot = String(namedArgs.slot).toLowerCase();
+    else if (namedArgs.pos) slot = String(namedArgs.pos).toLowerCase();
+
+    if (namedArgs.id) charId = String(namedArgs.id);
+    else if (namedArgs.char) charId = String(namedArgs.char);
+    else if (namedArgs.name) charId = String(namedArgs.name);
+
+    // Check positional arguments
+    if (!charId && posArgs.length > 0) {
+      const p0 = String(posArgs[0]);
+      if (posArgs.length === 1) {
+        charId = p0;
+      } else {
+        const p1 = String(posArgs[1]).toLowerCase();
+        if (p1 === 'left' || p1 === 'right') {
+          charId = p0;
+          slot = p1;
+        } else if (p0.toLowerCase() === 'left' || p0.toLowerCase() === 'right') {
+          slot = p0.toLowerCase();
+          charId = p1;
+        } else {
+          charId = p0;
+        }
+      }
+    }
+
+    if (!charId) continue;
+    const lowerId = charId.toLowerCase();
+
+    // Check if slot was not explicitly declared: default kutori->left, william->right
+    if (!slot) {
+      if (lowerId.includes('kutori')) {
+        slot = 'left';
+      } else if (lowerId.includes('william')) {
+        slot = 'right';
+      } else if (speakerName && String(speakerName).toLowerCase().includes('william')) {
+        slot = 'right';
+      } else {
+        slot = 'left';
+      }
+    }
+
+    // Hide / clear command
+    if (lowerId === 'none' || lowerId === 'hide' || lowerId === 'clear' || lowerId === 'off') {
+      if (slot === 'left') leftTarget = null;
+      if (slot === 'right') rightTarget = null;
+      continue;
+    }
+
+    const resolvedSrc = resolvePortraitUrl(charId);
+    if (slot === 'left') {
+      leftTarget = { id: charId, src: resolvedSrc };
+    } else if (slot === 'right') {
+      rightTarget = { id: charId, src: resolvedSrc };
+    }
+  }
+
+  return { left: leftTarget, right: rightTarget };
+}
+
+function updatePortraits(tags, payload) {
+  // Portraits are dedicated to Web Reader; VS Code extension does not display portraits.
+  if (window.ktoryReaderHost) return;
+  const speaker = payload ? payload.speaker : null;
+  const targets = extractPortraitsFromTags(tags, speaker);
+
+  updateSlot('left', el.portraitSlotLeft, targets.left);
+  updateSlot('right', el.portraitSlotRight, targets.right);
+}
+
+function updateSlot(side, slotEl, target) {
+  if (!slotEl) return;
+  const current = portraitState[side];
+
+  if (target) {
+    // If already showing this portrait in this slot, keep active and do nothing
+    if (current.id === target.id && current.src === target.src && slotEl.classList.contains('active')) {
+      return;
+    }
+
+    clearTimeout(current.timer);
+    current.id = target.id;
+    current.src = target.src;
+
+    slotEl.innerHTML = `<img src="${escapeHtml(target.src)}" alt="${escapeHtml(target.id)}" />`;
+
+    // Trigger enter animation: slide-in from side + fade-in
+    slotEl.classList.remove('active', 'exiting');
+    slotEl.classList.add('entering');
+
+    // Force layout reflow so animation always triggers cleanly
+    if (typeof slotEl.offsetWidth === 'number') {
+      void slotEl.offsetWidth;
+    }
+
+    slotEl.classList.remove('entering');
+    slotEl.classList.add('active');
+  } else {
+    // Fade out in place
+    if (current.id !== null || slotEl.classList.contains('active')) {
+      clearTimeout(current.timer);
+      current.id = null;
+      current.src = null;
+
+      slotEl.classList.remove('active', 'entering');
+      slotEl.classList.add('exiting');
+
+      current.timer = setTimeout(() => {
+        if (current.id === null) {
+          slotEl.classList.remove('exiting');
+          slotEl.innerHTML = '';
+        }
+      }, 400);
+    }
+  }
+}
+
+function clearAllPortraits() {
+  if (window.ktoryReaderHost) return;
+  updateSlot('left', el.portraitSlotLeft, null);
+  updateSlot('right', el.portraitSlotRight, null);
+}
+
+// ==========================================================================
+// Background Music (BGM) & Audio Support for Web Reader
+// ==========================================================================
+let currentBgmAudio = null;
+let currentBgmTrack = null;
+let bgmFadeAnimId = null;
+let pendingBgm = null;
+
+const requestAnimFrame = typeof requestAnimationFrame === 'function'
+  ? requestAnimationFrame
+  : (fn) => setTimeout(() => fn(typeof performance !== 'undefined' ? performance.now() : Date.now()), 16);
+
+const cancelAnimFrame = typeof cancelAnimationFrame === 'function'
+  ? cancelAnimationFrame
+  : (id) => clearTimeout(id);
+
+function resolveAudioUrl(track) {
+  if (!track) return '';
+  let clean = String(track).trim().replace(/^["']|["']$/g, '');
+  if (!clean) return '';
+  if (/^(https?:)?\/\//i.test(clean) || clean.startsWith('/') || clean.startsWith('./')) {
+    return clean;
+  }
+  if (clean.toLowerCase().startsWith('audio/')) {
+    return clean;
+  }
+  const hasExt = /\.(mp3|m4a|ogg|wav|aac|flac)$/i.test(clean);
+  const filename = hasExt ? clean : `${clean}.mp3`;
+  return `audio/${filename}`;
+}
+
+function stopBgmFade() {
+  if (bgmFadeAnimId != null) {
+    cancelAnimFrame(bgmFadeAnimId);
+    bgmFadeAnimId = null;
+  }
+}
+
+function setBgmVolume(targetVolume, durationSeconds = 0) {
+  if (window.ktoryReaderHost) return;
+  const target = Math.max(0, Math.min(1, Number(targetVolume) || 0));
+  const duration = Math.max(0, Number(durationSeconds) || 0);
+
+  if (pendingBgm) {
+    pendingBgm.targetVolume = target;
+  }
+
+  if (!currentBgmAudio) return;
+  stopBgmFade();
+
+  if (duration <= 0) {
+    currentBgmAudio.volume = target;
+    return;
+  }
+
+  const startVolume = currentBgmAudio.volume;
+  const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const durationMs = duration * 1000;
+
+  function stepFade(now) {
+    const elapsed = now - startTime;
+    if (elapsed >= durationMs) {
+      if (currentBgmAudio) {
+        currentBgmAudio.volume = target;
+      }
+      bgmFadeAnimId = null;
+    } else {
+      const progress = elapsed / durationMs;
+      if (currentBgmAudio) {
+        currentBgmAudio.volume = Math.max(0, Math.min(1, startVolume + (target - startVolume) * progress));
+      }
+      bgmFadeAnimId = requestAnimFrame(stepFade);
+    }
+  }
+
+  bgmFadeAnimId = requestAnimFrame(stepFade);
+}
+
+function stopBgm(durationSeconds = 0) {
+  if (window.ktoryReaderHost) return;
+  stopBgmFade();
+  pendingBgm = null;
+  if (!currentBgmAudio) return;
+
+  const audio = currentBgmAudio;
+  const duration = Math.max(0, Number(durationSeconds) || 0);
+
+  if (duration <= 0) {
+    audio.pause();
+    try { audio.currentTime = 0; } catch (_) {}
+    if (currentBgmAudio === audio) {
+      currentBgmAudio = null;
+      currentBgmTrack = null;
+    }
+  } else {
+    const startVolume = audio.volume;
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const durationMs = duration * 1000;
+
+    function stepFade(now) {
+      const elapsed = now - startTime;
+      if (elapsed >= durationMs) {
+        audio.volume = 0;
+        audio.pause();
+        try { audio.currentTime = 0; } catch (_) {}
+        if (currentBgmAudio === audio) {
+          currentBgmAudio = null;
+          currentBgmTrack = null;
+        }
+        bgmFadeAnimId = null;
+      } else {
+        const progress = elapsed / durationMs;
+        audio.volume = Math.max(0, startVolume * (1 - progress));
+        bgmFadeAnimId = requestAnimFrame(stepFade);
+      }
+    }
+    bgmFadeAnimId = requestAnimFrame(stepFade);
+  }
+}
+
+function playBgm(track, initialVolume = 1.0) {
+  if (window.ktoryReaderHost) return;
+  if (typeof Audio === 'undefined') return;
+  if (!track) return;
+
+  const resolvedUrl = resolveAudioUrl(track);
+  if (!resolvedUrl) return;
+
+  const volume = Math.max(0, Math.min(1, initialVolume != null ? Number(initialVolume) : 1.0));
+
+  // If already playing this track, adjust volume if needed
+  if (currentBgmAudio && currentBgmTrack === resolvedUrl && !currentBgmAudio.paused) {
+    setBgmVolume(volume, 0);
+    return;
+  }
+
+  stopBgm(0);
+
+  const audio = new Audio();
+  audio.loop = true;
+  audio.volume = volume;
+  audio.src = resolvedUrl;
+
+  audio.onerror = () => {
+    if (resolvedUrl.startsWith('audio/')) {
+      const fallbackUrl = resolvedUrl.slice(6);
+      if (audio.src !== fallbackUrl) {
+        audio.src = fallbackUrl;
+        audio.play().catch(() => {});
+      }
+    }
+  };
+
+  currentBgmAudio = audio;
+  currentBgmTrack = resolvedUrl;
+
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(err => {
+      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+        pendingBgm = { audio, targetVolume: volume };
+      } else {
+        console.warn('BGM playback failed:', err);
+      }
+    });
+  }
+}
+
+function resumePendingAudio() {
+  if (pendingBgm && pendingBgm.audio) {
+    const { audio, targetVolume } = pendingBgm;
+    pendingBgm = null;
+    audio.volume = targetVolume;
+    audio.play().catch(e => {
+      console.warn('Failed to resume pending audio:', e);
+    });
+  }
+}
+
+function parseVolumeArg(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'number') return raw;
+  const str = String(raw).trim();
+  const match = str.match(/(?:volume|vol|target)\s*[:=]\s*([0-9.]+)/i);
+  if (match) return Number(match[1]);
+  const num = Number(str);
+  return isNaN(num) ? null : num;
+}
+
+function parseDurationArg(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'number') return raw;
+  const str = String(raw).trim();
+  const match = str.match(/(?:duration|time|fade)\s*[:=]\s*([0-9.]+)/i);
+  if (match) return Number(match[1]);
+  const num = Number(str);
+  return isNaN(num) ? null : num;
+}
+
+function processAudioTags(tags) {
+  if (window.ktoryReaderHost) return;
+  if (!Array.isArray(tags)) return;
+
+  for (const tag of tags) {
+    if (!tag || !tag.name) continue;
+    const name = tag.name.toLowerCase();
+    const namedArgs = tag.namedArgs || {};
+    const posArgs = Array.isArray(tag.positionalArgs) ? tag.positionalArgs : [];
+
+    if (name === 'playbgm' || name === 'bgm' || name === 'play_bgm') {
+      let track = namedArgs.track || namedArgs.file || namedArgs.src || namedArgs.name || (posArgs.length > 0 ? posArgs[0] : null);
+      if (track) {
+        let vol = parseVolumeArg(namedArgs.volume ?? namedArgs.vol);
+        if (vol == null && posArgs.length > 1) {
+          vol = parseVolumeArg(posArgs[1]);
+        }
+        if (vol == null) vol = 1.0;
+        playBgm(track, vol);
+      }
+    } else if (name === 'setbgmvolume' || name === 'bgmvolume' || name === 'set_bgm_volume' || name === 'fadebgm' || name === 'fade_bgm') {
+      let targetVol = parseVolumeArg(namedArgs.volume ?? namedArgs.target ?? namedArgs.vol);
+      if (targetVol == null && posArgs.length > 0) {
+        targetVol = parseVolumeArg(posArgs[0]);
+      }
+      if (targetVol == null) targetVol = 1.0;
+
+      let duration = parseDurationArg(namedArgs.duration ?? namedArgs.time ?? namedArgs.fade);
+      if (duration == null && posArgs.length > 1) {
+        duration = parseDurationArg(posArgs[1]);
+      }
+      if (duration == null) duration = 0;
+
+      setBgmVolume(targetVol, duration);
+    } else if (name === 'stopbgm' || name === 'stop_bgm' || name === 'pausebgm' || name === 'pause_bgm') {
+      let duration = parseDurationArg(namedArgs.duration ?? namedArgs.fade);
+      if (duration == null && posArgs.length > 0) {
+        duration = parseDurationArg(posArgs[0]);
+      }
+      if (duration == null) duration = 0;
+
+      stopBgm(duration);
+    }
+  }
+}
+
 function renderBeat(payload, isLanguageSwitch = false) {
   const isDirective = payload.stepType === 1 || payload.stepType === 'Directive';
 
@@ -1034,6 +1437,8 @@ function renderBeat(payload, isLanguageSwitch = false) {
     }
 
     state.beatsCount++;
+    updatePortraits(payload.tags || [], payload);
+    processAudioTags(payload.tags || []);
     renderDirectiveBeat(payload);
     return;
   }
@@ -1102,6 +1507,9 @@ function renderBeat(payload, isLanguageSwitch = false) {
   const tags = payload.tags || [];
   state.activeTags = tags;
 
+  updatePortraits(tags, payload);
+  processAudioTags(tags);
+
   // Extract emotion tag if present
   let emotionArg = null;
   const emotionTag = tags.find(t => t.name.toLowerCase() === 'emotion');
@@ -1131,7 +1539,9 @@ function renderBeat(payload, isLanguageSwitch = false) {
     textContainer = passage.querySelector('.dialogue-text');
     cursorEl = passage.querySelector('.typing-cursor');
     state.currentActiveSpeakerEl = passage.querySelector('.speaker-name');
-    state.currentActiveSpeakerEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
+    if (state.currentActiveSpeakerEl) {
+      state.currentActiveSpeakerEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
+    }
   } else {
     // Narrator
     passage.classList.add('passage-narrator');
@@ -1164,8 +1574,13 @@ function renderDirectiveBeat(payload) {
 
   const tagsDesc = (payload.tags || [])
     .map(t => {
-      const args = t.positionalArgs.map(a => JSON.stringify(a)).join(', ');
-      return `.${t.name}(${args})`;
+      const parts = (t.positionalArgs || []).map(a => JSON.stringify(a));
+      if (t.namedArgs) {
+        for (const [k, v] of Object.entries(t.namedArgs)) {
+          parts.push(`${k}: ${JSON.stringify(v)}`);
+        }
+      }
+      return `.${t.name}(${parts.join(', ')})`;
     })
     .join(' ');
 
