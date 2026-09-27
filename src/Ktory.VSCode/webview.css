@@ -9,19 +9,24 @@
   --text-muted: var(--vscode-descriptionForeground, #aaa);
   --border-subtle: var(--vscode-panel-border, #444);
   --border-medium: var(--vscode-input-border, #555);
+  --font-serif: "Noto Serif", "Noto Serif SC", "Noto Serif JP", "Source Han Serif SC", "Source Han Serif JP", "Songti SC", "SimSun", "Times New Roman", Times, serif;
   color: var(--vscode-editor-foreground, #ddd);
   background: var(--vscode-editor-background, #181818);
 }
 .vscode-reader .editor-drawer, .vscode-reader #editorDrawer,
-.vscode-reader #drawerBackdrop { display: none !important; }
+.vscode-reader #drawerBackdrop,
+.vscode-reader .portrait-stage, .vscode-reader #portraitStage,
+.vscode-reader .portal-overlay, .vscode-reader #portalOverlay,
+.vscode-reader .reader-backdrop-mask, .vscode-reader #readerBackdropMask { display: none !important; }
 .vscode-reader .top-nav {
   position: static; height: auto; min-height: 0; flex: 0 0 auto;
   padding: 12px 16px; flex-wrap: wrap; gap: 10px;
 }
 .vscode-reader .nav-right { flex-wrap: wrap; gap: 8px; min-width: 0; }
-.vscode-reader .nav-divider, .vscode-reader #langSwitcher { display: none !important; }
+.vscode-reader .nav-divider, .vscode-reader #langSwitcher,
+.vscode-reader #btnGoHome, .vscode-reader .nav-home-link { display: none !important; }
 .vscode-reader .brand-logo { width: 28px; height: 28px; }
-.vscode-reader .brand-title { font-size: 18px; }
+.vscode-reader .brand-title { font-family: var(--font-serif); font-size: 18px; font-weight: 500; }
 .vscode-reader .app-layout { height: 100vh; display: flex; flex-direction: column; background: var(--bg-app); }
 .vscode-reader .reader-viewport { flex: 1; min-height: 0; padding-top: 0; }
 .vscode-reader .reader-container { padding: 20px 24px 120px; }

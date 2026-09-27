@@ -1,6 +1,6 @@
 # Ktory for VS Code
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+[English](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.md) | [简体中文](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.zh-CN.md) | [日本語](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.ja.md)
 
 `.ktr` 语法高亮与离线预览阅读面板，由 Ktory C# 核心驱动。
 
@@ -28,7 +28,7 @@ VSIX 安装包内置了 .NET WebAssembly 运行时、Core 核心、桥接层与 
 
 ## 许可证
 
-本扩展为专有软件。其[许可证](LICENSE.txt)允许个人与商业用途，包括为商业游戏编写剧本。修改和重新分发本扩展需获得单独书面许可。您编写的剧本及其它原创内容不受此限制。内置的第三方组件保留其原有许可证；详情请见安装扩展目录中的 `reader/notices/`。本许可证不授予独立分发 Ktory Core 或 Unity 运行时包的权利。
+本扩展为专有软件。其[许可证](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/LICENSE.txt)允许个人与商业用途，包括为商业游戏编写剧本。修改和重新分发本扩展需获得单独书面许可。您编写的剧本及其它原创内容不受此限制。内置的第三方组件保留其原有许可证；详情请见安装扩展目录中的 `reader/notices/`。本许可证不授予独立分发 Ktory Core 或 Unity 运行时包的权利。
 
 ## 故障排查
 

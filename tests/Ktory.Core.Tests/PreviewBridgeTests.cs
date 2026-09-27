@@ -1,5 +1,5 @@
 using Ktory.Core.Common;
-using Ktory.Web;
+using Ktory.Wasm;
 using System.Text.Json;
 
 namespace Ktory.Core.Tests;

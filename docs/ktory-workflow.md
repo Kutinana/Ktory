@@ -27,8 +27,8 @@
 | --- | --- | --- |
 | `src/Ktory.Core/Ast, Parser, Desugar, Runtime` | 结构解析、诊断、叙事状态、语言选择、载荷与标签派发 | Unity、DOM、HTTP、资源数据库、真实时钟、真实演出的执行与事件判定；当前不异步等待演出 |
 | `src/Ktory.Core/Runtime/PresentationController.cs` | 不依赖引擎的标准呈现策略辅助类；由接入层驱动 | 把文本门禁变成 Sequencer 的内部前置条件 |
-| `src/Ktory.Runner` | 本地 HTTP 宿主与 Reader 界面，`wwwroot` 是共用 Reader 前端源码 | 第二套分支、调用栈、循环或语言回退算法 |
-| `src/Ktory.Web` | WASM 宿主及 JS 桥接，引用 Core、复用 Reader 前端 | 重新实现脚本解释器 |
+| `src/Ktory.WebReader` | 本地 HTTP 宿主与 Reader 界面，`wwwroot` 是共用 Reader 前端源码 | 第二套分支、调用栈、循环或语言回退算法 |
+| `src/Ktory.Wasm` | WASM 宿主及 JS 桥接，引用 Core、复用 Reader 前端 | 重新实现脚本解释器 |
 | `src/Ktory.Unity` | 通用 Unity 导入、编辑器及接入代码的源码位置 | 特定游戏角色、剧情状态或私有资源；手工维护 Core 副本 |
 | `src/Ktory.VSCode` | VS Code 语言贡献、唯一 TextMate grammar、编辑器文档与 Webview 适配；内置同一 WASM Reader | 第二套解释器、手工修改生成的扩展目录、把高亮当作语义验证 |
 | `website` | 门户、教程、三语说明、语法高亮与展示 | 核心语义的第二权威或可冒充真实执行的模拟器 |
@@ -107,8 +107,8 @@ Vercel `ktory-home` 应仅接收门户源码分支的部署，排除 `deploy-rea
 pnpm --dir src/Ktory.VSCode install --frozen-lockfile
 dotnet test tests/Ktory.Core.Tests/Ktory.Core.Tests.csproj -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet build Ktory.sln -m:1 -nr:false -p:UseSharedCompilation=false
-dotnet publish src/Ktory.Web -c Release
-dotnet run --project src/Ktory.Runner
+dotnet publish src/Ktory.Wasm -c Release
+dotnet run --project src/Ktory.WebReader
 ```
 
 首轮正常执行 restore；依赖已还原且无需更新时可加 `--no-restore`。构建和测试要求本地进程通信，沙箱权限失败不能记为产品测试失败。门户使用其 `pnpm-lock.yaml` 和 `package.json` 中的构建命令独立验证。

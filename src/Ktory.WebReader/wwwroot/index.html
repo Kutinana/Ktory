@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ktory Web Reader</title>
 
-  <!-- Typography: Cormorant Garamond (Serif), Noto Serif SC (Songti), Inter (Sans), JetBrains Mono -->
+  <!-- Typography: Noto Serif, Noto Serif SC, Noto Serif JP, Inter, JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Serif:ital,wght@0,300..700;1,300..700&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Serif+JP:wght@300;400;600&display=swap"
     rel="stylesheet">
 
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
@@ -52,13 +52,58 @@
           <span class="btn-icon">↺</span>
           <span>RESTART</span>
         </button>
+
+        <div class="nav-divider"></div>
+
+        <!-- Official Website Link -->
+        <a href="https://ktory.ink" target="_blank" rel="noopener noreferrer" class="nav-text-btn nav-home-link"
+          id="btnGoHome" title="访问 Ktory 官网首页 (ktory.ink)">
+          <span class="btn-icon">↗</span>
+          <span id="navHomeText">官网</span>
+        </a>
       </div>
     </header>
+
+    <!-- Portal Landing Overlay -->
+    <section class="portal-overlay" id="portalOverlay" aria-label="Ktory Portal">
+      <div class="portal-hero">
+        <!-- Logo on the left, Title & Tagline on the right -->
+        <div class="portal-header-row">
+          <img src="ktory_logo.webp" alt="Ktory Logo" class="portal-logo" />
+          <div class="portal-header-text">
+            <h1 class="portal-title">Ktory Web Reader</h1>
+            <p class="portal-tagline" id="portalTagline">轻量 · 优雅 · 对白驱动的叙事创作与接入系统</p>
+          </div>
+        </div>
+
+        <!-- Action Buttons with icon on the left of text -->
+        <div class="portal-actions">
+          <button id="btnPortalSample" class="portal-btn portal-btn-primary" type="button">
+            <span class="portal-btn-icon">▶</span>
+            <span class="portal-btn-title" id="portalSampleTitle">尝试示例剧本</span>
+          </button>
+
+          <button id="btnPortalWrite" class="portal-btn portal-btn-secondary" type="button">
+            <span class="portal-btn-icon">✎</span>
+            <span class="portal-btn-title" id="portalWriteTitle">撰写我的剧本</span>
+          </button>
+        </div>
+      </div>
+    </section>
 
     <details class="runtime-diagnostics" id="runtimeDiagnostics" hidden>
       <summary id="runtimeDiagnosticSummary">剧本警告</summary>
       <pre id="runtimeDiagnosticMessages" aria-live="polite"></pre>
     </details>
+
+    <!-- Character Portrait Stage (Dual Slots: Left & Right) -->
+    <div class="portrait-stage" id="portraitStage" aria-hidden="true">
+      <div class="portrait-slot slot-left" id="portraitSlotLeft"></div>
+      <div class="portrait-slot slot-right" id="portraitSlotRight"></div>
+    </div>
+
+    <!-- Center Narrative Dimming Mask (Fades to sides) -->
+    <div class="reader-backdrop-mask" id="readerBackdropMask" aria-hidden="true"></div>
 
     <!-- Main Scrollable Reading Viewport -->
     <main class="reader-viewport" id="readerViewport">
@@ -141,7 +186,7 @@
             <span class="form-label-badge">CATALOG</span>
           </div>
 
-          <!-- Custom Dark-Gold Dropdown Component -->
+          <!-- Custom Dark Dropdown Component -->
           <div class="custom-select-wrapper" id="sampleSelectWrapper">
             <!-- Native select kept visually hidden for accessibility and value syncing -->
             <select id="sampleSelect" class="sr-only-select">
@@ -149,7 +194,8 @@
             </select>
 
             <!-- Custom Trigger -->
-            <button type="button" class="custom-select-trigger" id="sampleSelectTrigger" aria-haspopup="listbox" aria-expanded="false">
+            <button type="button" class="custom-select-trigger" id="sampleSelectTrigger" aria-haspopup="listbox"
+              aria-expanded="false">
               <div class="trigger-label-group">
                 <span class="trigger-icon">📜</span>
                 <span class="trigger-text" id="sampleSelectTriggerText">-- 选择示例剧本 --</span>
@@ -166,34 +212,6 @@
           </div>
         </div>
 
-        <div class="drawer-form-group">
-          <div class="form-label-row">
-            <span class="label-glyph">⚑</span>
-            <label for="sectionSelect" class="form-label-title">启动入口小节</label>
-            <span class="form-label-badge">ENTRY</span>
-          </div>
-
-          <!-- Custom Section Dropdown Component -->
-          <div class="custom-select-wrapper" id="sectionSelectWrapper">
-            <select id="sectionSelect" class="sr-only-select">
-              <option value="">-- 默认入口（根节 / 主线）--</option>
-            </select>
-
-            <button type="button" class="custom-select-trigger" id="sectionSelectTrigger" aria-haspopup="listbox" aria-expanded="false">
-              <div class="trigger-label-group">
-                <span class="trigger-icon">⚑</span>
-                <span class="trigger-text" id="sectionSelectTriggerText">-- 默认入口（根节 / 主线）--</span>
-              </div>
-              <span class="trigger-chevron">▾</span>
-            </button>
-
-            <div class="custom-select-popover" id="sectionSelectPopover" role="listbox">
-              <div class="custom-select-options-list" id="sectionSelectOptionsList">
-                <!-- Dynamically populated section options -->
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div class="drawer-form-group flex-1">
           <label for="scriptInput">脚本源码 (.ktr):</label>

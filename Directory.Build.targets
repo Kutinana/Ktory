@@ -1,5 +1,5 @@
 <Project>
-  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Ktory.Runner' Or '$(MSBuildProjectName)' == 'Ktory.Web'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Ktory.WebReader' Or '$(MSBuildProjectName)' == 'Ktory.Wasm'">
     <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json" Link="wwwroot/highlighting/ktory.tmLanguage.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(MSBuildThisFileDirectory)src/Ktory.Highlighting/renderer.mjs" Link="wwwroot/highlighting/renderer.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(MSBuildThisFileDirectory)src/Ktory.Highlighting/theme.mjs" Link="wwwroot/highlighting/theme.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -11,7 +11,7 @@
     <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/LICENSE.txt" Link="wwwroot/highlighting/oniguruma-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/NOTICES.txt" Link="wwwroot/highlighting/oniguruma-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <Target Name="CheckReaderHighlightingDependencies" BeforeTargets="PrepareForBuild" Condition="'$(MSBuildProjectName)' == 'Ktory.Runner' Or '$(MSBuildProjectName)' == 'Ktory.Web'">
+  <Target Name="CheckReaderHighlightingDependencies" BeforeTargets="PrepareForBuild" Condition="'$(MSBuildProjectName)' == 'Ktory.WebReader' Or '$(MSBuildProjectName)' == 'Ktory.Wasm'">
     <Error Condition="!Exists('$(MSBuildThisFileDirectory)src/Ktory.VSCode/node_modules/vscode-oniguruma/release/onig.wasm')" Text="Install Reader highlighting dependencies first: pnpm --dir src/Ktory.VSCode install --frozen-lockfile" />
   </Target>
 </Project>

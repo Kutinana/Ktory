@@ -21,7 +21,7 @@ Ktory aims to keep text and story flow together in `.ktr`, reducing repeated pre
 
 - [Try Ktory Web Reader](https://reader.ktory.ink/)
 
-The repository contains the shared core (`src/Ktory.Core`), local and WASM Reader hosts (`src/Ktory.Runner`, `src/Ktory.Web`), Unity package sources (`src/Ktory.Unity`), the VS Code extension (`src/Ktory.VSCode`), and the portal (`website`). The extension bundles the same WASM core and Reader frontend for offline use; its single TextMate grammar is also used by the portal, landing page and Reader source editor. Generated packages and deployed sites are distribution artifacts, not independently maintained core implementations.
+The repository contains the shared core (`src/Ktory.Core`), local and WASM Reader hosts (`src/Ktory.WebReader`, `src/Ktory.Wasm`), Unity package sources (`src/Ktory.Unity`), the VS Code extension (`src/Ktory.VSCode`), and the portal (`website`). The extension bundles the same WASM core and Reader frontend for offline use; its single TextMate grammar is also used by the portal, landing page and Reader source editor. Generated packages and deployed sites are distribution artifacts, not independently maintained core implementations.
 
 ## Installation
 

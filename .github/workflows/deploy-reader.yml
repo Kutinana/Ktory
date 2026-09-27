@@ -7,8 +7,8 @@ on:
       - master
     paths:
       - 'src/Ktory.Core/**'
-      - 'src/Ktory.Web/**'
-      - 'src/Ktory.Runner/wwwroot/**'
+      - 'src/Ktory.Wasm/**'
+      - 'src/Ktory.WebReader/wwwroot/**'
       - 'samples/**'
       - 'src/Ktory.Highlighting/**'
       - 'src/Ktory.VSCode/syntaxes/**'
@@ -47,7 +47,7 @@ jobs:
 
       - name: Build Reader static files
         run: |
-          dotnet publish src/Ktory.Web -c Release -o artifacts/reader
+          dotnet publish src/Ktory.Wasm -c Release -o artifacts/reader
 
       - name: Publish Reader files to deploy-reader branch
         uses: peaceiris/actions-gh-pages@v3

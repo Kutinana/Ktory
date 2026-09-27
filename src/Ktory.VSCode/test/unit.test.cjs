@@ -68,12 +68,32 @@ test('the portal consumes the extension grammar instead of maintaining another c
 test('the offline bundle contains Core and the real WASM host', () => {
   const framework = fs.readdirSync(path.join(readerRoot, '_framework'));
   assert.ok(framework.some(name => /^Ktory.Core.*\.wasm$/.test(name)));
-  assert.ok(framework.some(name => /^Ktory.Web.*\.wasm$/.test(name)));
+  assert.ok(framework.some(name => /^Ktory.Wasm.*\.wasm$/.test(name)));
   assert.ok(framework.includes('blazor.webassembly.js'));
   assert.ok(fs.existsSync(path.join(readerRoot, 'notices/microsoft.netcore.app.runtime.mono.browser-wasm')));
   assert.equal(fs.readFileSync(path.join(readerRoot, 'app.js'), 'utf8'),
-    fs.readFileSync(path.resolve(root, '../Ktory.Runner/wwwroot/app.js'), 'utf8'));
+    fs.readFileSync(path.resolve(root, '../Ktory.WebReader/wwwroot/app.js'), 'utf8'));
   assert.match(JSON.parse(fs.readFileSync(path.join(readerRoot, 'build-info.json'), 'utf8')).sourceCommit, /^[a-f0-9]{40}$/);
+});
+
+test('the offline extension reader excludes sample scripts and character portraits', () => {
+  assert.equal(fs.existsSync(path.join(readerRoot, 'portraits')), false, 'portraits directory must not be bundled');
+  function scan(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scan(full);
+      } else {
+        assert.ok(!/\.(ktr|ktory)$/i.test(entry.name), `sample script should not be bundled: ${entry.name}`);
+        assert.ok(!/kutori|william/i.test(entry.name), `portrait image should not be bundled: ${entry.name}`);
+      }
+    }
+  }
+  scan(readerRoot);
+
+  const webviewCss = fs.readFileSync(path.join(root, 'webview.css'), 'utf8');
+  assert.ok(webviewCss.includes('.portrait-stage') || webviewCss.includes('#portraitStage'),
+    'webview.css must hide portrait stage');
 });
 
 test('the staged extension includes current runtime sources and no build tooling', () => {

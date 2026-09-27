@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Synchronize offline WASM reader runtime and asset bundles for the VS Code preview.
+- Update sample script character declaration naming conventions.
+
 ## 0.1.2
 
 - Support multi-language UI in the VS Code extension for English, Simplified Chinese, and Japanese (`en`, `zh-cn`, `ja`).

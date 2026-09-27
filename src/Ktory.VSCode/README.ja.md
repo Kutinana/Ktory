@@ -1,6 +1,6 @@
 # Ktory for VS Code
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+[English](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.md) | [简体中文](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.zh-CN.md) | [日本語](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.ja.md)
 
 `.ktr` 構文ハイライトと、Ktory C# コアを搭載したオフライン読書プレビューパネルです。
 
@@ -28,7 +28,7 @@ VSIX パッケージには .NET WebAssembly ランタイム、Core、ブリッ�
 
 ## ライセンス
 
-本拡張機能はプロプライエタリソフトウェアです。[ライセンス](LICENSE.txt)は、商用ゲーム用のスクリプト作成を含む個人および商用利用を許諾しています。本拡張機能自体の改変および再配布には個別の書面による許可が必要です。作成されたスクリプトやその他のオリジナルコンテンツにはこの制限は適用されません。同梱されているサードパーティ製コンポーネントはそれぞれのライセンスを保持します（インストール先拡張機能の `reader/notices/` を参照）。このライセンスは、単体の Ktory Core や Unity ランタイムパッケージの再配布権を付与するものではありません。
+本拡張機能はプロプライエタリソフトウェアです。[ライセンス](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/LICENSE.txt)は、商用ゲーム用のスクリプト作成を含む個人および商用利用を許諾しています。本拡張機能自体の改変および再配布には個別の書面による許可が必要です。作成されたスクリプトやその他のオリジナルコンテンツにはこの制限は適用されません。同梱されているサードパーティ製コンポーネントはそれぞれのライセンスを保持します（インストール先拡張機能の `reader/notices/` を参照）。このライセンスは、単体の Ktory Core や Unity ランタイムパッケージの再配布権を付与するものではありません。
 
 ## トラブルシューティング
 

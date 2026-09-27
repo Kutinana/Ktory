@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
-namespace Ktory.Web;
+namespace Ktory.Wasm;
 
 public class Program
 {

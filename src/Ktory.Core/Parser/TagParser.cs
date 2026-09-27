@@ -138,8 +138,9 @@ namespace Ktory.Core.Parser
                 else
                 {
                     // Read identifier or expression until '=', ',', or ')'
+                    // Read identifier or expression until '=', ':', ',', or ')'
                     var tokenSb = new StringBuilder();
-                    while (i < input.Length && input[i] != '=' && input[i] != ',' && input[i] != ')')
+                    while (i < input.Length && input[i] != '=' && input[i] != ':' && input[i] != ',' && input[i] != ')')
                     {
                         tokenSb.Append(input[i]);
                         i++;
@@ -147,11 +148,11 @@ namespace Ktory.Core.Parser
 
                     var token = tokenSb.ToString().Trim();
 
-                    // If followed by '=', this token was a key
-                    if (i < input.Length && input[i] == '=')
+                    // If followed by '=' or ':', this token was a key
+                    if (i < input.Length && (input[i] == '=' || input[i] == ':'))
                     {
                         key = token;
-                        i++; // skip '='
+                        i++; // skip '=' or ':'
                         while (i < input.Length && char.IsWhiteSpace(input[i])) i++;
 
                         // Read value
@@ -247,9 +248,9 @@ namespace Ktory.Core.Parser
                 }
                 else
                 {
-                    // Read identifier or expression until '=', ',', or ')'
+                    // Read identifier or expression until '=', ':', ',', or ')'
                     var tokenSb = new StringBuilder();
-                    while (i < input.Length && input[i] != '=' && input[i] != ',' && input[i] != ')')
+                    while (i < input.Length && input[i] != '=' && input[i] != ':' && input[i] != ',' && input[i] != ')')
                     {
                         tokenSb.Append(input[i]);
                         i++;
@@ -257,11 +258,11 @@ namespace Ktory.Core.Parser
 
                     var token = tokenSb.ToString().Trim();
 
-                    // If followed by '=', this token was a key
-                    if (i < input.Length && input[i] == '=')
+                    // If followed by '=' or ':', this token was a key
+                    if (i < input.Length && (input[i] == '=' || input[i] == ':'))
                     {
                         key = token;
-                        i++; // skip '='
+                        i++; // skip '=' or ':'
                         while (i < input.Length && char.IsWhiteSpace(input[i])) i++;
 
                         // Read value

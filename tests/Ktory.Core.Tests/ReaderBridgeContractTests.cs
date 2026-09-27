@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Ktory.Core.Runtime;
-using Ktory.Web;
+using Ktory.Wasm;
 
 namespace Ktory.Core.Tests;
 

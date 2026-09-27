@@ -1,6 +1,6 @@
 # Ktory for VS Code
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+[English](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.md) | [简体中文](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.zh-CN.md) | [日本語](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/README.ja.md)
 
 `.ktr` syntax highlighting and an offline reading panel powered by the Ktory C# core.
 
@@ -28,7 +28,7 @@ The preview ignores unknown external choice conditions and skips unknown present
 
 ## License
 
-This extension is proprietary software. The [license](LICENSE.txt) permits personal and commercial use, including authoring scripts for commercial games. Modification and redistribution of the extension require separate written permission. Your own scripts and other original content are not subject to these restrictions. Bundled third-party components retain their own licenses; see `reader/notices/` in the installed extension. This license does not grant redistribution rights for standalone Ktory Core or Unity runtime packages.
+This extension is proprietary software. The [license](https://github.com/Kutinana/Ktory/blob/main/src/Ktory.VSCode/LICENSE.txt) permits personal and commercial use, including authoring scripts for commercial games. Modification and redistribution of the extension require separate written permission. Your own scripts and other original content are not subject to these restrictions. Bundled third-party components retain their own licenses; see `reader/notices/` in the installed extension. This license does not grant redistribution rights for standalone Ktory Core or Unity runtime packages.
 
 ## Troubleshooting
 

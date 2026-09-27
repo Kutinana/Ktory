@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -9,9 +9,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ktory.Core", "src\Ktory.Cor
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ktory.Core.Tests", "tests\Ktory.Core.Tests\Ktory.Core.Tests.csproj", "{363FFF22-7B2F-4E2D-89EA-D97A2DA93B0C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ktory.Runner", "src\Ktory.Runner\Ktory.Runner.csproj", "{225C7FE5-AF34-438C-AC66-AA9AE44FF851}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ktory.WebReader", "src\Ktory.WebReader\Ktory.WebReader.csproj", "{225C7FE5-AF34-438C-AC66-AA9AE44FF851}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ktory.Web", "src\Ktory.Web\Ktory.Web.csproj", "{25889770-F5FF-4BDD-BEA5-824C283602BF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ktory.Wasm", "src\Ktory.Wasm\Ktory.Wasm.csproj", "{25889770-F5FF-4BDD-BEA5-824C283602BF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

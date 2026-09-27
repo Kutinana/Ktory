@@ -16,12 +16,12 @@
     <ProjectReference Include="..\Ktory.Core\Ktory.Core.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(ExcludeEmbeddedSamples)' != 'true'">
     <EmbeddedResource Include="..\..\samples\*.ktr" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\Ktory.Runner\wwwroot\**" Link="wwwroot\%(RecursiveDir)%(FileName)%(Extension)">
+    <Content Include="..\Ktory.WebReader\wwwroot\**" Link="wwwroot\%(RecursiveDir)%(FileName)%(Extension)">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

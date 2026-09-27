@@ -1,0 +1,81 @@
+@defaultLang: ja
+@speaker ktr: zh=珂朵莉 | en=Chtholly | ja=クトリ
+  .portrait(kutori, left)
+@speaker wil: zh=威廉 | en=William | ja=ヴィレム
+  .portrait(william, right)
+
+#.playBgm("Scarborough Fair.mp3", volume: 0.5).wait(5).next
+
+ktr:「いつまでも一緒にいるよ」と誓った
+  @en: We vowed to be together forever.
+  @zh: 我曾许下誓言，与他相伴终生
+  
+ktr:誓えたことが幸せだった
+  @en: And that vow brought me happiness.
+  @zh: 正是这份誓言，让我十分欢喜
+
+wil:「いつまでも一緒にいるよ」と誓った
+  @en: We vowed to be together forever.
+  @zh: 我曾许下誓言，与她携手同行
+
+wil:誓えたことが安らぎだった
+  @en: And that vow gave me peace.
+  @zh: 正是这份誓言，让我不再迷惘
+
+ktr:この人のことが　好きだなと思った
+  @en: I realized how much I love him.
+  @zh: 我曾始终坚信，自己倾心于他
+
+wil:こいつのことが　大切だと思った
+  @en: I realized how much she meant to me.
+  @zh: 我曾始终坚信，自己珍视于她
+
+ktr:思えたことが　幸せだった
+  @en: And that realization brought me happiness.
+  @zh: 正是这份坚信，让我无比雀跃
+
+wil:思えたことが　喜びだった
+  @en: And that realization gave me joy.
+  @zh: 正是这份坚信，让我异常欣喜
+
+ktr:「幸せにしてやるよ」と　言ってもらえた
+  @en: He told me he would make me happy.
+  @zh: 他曾向我诉说，定会让我幸福
+
+wil:「幸せにしてやる」と　言ってやれた
+  @en: I told her I would make her happy.
+  @zh: 我曾向她诉说，定会让她幸福
+
+ktr:言ってもらえたことが　幸せだった
+  @en: And those words brought me happiness.
+  @zh: 正是这份诉说，让我万分欣慰
+
+wil:言えたことで　満たされていた
+  @en: And those words gave me satisfaction.
+  @zh: 正是这份诉说，让我无比满足
+
+ktr:こんなにもたくさんの幸せを　あの人に分けてもらった
+  @en: He brought an increadible amount of happiness and joy into my life.
+  @zh: 他所给予我的，是数不尽的幸福
+
+wil:こんなにも色々なものを　こいつから受け取っていた
+  @en: She gave me so many things I never thought I'd have.
+  @zh: 她所给予我的，是数不尽的色彩
+
+wil:なのに　俺は…
+  @en: But I...
+  @zh: 但是，我却…
+
+ktr:だから　きっと…
+  @en: Which is why I can say for certain,
+  @zh: 所以，我相信…
+
+ktr:今の私は　誰が何と言おうと
+  @en: and no one can convince me otherwise,
+  @zh: 此刻的我，无论他人如何言说
+
+ktr:世界一　幸せな女の子だ
+  @en: that I am the happiest girl in the world right now.
+  @zh: 都一定是世上最幸福的女孩
+
+#.setBgmVolume(1, 1.5).next

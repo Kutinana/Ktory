@@ -30,7 +30,7 @@ function reader(fetch) {
     document: { body: element('body'), getElementById: element, createElement: makeElement, addEventListener() {} },
     window: {}, requestAnimationFrame: fn => fn()
   });
-  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/Ktory.Runner/wwwroot/app.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/Ktory.WebReader/wwwroot/app.js'), 'utf8'), context);
   vm.runInContext(`
     globalThis.updates = [];
     // Test the real request queue and token capture; rendering is verified separately.

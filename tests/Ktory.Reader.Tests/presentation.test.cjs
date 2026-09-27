@@ -25,7 +25,7 @@ function reader(tags = [], options = {}) {
     timers.set(id, { fn, delay, repeat, at: now + delay });
     return id;
   }
-  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/Ktory.Runner/wwwroot/app.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/Ktory.WebReader/wwwroot/app.js'), 'utf8'), context);
   vm.runInContext(`
     globalThis.advances = [];
     stepSession = id => { advances.push(id); clearTimers(); state.status = 'Completed'; };

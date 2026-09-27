@@ -916,7 +916,7 @@ namespace Ktory.Core.Tests
 : 自动播放第一句。
 #AUTO_END
 ";
-            var bridge = new Ktory.Web.KtoryWasmBridge();
+            var bridge = new Ktory.Wasm.KtoryWasmBridge();
             string json = bridge.Start(script, "zh", null);
 
             using var doc = System.Text.Json.JsonDocument.Parse(json);
@@ -957,7 +957,7 @@ namespace Ktory.Core.Tests
 : 固定3.5秒。
 #AUTO_END
 ";
-            var bridge = new Ktory.Web.KtoryWasmBridge();
+            var bridge = new Ktory.Wasm.KtoryWasmBridge();
             string json1 = bridge.Start(script, "zh", null);
             PresentationToken token;
             using (var doc1 = System.Text.Json.JsonDocument.Parse(json1))

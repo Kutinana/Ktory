@@ -20,8 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ktory.Core\Ktory.Core.csproj" />
-    <ProjectReference Include="..\..\src\Ktory.Web\Ktory.Web.csproj" />
-    <ProjectReference Include="..\..\src\Ktory.Runner\Ktory.Runner.csproj" />
+    <ProjectReference Include="..\..\src\Ktory.Wasm\Ktory.Wasm.csproj" />
+    <ProjectReference Include="..\..\src\Ktory.WebReader\Ktory.WebReader.csproj" />
   </ItemGroup>
 
 </Project>

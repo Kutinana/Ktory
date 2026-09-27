@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-namespace Ktory.Web;
+namespace Ktory.Wasm;
 
 public static class EmbeddedSamples
 {

@@ -7,7 +7,7 @@ using Ktory.Core.Ast;
 using Ktory.Core.Parser;
 using Ktory.Core.Runtime;
 
-namespace Ktory.Web;
+namespace Ktory.Wasm;
 
 public class KtoryWasmBridge
 {

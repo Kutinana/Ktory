@@ -1,4 +1,4 @@
-/* global acquireVsCodeApi, Blazor, el, state, updateSectionSelector, startSession,
+/* global acquireVsCodeApi, Blazor, el, state, startSession,
    handleAdvanceAction, submitChoice, changeLanguage, restartSession, reportSessionError */
 (() => {
   const MESSAGES = {
@@ -325,11 +325,9 @@
     if (!message || typeof message.type !== 'string') return;
     if (message.type === 'document') {
       if (currentDocument && message.revision <= currentDocument.revision) return;
-      const changedFile = currentDocument?.uri !== message.uri;
       currentDocument = message;
       isOutdated = false;
       error.hidden = true;
-      if (changedFile && el.sectionSelect) el.sectionSelect.value = '';
       el.scriptInput.value = message.text;
       document.dispatchEvent(new Event('ktory:source-changed'));
       updateLanguages(message.text);

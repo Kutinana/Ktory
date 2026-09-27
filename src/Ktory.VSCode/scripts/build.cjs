@@ -14,8 +14,8 @@ async function build({ version } = {}) {
   // Work from an empty publish directory so fingerprinted WASM files cannot accumulate.
   fs.rmSync(buildRoot, { recursive: true, force: true });
   try {
-    const result = spawnSync('dotnet', ['publish', 'src/Ktory.Web', '-c', 'Release', '-o', output,
-      '-m:1', '-nr:false', '-p:UseSharedCompilation=false'], { cwd: repoRoot, stdio: 'inherit' });
+    const result = spawnSync('dotnet', ['publish', 'src/Ktory.Wasm', '-c', 'Release', '-o', output,
+      '-m:1', '-nr:false', '-p:UseSharedCompilation=false', '-p:ExcludeEmbeddedSamples=true'], { cwd: repoRoot, stdio: 'inherit' });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(`Reader build failed (${result.status ?? result.signal}).`);
 
@@ -38,11 +38,17 @@ async function build({ version } = {}) {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
     fs.cpSync(path.join(output, 'wwwroot'), reader, {
       recursive: true,
-      filter: source => !/\.(br|gz|pdb)$/.test(source)
+      filter: source => {
+        if (/\.(br|gz|pdb|ktr|ktory|mp3|m4a|ogg|wav)$/i.test(source)) return false;
+        const rel = path.relative(path.join(output, 'wwwroot'), source);
+        const segments = rel.split(path.sep);
+        if (segments.includes('portraits') || segments.includes('audio') || /kutori|william|scarborough/i.test(source)) return false;
+        return true;
+      }
     });
 
     // Keep the runtime's redistribution notices with the offline binaries.
-    const assets = JSON.parse(fs.readFileSync(path.join(repoRoot, 'artifacts/obj/Ktory.Web/project.assets.json'), 'utf8'));
+    const assets = JSON.parse(fs.readFileSync(path.join(repoRoot, 'artifacts/obj/Ktory.Wasm/project.assets.json'), 'utf8'));
     const packages = new Set(Object.values(assets.libraries).filter(item => item.type === 'package').map(item => item.path));
     for (const framework of Object.values(assets.project.frameworks)) {
       for (const dependency of framework.downloadDependencies || []) {
