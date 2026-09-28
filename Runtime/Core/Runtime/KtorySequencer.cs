@@ -1,0 +1,828 @@
+using System;
+using System.Collections.Generic;
+using Ktory.Core.Ast;
+using Ktory.Core.Common;
+
+namespace Ktory.Core.Runtime
+{
+    public partial class KtorySequencer
+    {
+        public KtoryFile File { get; }
+        public string RequestedLanguage { get; private set; } = "zh";
+        public string? DefaultLanguage => File.DefaultLang;
+
+        public ExecutionStatus Status { get; private set; } = ExecutionStatus.Ready;
+        public TextPayload? CurrentPayload { get; private set; }
+        public ChoicePayload? CurrentChoice { get; private set; }
+        public AutoPolicy? ActiveAutoPolicy { get; private set; }
+        public long CurrentPresentationId { get; private set; }
+        private long _presentationCounter = 0;
+
+        public IExpressionEvaluator Evaluator { get; set; } = new DefaultExpressionEvaluator();
+
+        /// <summary>
+        /// Maximum number of internal transitions / instructions allowed during a single Advance() call.
+        /// Guards against infinite loops that do not yield content or choices (e.g. infinite jumps without beats).
+        /// Default is 10,000.
+        /// </summary>
+        public int MaxInstructionBudgetPerAdvance { get; set; } = 10000;
+
+        // Session state
+        public HashSet<string> VisitedItemIds { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public Stack<CallFrame> CallStack { get; } = new Stack<CallFrame>();
+
+        // Active loop stack: (LoopContext, ResumeFrame, CallStackDepthAtEntry)
+        private readonly Stack<(LoopContext Loop, CallFrame ResumeFrame, int CallStackDepth)> _activeLoops = new Stack<(LoopContext, CallFrame, int)>();
+        public int ActiveLoopCount => _activeLoops.Count;
+
+        // Current execution pointer
+        private KtoryBlock _currentBlock;
+        private List<StepNode> _currentSteps;
+        private int _currentStepIndex;
+        private StepNode? _currentStep;
+
+        public event Action<IReadOnlyList<TagData>>? OnTagsDispatched;
+
+        public KtorySequencer(KtoryFile file)
+        {
+            File = file ?? throw new ArgumentNullException(nameof(file));
+            File.BindLexicalAutoScopes();
+            _currentBlock = file.RootBlock;
+            _currentSteps = _currentBlock.Steps;
+            _currentStepIndex = 0;
+        }
+
+        public void Start(string? entryLabel = null, string? requestedLocale = null)
+        {
+            try { StartCore(entryLabel, requestedLocale); }
+            catch (Exception error)
+            {
+                TraceError(error);
+                InvalidateSession();
+                Status = ExecutionStatus.Error;
+                throw;
+            }
+        }
+
+        private void StartCore(string? entryLabel = null, string? requestedLocale = null)
+        {
+            BeginSession();
+            _reportedFallbackWarnings.Clear();
+            _currentStep = null;
+            RequestedLanguage = requestedLocale ?? DefaultLanguage ?? "zh";
+            VisitedItemIds.Clear();
+            CallStack.Clear();
+            _activeLoops.Clear();
+            ActiveAutoPolicy = null;
+            CurrentPayload = null;
+            CurrentChoice = null;
+            _presentationCounter = 0;
+            CurrentPresentationId = 0;
+
+            if (!string.IsNullOrEmpty(entryLabel))
+            {
+                if (!File.TryGetBlock(entryLabel, out var block))
+                {
+                    throw new KtoryException($"Entry section '=== {entryLabel} ===' not found in file.");
+                }
+                _currentBlock = block;
+                _currentSteps = block.Steps;
+                _currentStepIndex = 0;
+            }
+            else
+            {
+                // Named sections require an explicit entry, jump or call, even when root is empty.
+                _currentBlock = File.RootBlock;
+                _currentSteps = _currentBlock.Steps;
+                _currentStepIndex = 0;
+            }
+
+            Status = ExecutionStatus.Ready;
+            Advance();
+        }
+
+        /// <summary>
+        /// Synchronous compatibility input. For delayed work capture CurrentPresentationToken
+        /// and use Step(token); a numeric presentation id alone cannot identify a session.
+        /// </summary>
+        public void Step(long? expectedPresentationId = null)
+        {
+            try { StepCore(expectedPresentationId); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void StepCore(long? expectedPresentationId = null)
+        {
+            if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
+            {
+                TraceIgnoredInput(nameof(Step), new PresentationToken(CurrentSessionId, expectedPresentationId.Value));
+                return;
+            }
+
+            if (Status == ExecutionStatus.Completed)
+            {
+                return;
+            }
+
+            if (Status == ExecutionStatus.AwaitingChoice)
+            {
+                throw new KtoryControlFlowException("Cannot advance with Step() while awaiting choice selection. SubmitChoice must be used.");
+            }
+
+            if (Status != ExecutionStatus.SuspendedAtBeat && Status != ExecutionStatus.Ready)
+            {
+                return;
+            }
+
+            Advance();
+        }
+
+        /// <summary>Synchronous compatibility input; asynchronous choices must carry the full presentation token.</summary>
+        public void SubmitChoice(string choiceIdentifier, long? expectedPresentationId = null)
+        {
+            try { SubmitChoiceCore(choiceIdentifier, expectedPresentationId); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void SubmitChoiceCore(string choiceIdentifier, long? expectedPresentationId = null)
+        {
+            if (expectedPresentationId.HasValue && expectedPresentationId.Value != CurrentPresentationId)
+            {
+                TraceIgnoredInput(nameof(SubmitChoice), new PresentationToken(CurrentSessionId, expectedPresentationId.Value));
+                return;
+            }
+
+            if (Status != ExecutionStatus.AwaitingChoice || CurrentChoice == null)
+            {
+                throw new KtoryControlFlowException("Not currently awaiting a choice submission.");
+            }
+
+            // Find matching item by Id or Label
+            ChoiceOption? matchedOption = null;
+            ContainerItem? matchedItem = null;
+
+            if (_currentStep is ContainerStep container)
+            {
+                for (int i = 0; i < container.Items.Count; i++)
+                {
+                    var item = container.Items[i];
+                    string label = item.GetLabel(RequestedLanguage, DefaultLanguage);
+                    if (string.Equals(item.Id, choiceIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(label, choiceIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals($"[{label}]", choiceIdentifier, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedItem = item;
+                        if (i < CurrentChoice.Options.Count)
+                        {
+                            matchedOption = CurrentChoice.Options[i];
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (matchedItem == null)
+            {
+                throw new KtoryException($"Choice item '{choiceIdentifier}' not found in container.");
+            }
+
+            if (matchedOption != null && !matchedOption.CanSelect)
+            {
+                throw new KtoryControlFlowException($"Choice item '{choiceIdentifier}' is consumed or not selectable.");
+            }
+
+            Trace(ExecutionTraceKind.Choice, matchedItem.Id + ": " + matchedOption?.Label, matchedItem.LineNumber);
+
+            // Mark single-use item as visited in session
+            if (matchedItem.IsOneTime)
+            {
+                VisitedItemIds.Add(matchedItem.Id);
+            }
+
+            // Dispatch item tags
+            if (matchedItem.Tags.Count > 0)
+            {
+                DispatchTags(matchedItem.Tags, matchedItem.LineNumber);
+            }
+
+            CurrentChoice = null;
+
+            // Handle branch: TargetJump vs InlineSteps
+            if (matchedItem.TargetJump != null)
+            {
+                ExecuteControlFlow(matchedItem.TargetJump, _currentStep as ContainerStep);
+                if (Status == ExecutionStatus.Completed)
+                {
+                    return;
+                }
+                Advance();
+            }
+            else if (matchedItem.InlineSteps.Count > 0)
+            {
+                // Case C: Inline steps
+                var sourceContainer = _currentStep as ContainerStep;
+                bool isLoop = sourceContainer?.IsLoop == true;
+
+                // Push return frame for after inline steps finish
+                var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.InlineBranch, _activeLoops.Count)
+                {
+                    SourceContainer = sourceContainer,
+                    ReturnToContainer = isLoop,
+                    SavedAutoPolicy = ActiveAutoPolicy
+                };
+                CallStack.Push(resumeFrame);
+
+                // Switch to inline steps
+                _currentSteps = matchedItem.InlineSteps;
+                _currentStepIndex = 0;
+                Advance();
+            }
+            else
+            {
+                // No jump and no inline steps
+                var sourceContainer = _currentStep as ContainerStep;
+                if (sourceContainer?.IsLoop == true)
+                {
+                    // Re-enter loop container
+                    _currentStepIndex--; // keep at container
+                    Advance();
+                }
+                else
+                {
+                    Advance();
+                }
+            }
+        }
+
+        public void Break()
+        {
+            try { BreakCore(); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void BreakCore()
+        {
+            Trace(ExecutionTraceKind.Jump, "Host break");
+            ApplyBreak();
+            Advance();
+        }
+
+        public void SetLanguage(string? requestedLocale)
+        {
+            try { SetLanguageCore(requestedLocale); }
+            catch (Exception error) { TraceError(error); throw; }
+        }
+
+        private void SetLanguageCore(string? requestedLocale)
+        {
+            var target = requestedLocale ?? DefaultLanguage ?? "zh";
+            if (string.Equals(RequestedLanguage, target, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            RequestedLanguage = target;
+
+            // If currently suspended at text beat, update text content and speaker without side-effects
+            if (Status == ExecutionStatus.SuspendedAtBeat && _currentStep is TextStep textStep && CurrentPayload != null)
+            {
+                RefreshTextPayload(textStep, CurrentPayload);
+            }
+            else if (Status == ExecutionStatus.AwaitingChoice && _currentStep is ContainerStep containerStep)
+            {
+                // Re-build choice payload with new language while preserving current presentation id
+                var rebuilt = BuildChoicePayload(containerStep);
+                rebuilt.PresentationId = CurrentPresentationId;
+                CurrentChoice = rebuilt;
+            }
+        }
+
+        private void Advance()
+        {
+            if (Status == ExecutionStatus.Completed)
+            {
+                return;
+            }
+
+            CurrentPayload = null;
+            CurrentChoice = null;
+            CurrentPresentationId = 0;
+            _reportedFallbackWarnings.Clear();
+
+            int executedInstructions = 0;
+            var executionTrail = new Queue<string>();
+
+            while (true)
+            {
+                if (++executedInstructions > MaxInstructionBudgetPerAdvance)
+                {
+                    Status = ExecutionStatus.Error;
+                    string trail = string.Join(" -> ", executionTrail);
+                    throw new KtoryInstructionBudgetExceededException(
+                        $"Instruction budget of {MaxInstructionBudgetPerAdvance} exceeded during single advance without yielding content or choice. " +
+                        $"Possible infinite loop detected in script.\n" +
+                        $"Last active block: '{_currentBlock?.Label ?? "Unknown"}', step index: {_currentStepIndex}, line: {_currentStep?.LineNumber}.\n" +
+                        $"Recent execution path: {trail}");
+                }
+
+                // Check if currently looping a non-container step (TextStep or DirectiveStep)
+                if (_activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode is not ContainerStep)
+                {
+                    var currentLoop = _activeLoops.Peek().Loop;
+                    currentLoop.IterationCount++;
+                    if (currentLoop.CanLoopAgain())
+                    {
+                        // Re-enter the node: re-emit content and re-execute modifiers
+                        _currentStep = currentLoop.TargetNode;
+                        ActiveAutoPolicy = _currentStep.LexicalAutoPolicy;
+                        ProcessBeatStep(_currentStep);
+                        return;
+                    }
+                    else
+                    {
+                        // Loop limit reached, break and unwind
+                        var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
+                        while (CallStack.Count > loopBoundaryDepth)
+                        {
+                            CallStack.Pop();
+                        }
+                    }
+                }
+
+                // If we've reached the end of the current step list
+                if (_currentStepIndex >= _currentSteps.Count)
+                {
+                    // Case 1: Inline branch ended naturally -> pop inline frame and resume parent steps
+                    if (CallStack.Count > 0 && CallStack.Peek().FrameType == CallFrameType.InlineBranch)
+                    {
+                        Trace(ExecutionTraceKind.Return, "Inline branch completed");
+                        var frame = CallStack.Pop();
+                        while (_activeLoops.Count > frame.LoopStackDepth)
+                        {
+                            _activeLoops.Pop();
+                        }
+                        _currentBlock = frame.Block;
+                        _currentSteps = frame.Steps;
+                        _currentStepIndex = frame.StepIndex;
+                        ActiveAutoPolicy = frame.SavedAutoPolicy;
+
+                        if (frame.ReturnToContainer && frame.SourceContainer != null)
+                        {
+                            // Loop back to container
+                            _currentStepIndex--;
+                            if (_currentStepIndex < 0) _currentStepIndex = 0;
+                        }
+                        continue;
+                    }
+
+                    // Case 2: Named section reached natural end -> implicit end per specification:
+                    // Clear call stack and active loops, then resume at the first root node following the section.
+                    if (!_currentBlock.IsRoot)
+                    {
+                        Trace(ExecutionTraceKind.End, "Section completed; resume root");
+                        ClearActiveLoopsForBlock(_currentBlock);
+                        CallStack.Clear();
+                        _activeLoops.Clear();
+                        ActiveAutoPolicy = null;
+
+                        if (ResumeRootSectionAfter(_currentBlock))
+                        {
+                            continue;
+                        }
+                        Status = ExecutionStatus.Completed;
+                        return;
+                    }
+
+                    // Case 3: Root block ended
+                    Trace(ExecutionTraceKind.End, "Root completed");
+                    CallStack.Clear();
+                    _activeLoops.Clear();
+                    ActiveAutoPolicy = null;
+                    Status = ExecutionStatus.Completed;
+                    return;
+                }
+
+                _currentStep = _currentSteps[_currentStepIndex++];
+                ActiveAutoPolicy = _currentStep.LexicalAutoPolicy;
+
+                string desc = _currentStep switch
+                {
+                    ControlFlowStep cf => $"{cf.FlowType} {(cf.TargetLabel ?? "")}".Trim(),
+                    DirectiveStep d => $"#{d.Name}",
+                    ContainerStep c => $"container:{c.Name}",
+                    TextStep t => $"text:L{t.LineNumber}",
+                    _ => _currentStep.GetType().Name
+                };
+                executionTrail.Enqueue($"{_currentBlock.Label}:L{_currentStep.LineNumber}({desc})");
+                if (executionTrail.Count > 10) executionTrail.Dequeue();
+
+                // Guard evaluation
+                if (!string.IsNullOrEmpty(_currentStep.GuardCondition))
+                {
+                    bool guardPass = EvaluateGuard(_currentStep.GuardCondition!, _currentStep.LineNumber);
+                    if (!guardPass)
+                    {
+                        continue; // Skip this node
+                    }
+                }
+
+                // Handle Step types
+                switch (_currentStep)
+                {
+                    case TextStep textStep:
+                    {
+                        if (textStep.IsLoop)
+                        {
+                            EnsureLoopContext(textStep);
+                        }
+
+                        ProcessBeatStep(textStep);
+                        return;
+                    }
+
+                    case DirectiveStep directiveStep:
+                    {
+                        // Ordinary directive beats are traced by ProcessBeatStep.
+                        if (string.Equals(directiveStep.Name, "AUTO", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(directiveStep.Name, "AUTO_END", StringComparison.OrdinalIgnoreCase))
+                            Trace(ExecutionTraceKind.Node, "#" + directiveStep.Name);
+
+                        // Handle #AUTO macro directive (enters auto scope without observable pause)
+                        if (string.Equals(directiveStep.Name, "AUTO", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (directiveStep.Tags.Count > 0)
+                            {
+                                DispatchTags(directiveStep.Tags, directiveStep.LineNumber);
+                            }
+
+                            ActiveAutoPolicy = directiveStep.LexicalAutoPolicy;
+                            continue;
+                        }
+
+                        // Handle #AUTO_END macro directive (leaves auto scope without extra pause)
+                        if (string.Equals(directiveStep.Name, "AUTO_END", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (directiveStep.Tags.Count > 0)
+                            {
+                                DispatchTags(directiveStep.Tags, directiveStep.LineNumber);
+                            }
+
+                            ActiveAutoPolicy = null;
+                            continue;
+                        }
+
+                        if (directiveStep.IsLoop)
+                        {
+                            EnsureLoopContext(directiveStep);
+                        }
+
+                        ProcessBeatStep(directiveStep);
+                        return;
+                    }
+
+                    case ContainerStep containerStep:
+                    {
+                        Trace(ExecutionTraceKind.Node, "#" + containerStep.Name);
+                        // Check loop context
+                        if (containerStep.IsLoop)
+                        {
+                            EnsureLoopContext(containerStep);
+                            var currentLoop = _activeLoops.Peek().Loop;
+                            if (!currentLoop.CanLoopAgain())
+                            {
+                                // Loop limit reached, break loop
+                                var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
+                                while (CallStack.Count > loopBoundaryDepth)
+                                {
+                                    CallStack.Pop();
+                                }
+                                continue;
+                            }
+                        }
+
+                        // Only the built-in choice behavior is currently implemented. Other names
+                        // retain their identity and use the same fallback, with an observable warning
+                        // on each real entry (never on payload refresh or an exhausted loop).
+                        if (!string.Equals(containerStep.Name, "choice", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Trace(ExecutionTraceKind.Warning,
+                                $"No handler for container '#{containerStep.Name}' at line {containerStep.LineNumber}; falling back to choice behavior.",
+                                containerStep.LineNumber);
+                        }
+
+                        // Dispatch container tags
+                        if (containerStep.Tags.Count > 0)
+                        {
+                            DispatchTags(containerStep.Tags, containerStep.LineNumber);
+                        }
+
+                        var choicePayload = BuildChoicePayload(containerStep);
+
+                        // If zero selectable options, smoothly skip over container!
+                        if (choicePayload.SelectableCount == 0)
+                        {
+                            if (containerStep.IsLoop && _activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode == containerStep)
+                            {
+                                var (_, _, loopBoundaryDepth) = _activeLoops.Pop();
+                                while (CallStack.Count > loopBoundaryDepth)
+                                {
+                                    CallStack.Pop();
+                                }
+                            }
+                            continue;
+                        }
+
+                        CurrentPresentationId = ++_presentationCounter;
+                        choicePayload.PresentationId = CurrentPresentationId;
+                        CurrentChoice = choicePayload;
+                        Status = ExecutionStatus.AwaitingChoice;
+                        return;
+                    }
+
+                    case ControlFlowStep cfStep:
+                    {
+                        ExecuteControlFlow(cfStep, null);
+                        if (Status == ExecutionStatus.Completed)
+                        {
+                            return;
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+
+        private void ProcessBeatStep(StepNode step)
+        {
+            Trace(ExecutionTraceKind.Node, step.GetType().Name, step.LineNumber);
+            if (step is TextStep textStep)
+            {
+                if (textStep.Tags.Count > 0)
+                {
+                    DispatchTags(textStep.Tags, textStep.LineNumber);
+                }
+
+                CurrentPresentationId = ++_presentationCounter;
+                CurrentPayload = new TextPayload
+                {
+                    PresentationId = CurrentPresentationId,
+                    StepType = StepType.Text,
+                    LineNumber = textStep.LineNumber,
+                    Tags = textStep.Tags,
+                    AutoPolicy = ActiveAutoPolicy
+                };
+                RefreshTextPayload(textStep, CurrentPayload);
+
+                Status = ExecutionStatus.SuspendedAtBeat;
+            }
+            else if (step is DirectiveStep directiveStep)
+            {
+                if (directiveStep.Tags.Count > 0)
+                {
+                    DispatchTags(directiveStep.Tags, directiveStep.LineNumber);
+                }
+
+                CurrentPresentationId = ++_presentationCounter;
+                CurrentPayload = new TextPayload
+                {
+                    PresentationId = CurrentPresentationId,
+                    StepType = StepType.Directive,
+                    LineNumber = directiveStep.LineNumber,
+                    Speaker = null,
+                    Content = directiveStep.Name,
+                    ActualLanguage = RequestedLanguage,
+                    RequestedLanguage = RequestedLanguage,
+                    Tags = directiveStep.Tags,
+                    AutoPolicy = ActiveAutoPolicy
+                };
+
+                Status = ExecutionStatus.SuspendedAtBeat;
+            }
+        }
+
+        private void EnsureLoopContext(StepNode node)
+        {
+            if (_activeLoops.Count > 0 && _activeLoops.Peek().Loop.TargetNode == node)
+            {
+                // Increment iteration
+                _activeLoops.Peek().Loop.IterationCount++;
+                return;
+            }
+
+            // Create new loop context
+            var loop = new LoopContext(node);
+            var resumeFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, loopStackDepth: _activeLoops.Count)
+            {
+                SavedAutoPolicy = ActiveAutoPolicy
+            };
+            int callStackDepth = CallStack.Count;
+            _activeLoops.Push((loop, resumeFrame, callStackDepth));
+        }
+
+        private void ApplyBreak()
+        {
+            if (_activeLoops.Count == 0)
+            {
+                throw new KtoryControlFlowException("No active loop container to break from.");
+            }
+
+            var (_, resumeFrame, loopBoundaryDepth) = _activeLoops.Pop();
+
+            // Unwind call stack up to the loop boundary depth so that inline branch frames
+            // created inside the loop are purged without disrupting outer call frames.
+            while (CallStack.Count > loopBoundaryDepth)
+            {
+                CallStack.Pop();
+            }
+
+            _currentBlock = resumeFrame.Block;
+            _currentSteps = resumeFrame.Steps;
+            _currentStepIndex = resumeFrame.StepIndex;
+            ActiveAutoPolicy = resumeFrame.SavedAutoPolicy;
+            CurrentChoice = null;
+            CurrentPayload = null;
+        }
+
+        private void ExecuteControlFlow(ControlFlowStep cf, ContainerStep? sourceContainer)
+        {
+            var kind = cf.FlowType == ControlFlowType.Call ? ExecutionTraceKind.Call
+                : cf.FlowType == ControlFlowType.Return ? ExecutionTraceKind.Return
+                : cf.FlowType == ControlFlowType.End ? ExecutionTraceKind.End : ExecutionTraceKind.Jump;
+            Trace(kind, cf.ToString(), cf.LineNumber > 0 ? cf.LineNumber : CurrentLineNumber);
+            switch (cf.FlowType)
+            {
+                case ControlFlowType.Jump:
+                {
+                    CallStack.Clear();
+                    _activeLoops.Clear();
+                    ActiveAutoPolicy = null;
+                    if (!File.TryGetBlock(cf.TargetLabel!, out var targetBlock))
+                    {
+                        throw new KtoryException($"Jump target block '=== {cf.TargetLabel} ===' not found.");
+                    }
+                    _currentBlock = targetBlock;
+                    _currentSteps = targetBlock.Steps;
+                    _currentStepIndex = 0;
+                    break;
+                }
+
+                case ControlFlowType.Call:
+                {
+                    if (!File.TryGetBlock(cf.TargetLabel!, out var targetBlock))
+                    {
+                        throw new KtoryException($"Call target block '=== {cf.TargetLabel} ===' not found.");
+                    }
+
+                    bool returnToContainer = sourceContainer?.IsLoop == true;
+                    var returnFrame = new CallFrame(_currentBlock, _currentStepIndex, _currentSteps, CallFrameType.SectionCall, _activeLoops.Count)
+                    {
+                        SourceContainer = sourceContainer,
+                        ReturnToContainer = returnToContainer,
+                        SavedAutoPolicy = ActiveAutoPolicy
+                    };
+                    CallStack.Push(returnFrame);
+
+                    // AUTO policy does not inherit into external subroutines per Specification §2.7
+                    ActiveAutoPolicy = null;
+
+                    _currentBlock = targetBlock;
+                    _currentSteps = targetBlock.Steps;
+                    _currentStepIndex = 0;
+                    break;
+                }
+
+                case ControlFlowType.Return:
+                {
+                    // Unwind frames until we find a SectionCall frame (pierces inline branch blocks)
+                    CallFrame? callFrame = null;
+                    while (CallStack.Count > 0)
+                    {
+                        var f = CallStack.Pop();
+                        if (f.FrameType == CallFrameType.SectionCall)
+                        {
+                            callFrame = f;
+                            break;
+                        }
+                    }
+
+                    if (callFrame == null)
+                    {
+                        throw new KtoryControlFlowException("-> return encountered with empty call stack.");
+                    }
+
+                    // Clean up any loops created within the returned subroutine,
+                    // preserving loops that existed before entering the subroutine.
+                    while (_activeLoops.Count > callFrame.LoopStackDepth)
+                    {
+                        _activeLoops.Pop();
+                    }
+
+                    _currentBlock = callFrame.Block;
+                    _currentSteps = callFrame.Steps;
+                    _currentStepIndex = callFrame.StepIndex;
+                    ActiveAutoPolicy = callFrame.SavedAutoPolicy;
+
+                    if (callFrame.ReturnToContainer && callFrame.SourceContainer != null)
+                    {
+                        _currentStepIndex--;
+                        if (_currentStepIndex < 0) _currentStepIndex = 0;
+                    }
+                    break;
+                }
+
+                case ControlFlowType.Break:
+                {
+                    ApplyBreak();
+                    break;
+                }
+
+                case ControlFlowType.End:
+                {
+                    CallStack.Clear();
+                    _activeLoops.Clear();
+                    ActiveAutoPolicy = null;
+                    if (!_currentBlock.IsRoot)
+                    {
+                        if (ResumeRootSectionAfter(_currentBlock))
+                        {
+                            return;
+                        }
+                    }
+                    Status = ExecutionStatus.Completed;
+                    break;
+                }
+            }
+        }
+
+        private ChoicePayload BuildChoicePayload(ContainerStep container)
+        {
+            var options = new List<ChoiceOption>();
+
+            foreach (var item in container.Items)
+            {
+                bool isConsumed = VisitedItemIds.Contains(item.Id);
+                bool conditionPass = string.IsNullOrEmpty(item.GuardCondition) || EvaluateGuard(item.GuardCondition!, item.LineNumber);
+
+                bool canSelect = conditionPass && (!item.IsOneTime || !isConsumed);
+                string label = item.GetLabel(RequestedLanguage, DefaultLanguage, out var actualLanguage, out var labelFallback);
+                if (labelFallback) WarnMissingTranslations("Choice label", item.LineNumber, actualLanguage ?? string.Empty);
+
+                options.Add(new ChoiceOption
+                {
+                    Id = item.Id,
+                    Label = label,
+                    ActualLanguage = actualLanguage,
+                    RequestedLanguage = RequestedLanguage,
+                    LineNumber = item.LineNumber,
+                    Marker = item.Marker,
+                    IsConsumed = isConsumed,
+                    CanSelect = canSelect,
+                    Tags = item.Tags
+                });
+            }
+
+            return new ChoicePayload
+            {
+                ContainerName = container.Name,
+                LineNumber = container.LineNumber,
+                IsLoop = container.IsLoop,
+                Tags = container.Tags,
+                Options = options
+            };
+        }
+
+        private bool ResumeRootSectionAfter(KtoryBlock block)
+        {
+            _currentBlock = File.RootBlock;
+            _currentSteps = File.RootBlock.Steps;
+
+            int maxLine = block.StartLineNumber;
+            if (block.EndLineNumber > maxLine)
+            {
+                maxLine = block.EndLineNumber;
+            }
+            foreach (var s in block.Steps)
+            {
+                if (s.LineNumber > maxLine)
+                {
+                    maxLine = s.LineNumber;
+                }
+            }
+
+            int resumeIndex = _currentSteps.FindIndex(s => s.LineNumber > maxLine);
+            if (resumeIndex >= 0)
+            {
+                _currentStepIndex = resumeIndex;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ClearActiveLoopsForBlock(KtoryBlock block)
+        {
+            while (_activeLoops.Count > 0 && _activeLoops.Peek().ResumeFrame.Block == block)
+            {
+                _activeLoops.Pop();
+            }
+        }
+    }
+}
