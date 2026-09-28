@@ -16,10 +16,9 @@ This section introduces how to implement single-file multilingual authoring in K
 Currently, `@[locale]` declarations are supported for dialogue lines and choice option labels.
 
 ```ktory
-@defaultLang: zh
+@defaultLang: en
 
-爱丽丝
-:
+Alice:
   @zh: 你好，旅行者。
   @en: Hello, traveler.
   @ja: こんにちは、旅人さん。
@@ -29,7 +28,7 @@ Currently, `@[locale]` declarations are supported for dialogue lines and choice 
   * [@zh: "继续"]
     [@en: "Continue"]
     [@ja: "続ける"]
-    alice: 我们出发吧。
+    Alice: Let's set sail.
 ```
 
 ## Character Names and Aliases

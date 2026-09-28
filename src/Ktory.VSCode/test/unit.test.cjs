@@ -180,3 +180,22 @@ test('linter service parses .ktr scripts and produces diagnostics via bundled WA
   assert.ok(warn.some(item => item.severity === 2));
 });
 
+test('linter initializes without proxy fetch protocol errors when global fetch rejects non-http URLs', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    if (!String(url).startsWith('http:') && !String(url).startsWith('https:')) {
+      throw new Error(`InvalidArgumentError: Invalid URL protocol: the URL must start with http: or https:. Got: ${url}`);
+    }
+    return originalFetch ? originalFetch(url) : { ok: false };
+  };
+  try {
+    delete require.cache[require.resolve('../linter.js')];
+    const { lintScript } = require('../linter.js');
+    const frameworkDir = path.join(readerRoot, '_framework');
+    const result = await lintScript(': 开场\n', frameworkDir);
+    assert.ok(Array.isArray(result));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fix linter initialization failure on Windows where local paths caused `@vscode/proxy-agent` to throw `InvalidArgumentError` due to missing `file://` protocol.
+
 ## 0.2.0
 
 - Graduate extension from pre-release to stable channel.

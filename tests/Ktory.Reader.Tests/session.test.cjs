@@ -28,7 +28,7 @@ function reader(fetch) {
   const context = vm.createContext({
     console, fetch, setTimeout, clearTimeout, setInterval, clearInterval,
     document: { body: element('body'), getElementById: element, createElement: makeElement, addEventListener() {} },
-    window: {}, requestAnimationFrame: fn => fn()
+    window: { __ktoryWasmFailed: true }, requestAnimationFrame: fn => fn()
   });
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/Ktory.WebReader/wwwroot/app.js'), 'utf8'), context);
   vm.runInContext(`
@@ -99,6 +99,7 @@ test('an in-flight response from before restart cannot render into the new sessi
 
 test('visible diagnostics show warning text safely and keep ignored input in the background', () => {
   const r = reader();
+  r.state.requestedLocale = 'zh';
   r.state.diagnostics = [
     { kind: 256, block: 'root', lineNumber: 2, message: '<script>literal warning</script>' },
     { kind: 512, block: 'root', lineNumber: 2, message: 'old input ignored' }
@@ -108,7 +109,17 @@ test('visible diagnostics show warning text safely and keep ignored input in the
   assert.equal(r.el.runtimeDiagnosticSummary.textContent, '剧本警告（1）');
   assert.equal(r.el.runtimeDiagnosticMessages.textContent, 'root · L2: <script>literal warning</script>');
   assert.equal(r.el.runtimeDiagnosticMessages.innerHTML, '');
+
+  r.state.requestedLocale = 'en';
+  r.renderDiagnostics();
+  assert.equal(r.el.runtimeDiagnosticSummary.textContent, 'Script Warnings (1)');
+
+  r.state.requestedLocale = 'ja';
+  r.renderDiagnostics();
+  assert.equal(r.el.runtimeDiagnosticSummary.textContent, 'スクリプト警告（1）');
+
   r.state.diagnostics = [];
   r.renderDiagnostics();
   assert.equal(r.el.runtimeDiagnostics.hidden, true);
 });
+

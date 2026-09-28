@@ -10,7 +10,7 @@ function getPreferredLocale() {
     if (saved && supported.includes(saved)) {
       return saved;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const langs = (typeof navigator !== 'undefined' && navigator.languages) || [(typeof navigator !== 'undefined' && navigator.language) || ''];
   for (const lang of langs) {
@@ -137,7 +137,7 @@ const PORTAL_I18N = {
     sampleTitle: '尝试示例剧本',
     writeTitle: '撰写我的剧本',
     home: '官网',
-    homeTitle: '访问 Ktory 官网首页 (ktory.ink)',
+    homeTitle: '访问 Ktory 官网',
     langSwitcherTitle: '切换语言',
     autoPlayTitle: '自动阅读模式 (A)',
     restartTitle: '重新从头开始试读 (R)',
@@ -148,7 +148,7 @@ const PORTAL_I18N = {
     sampleTitle: 'Try Sample Script',
     writeTitle: 'Write My Script',
     home: 'Home',
-    homeTitle: 'Visit Ktory Homepage (ktory.ink)',
+    homeTitle: 'Visit Ktory Official Site',
     langSwitcherTitle: 'Switch Language',
     autoPlayTitle: 'Auto-advance mode (A)',
     restartTitle: 'Restart from beginning (R)',
@@ -159,7 +159,7 @@ const PORTAL_I18N = {
     sampleTitle: 'サンプルを試読',
     writeTitle: '脚本を作成する',
     home: '公式サイト',
-    homeTitle: 'Ktory 公式サイトへ (ktory.ink)',
+    homeTitle: 'Ktory 公式サイトへ',
     langSwitcherTitle: '言語を切り替える',
     autoPlayTitle: '自動進行モード (A)',
     restartTitle: '最初からやり直す (R)',
@@ -289,6 +289,9 @@ function setupEventListeners() {
       e.stopPropagation();
       resumePendingAudio();
       hidePortal();
+      if (Object.keys(state.samples).length === 0) {
+        await loadSamples();
+      }
       const sampleKey = state.currentSampleKey || Object.keys(state.samples)[0];
       const script = (sampleKey && state.samples[sampleKey]) || el.scriptInput.value;
       if (script) {
@@ -456,7 +459,7 @@ function setupDrawerResizer() {
         el.editorDrawer.style.width = `${numW}px`;
       }
     }
-  } catch {}
+  } catch { }
 
   const onDragStart = (startClientX) => {
     el.editorDrawer.classList.add('no-transition');
@@ -488,7 +491,7 @@ function setupDrawerResizer() {
 
       try {
         localStorage.setItem('ktory_editor_drawer_width', el.editorDrawer.style.width);
-      } catch {}
+      } catch { }
     };
 
     window.addEventListener('mousemove', onMouseMove);
@@ -545,7 +548,7 @@ function setupDrawerResizer() {
         document.body.classList.remove('is-resizing-drawer');
         try {
           localStorage.setItem('ktory_editor_drawer_width', el.editorDrawer.style.width);
-        } catch {}
+        } catch { }
         setTimeout(() => { isHandleDragging = false; }, 60);
       }
     };
@@ -661,9 +664,48 @@ function toggleAutoPlay() {
 }
 
 // ==========================================================================
+// Runtime Orchestration: WASM vs Local REST API vs Host Mode
+// ==========================================================================
+let resolveWasmReady = null;
+let rejectWasmReady = null;
+
+if (typeof window !== 'undefined') {
+  window.__ktoryWasmPromise = new Promise((resolve, reject) => {
+    resolveWasmReady = resolve;
+    rejectWasmReady = reject;
+  });
+  window.__resolveKtoryWasm = (val) => {
+    if (resolveWasmReady) resolveWasmReady(val);
+  };
+  window.__rejectKtoryWasm = (err) => {
+    window.__ktoryWasmFailed = true;
+    if (rejectWasmReady) rejectWasmReady(err);
+  };
+}
+
+function isWasmPending() {
+  return typeof window !== 'undefined' &&
+    !!window.__ktoryWasmPromise &&
+    !window.KtoryWasm &&
+    !window.__ktoryWasmFailed;
+}
+
+async function ensureRuntimeReady() {
+  if (!isWasmPending()) return;
+  try {
+    await Promise.race([
+      window.__ktoryWasmPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('WASM boot timeout')), 5000))
+    ]);
+  } catch (_) {
+    window.__ktoryWasmFailed = true;
+  }
+}
+
+// ==========================================================================
 // WebAssembly Bridge (For Vercel / GitHub Pages Static Hosting)
 // ==========================================================================
-window.registerKtoryWasmBridge = function(dotNetRef) {
+window.registerKtoryWasmBridge = function (dotNetRef) {
   window.KtoryWasm = {
     async start(script, requestedLocale, entryBlock) {
       const json = await dotNetRef.invokeMethodAsync('Start', script, requestedLocale, entryBlock || null);
@@ -692,12 +734,16 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
   };
   console.log('[Ktory] WebAssembly in-browser engine is ready.');
 
+  if (typeof window !== 'undefined' && window.__resolveKtoryWasm) {
+    window.__resolveKtoryWasm(window.KtoryWasm);
+  }
+
   if (window.ktoryReaderHost) {
     window.ktoryReaderHost.onRuntimeReady();
     return;
   }
 
-  // If page loaded before WASM booted, load samples and kick off session
+  // If page loaded before WASM booted, populate first catalog sample into scriptInput without auto-starting session
   if (Object.keys(state.samples).length === 0) {
     loadSamples().then(() => {
       const sampleKeys = Object.keys(state.samples);
@@ -706,7 +752,6 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
         el.scriptInput.value = state.samples[state.currentSampleKey];
         document.dispatchEvent(new Event('ktory:source-changed'));
         syncSampleSelect(state.currentSampleKey);
-        startSession(state.samples[state.currentSampleKey], state.requestedLocale || 'en');
       }
     });
   }
@@ -717,10 +762,14 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
 // ==========================================================================
 async function loadSamples() {
   try {
+    if (isWasmPending()) {
+      await ensureRuntimeReady();
+    }
+
     let samples = null;
     if (window.KtoryWasm && window.KtoryWasm.getSamples) {
       samples = await window.KtoryWasm.getSamples();
-    } else {
+    } else if (!isWasmPending()) {
       const res = await fetch('/api/samples');
       if (res.ok) {
         samples = await res.json();
@@ -806,6 +855,10 @@ async function startSession(script, requestedLocale = state.requestedLocale || '
     if (sessionEpoch !== currentSessionEpoch) return;
 
     try {
+      if (isWasmPending()) {
+        await ensureRuntimeReady();
+      }
+
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.start) {
         data = await window.KtoryWasm.start(script, requestedLocale, entryBlock);
@@ -853,6 +906,10 @@ async function stepSession(expectedPresentationId = null) {
     clearTimers();
 
     try {
+      if (isWasmPending()) {
+        await ensureRuntimeReady();
+      }
+
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.step) {
         data = await window.KtoryWasm.step(targetPresentationId, targetSessionId);
@@ -903,6 +960,10 @@ async function submitChoice(choiceId, expectedPresentationId = null, expectedSes
     if (targetPresentationId && targetPresentationId !== state.currentPresentationId) return;
 
     try {
+      if (isWasmPending()) {
+        await ensureRuntimeReady();
+      }
+
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.choice) {
         data = await window.KtoryWasm.choice(choiceId, targetPresentationId, targetSessionId);
@@ -933,7 +994,7 @@ async function changeLanguage(locale) {
   state.requestedLocale = locale;
   try {
     localStorage.setItem('ktory-locale', locale);
-  } catch (e) {}
+  } catch (e) { }
   document.documentElement.lang = locale === 'zh' ? 'zh-CN' : locale;
   updatePortalLabels(locale);
   el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
@@ -947,6 +1008,10 @@ async function changeLanguage(locale) {
     if (opEpoch !== currentSessionEpoch) return;
 
     try {
+      if (isWasmPending()) {
+        await ensureRuntimeReady();
+      }
+
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.setLanguage) {
         data = await window.KtoryWasm.setLanguage(locale, state.currentPresentationId, targetSessionId);
@@ -1003,18 +1068,22 @@ function syncSampleSelect(sampleKey) {
 function updateState(serverState, isLanguageSwitch = false) {
   window.ktoryReaderHost?.onState(serverState);
   if (window.ktoryReaderHost?.sanitizeHtml && serverState.payload &&
-      serverState.payload.stepType !== 1 && serverState.payload.stepType !== 'Directive') {
-    serverState = { ...serverState, payload: { ...serverState.payload,
-      content: window.ktoryReaderHost.sanitizeHtml(serverState.payload.content || '') } };
+    serverState.payload.stepType !== 1 && serverState.payload.stepType !== 'Directive') {
+    serverState = {
+      ...serverState, payload: {
+        ...serverState.payload,
+        content: window.ktoryReaderHost.sanitizeHtml(serverState.payload.content || '')
+      }
+    };
   }
   state.status = serverState.status;
   state.payload = serverState.payload;
   state.choice = serverState.choice;
   state.currentSessionId = serverState.sessionId || '';
   state.currentPresentationId = serverState.presentationId ??
-                                serverState.payload?.presentationId ??
-                                serverState.choice?.presentationId ??
-                                0;
+    serverState.payload?.presentationId ??
+    serverState.choice?.presentationId ??
+    0;
   state.requestedLocale = serverState.requestedLanguage;
   state.defaultLocale = serverState.defaultLanguage;
   state.visitedItems = serverState.visitedItems || [];
@@ -1105,8 +1174,8 @@ function extractPortraitsFromTags(tags, speakerName) {
 
     // Match .portrait(...), .char(...), .portrait_left(...), .portrait_right(...)
     if (tagName !== 'portrait' && tagName !== 'char' &&
-        tagName !== 'portrait_left' && tagName !== 'portrait_right' &&
-        tagName !== 'portraitleft' && tagName !== 'portraitright') {
+      tagName !== 'portrait_left' && tagName !== 'portrait_right' &&
+      tagName !== 'portraitleft' && tagName !== 'portraitright') {
       continue;
     }
 
@@ -1333,7 +1402,7 @@ function stopBgm(durationSeconds = 0) {
 
   if (duration <= 0) {
     audio.pause();
-    try { audio.currentTime = 0; } catch (_) {}
+    try { audio.currentTime = 0; } catch (_) { }
     if (currentBgmAudio === audio) {
       currentBgmAudio = null;
       currentBgmTrack = null;
@@ -1348,7 +1417,7 @@ function stopBgm(durationSeconds = 0) {
       if (elapsed >= durationMs) {
         audio.volume = 0;
         audio.pause();
-        try { audio.currentTime = 0; } catch (_) {}
+        try { audio.currentTime = 0; } catch (_) { }
         if (currentBgmAudio === audio) {
           currentBgmAudio = null;
           currentBgmTrack = null;
@@ -1392,7 +1461,7 @@ function playBgm(track, initialVolume = 1.0) {
       const fallbackUrl = resolvedUrl.slice(6);
       if (audio.src !== fallbackUrl) {
         audio.src = fallbackUrl;
-        audio.play().catch(() => {});
+        audio.play().catch(() => { });
       }
     }
   };
@@ -1696,8 +1765,8 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
 
       // Check if explicit duration parameter t is provided
       const hasDuration = skippableTag.positionalArgs.length > 1 &&
-                          skippableTag.positionalArgs[1] !== null &&
-                          skippableTag.positionalArgs[1] !== '';
+        skippableTag.positionalArgs[1] !== null &&
+        skippableTag.positionalArgs[1] !== '';
       if (hasDuration) {
         const duration = Number(skippableTag.positionalArgs[1]);
         if (duration > 0) {
@@ -1932,16 +2001,16 @@ function updateHoldHint() {
   const autoRemaining = Math.max(0, state.autoAdvanceDuration - state.autoAdvanceElapsed);
   el.dockStepHint.textContent = !state.allowClickInterrupt
     ? (state.requestedLocale === 'en'
-        ? `Waiting (${waitRemaining.toFixed(1)}s)... Click disabled`
-        : state.requestedLocale === 'ja'
-          ? `待機中 (${waitRemaining.toFixed(1)}s)... クリック不可`
-          : `强制停留中 (${waitRemaining.toFixed(1)}s)... 点击无效`)
+      ? `Waiting (${waitRemaining.toFixed(1)}s)... Click disabled`
+      : state.requestedLocale === 'ja'
+        ? `待機中 (${waitRemaining.toFixed(1)}s)... クリック不可`
+        : `强制停留中 (${waitRemaining.toFixed(1)}s)... 点击无效`)
     : state.autoAdvanceOnHoldEnd
       ? (state.requestedLocale === 'en'
-          ? `Auto-advancing (${autoRemaining.toFixed(1)}s)... Click to advance now`
-          : state.requestedLocale === 'ja'
-            ? `自動進行カウントダウン (${autoRemaining.toFixed(1)}s)... クリックで直ちに進行`
-            : `自动推进倒计时 (${autoRemaining.toFixed(1)}s)... 点击即刻推进`)
+        ? `Auto-advancing (${autoRemaining.toFixed(1)}s)... Click to advance now`
+        : state.requestedLocale === 'ja'
+          ? `自動進行カウントダウン (${autoRemaining.toFixed(1)}s)... クリックで直ちに進行`
+          : `自动推进倒计时 (${autoRemaining.toFixed(1)}s)... 点击即刻推进`)
       : getAdvanceHint();
 }
 
@@ -2066,7 +2135,7 @@ function renderChoices(choicePayload) {
       e.stopPropagation();
       // Guard: Stale button clicks on old content must not affect new content
       if (state.currentSessionId !== choiceSessionId || state.currentPresentationId !== choicePresentationId ||
-          state.currentActiveChoiceEl !== choiceGroup) {
+        state.currentActiveChoiceEl !== choiceGroup) {
         console.debug('[Ktory] Ignored a choice button from an expired view.');
         return;
       }

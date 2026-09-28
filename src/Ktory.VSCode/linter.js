@@ -16,11 +16,16 @@ async function getLintBridge(frameworkDir) {
     runtimePromise = (async () => {
       const dotnetJsPath = path.join(frameworkDir, 'dotnet.js');
       const configPath = path.join(frameworkDir, 'blazor.boot.json');
-      const { dotnet } = await import(pathToFileURL(dotnetJsPath).href);
-      const runtime = await dotnet.withConfigSrc(configPath).create();
+      const dotnetUrl = dotnetJsPath.startsWith('file:') ? dotnetJsPath : pathToFileURL(dotnetJsPath).href;
+      const configUrl = configPath.startsWith('file:') ? configPath : pathToFileURL(configPath).href;
+      const { dotnet } = await import(dotnetUrl);
+      const runtime = await dotnet.withConfigSrc(configUrl).create();
       const exports = await runtime.getAssemblyExports('Ktory.Wasm');
       return exports.Ktory.Wasm.KtoryLinterBridge;
-    })();
+    })().catch(err => {
+      runtimePromise = null;
+      throw err;
+    });
   }
   lintBridge = await runtimePromise;
   return lintBridge;

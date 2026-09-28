@@ -18,8 +18,7 @@ sidebar:
 ```ktory
 @defaultLang: zh
 
-爱丽丝
-:
+爱丽丝:
   @zh: 你好，旅行者。
   @en: Hello, traveler.
   @ja: こんにちは、旅人さん。
@@ -29,7 +28,7 @@ sidebar:
   * [@zh: "继续"]
     [@en: "Continue"]
     [@ja: "続ける"]
-    alice: 我们出发吧。
+    爱丽丝: 我们出发吧。
 ```
 
 ## 人名与别名

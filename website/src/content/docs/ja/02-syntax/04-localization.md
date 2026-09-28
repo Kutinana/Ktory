@@ -16,10 +16,9 @@ sidebar:
 現在、`@[locale]` 宣言はセリフと選択肢ラベルをサポートしています。
 
 ```ktory
-@defaultLang: zh
+@defaultLang: ja
 
-爱丽丝
-:
+アリス:
   @zh: 你好，旅行者。
   @en: Hello, traveler.
   @ja: こんにちは、旅人さん。
@@ -29,7 +28,7 @@ sidebar:
   * [@zh: "继续"]
     [@en: "Continue"]
     [@ja: "続ける"]
-    alice: 我们出发吧。
+    アリス: 私たち、行こう。
 ```
 
 ## キャラクター名と別名
