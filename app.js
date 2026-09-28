@@ -180,9 +180,6 @@ function updatePortalLabels(locale) {
   if (el.langSwitcher) el.langSwitcher.title = texts.langSwitcherTitle;
   if (el.btnAutoPlay) el.btnAutoPlay.title = texts.autoPlayTitle;
   if (el.btnRestartSession) el.btnRestartSession.title = texts.restartTitle;
-}leTitle;
-  if (el.portalWriteTitle) el.portalWriteTitle.textContent = texts.writeTitle;
-  if (el.navHomeText) el.navHomeText.textContent = texts.home;
 }
 
 function hidePortal() {
