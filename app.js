@@ -131,7 +131,7 @@ const el = {
   drawerResizer: document.getElementById('drawerResizer')
 };
 
-const PORTAL_I18N = {
+const PORTAL_I18N = (typeof window !== 'undefined' && window.__KTORY_I18N__) || {
   'zh': {
     tagline: '轻量 · 优雅 · 对白驱动的叙事创作与接入系统',
     sampleTitle: '尝试示例剧本',
@@ -141,18 +141,22 @@ const PORTAL_I18N = {
     langSwitcherTitle: '切换语言',
     autoPlayTitle: '自动阅读模式 (A)',
     restartTitle: '重新从头开始试读 (R)',
-    homeUrl: 'https://ktory.ink'
+    homeUrl: 'https://ktory.ink',
+    ready: '就绪 (Ready)',
+    stepHint: '点击页面或按 [空格] 推进阅读 ▾'
   },
   'en': {
     tagline: 'Lightweight, elegant, dialogue-driven narrative engine and runtime',
     sampleTitle: 'Try Sample Script',
     writeTitle: 'Write My Script',
     home: 'Home',
-    homeTitle: 'Visit Ktory Official Site',
+    homeTitle: 'Visit Ktory Homepage',
     langSwitcherTitle: 'Switch Language',
     autoPlayTitle: 'Auto-advance mode (A)',
     restartTitle: 'Restart from beginning (R)',
-    homeUrl: 'https://ktory.ink/en/'
+    homeUrl: 'https://ktory.ink/en/',
+    ready: 'Ready',
+    stepHint: 'Click screen or press [Space] to advance ▾'
   },
   'ja': {
     tagline: '軽量・優雅・対話主導のシナリオ制作・接続システム',
@@ -163,7 +167,9 @@ const PORTAL_I18N = {
     langSwitcherTitle: '言語を切り替える',
     autoPlayTitle: '自動進行モード (A)',
     restartTitle: '最初からやり直す (R)',
-    homeUrl: 'https://ktory.ink/ja/'
+    homeUrl: 'https://ktory.ink/ja/',
+    ready: '準備完了 (Ready)',
+    stepHint: '画面クリックまたは [Space] で進行 ▾'
   }
 };
 
@@ -180,6 +186,9 @@ function updatePortalLabels(locale) {
   if (el.langSwitcher) el.langSwitcher.title = texts.langSwitcherTitle;
   if (el.btnAutoPlay) el.btnAutoPlay.title = texts.autoPlayTitle;
   if (el.btnRestartSession) el.btnRestartSession.title = texts.restartTitle;
+  if (el.dockLocaleTag) el.dockLocaleTag.textContent = locale.toUpperCase();
+  if (el.dockStatusText && state.status === 'Ready') el.dockStatusText.textContent = texts.ready || 'Ready';
+  if (el.dockStepHint && state.status === 'Ready') el.dockStepHint.textContent = texts.stepHint || 'Click screen or press [Space] to advance ▾';
 }
 
 function hidePortal() {
@@ -354,10 +363,12 @@ function setupEventListeners() {
   });
 
   // Fast forward dock button
-  el.btnFastForward.addEventListener('click', (e) => {
-    e.stopPropagation();
-    fastForwardTypewriter();
-  });
+  if (el.btnFastForward) {
+    el.btnFastForward.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fastForwardTypewriter();
+    });
+  }
 
   // Drawer sample select
   el.sampleSelect.addEventListener('change', () => {

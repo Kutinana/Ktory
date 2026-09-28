@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="highlighting/colors.css" />
   <script>
-    (function() {
+    (function () {
       try {
         var supported = ['zh', 'en', 'ja'];
         var preferred = localStorage.getItem('ktory-locale');
@@ -33,7 +33,82 @@
         }
         document.documentElement.lang = preferred === 'zh' ? 'zh-CN' : preferred;
         window.__KTORY_INITIAL_LOCALE__ = preferred;
-      } catch (e) {}
+
+        window.__KTORY_I18N__ = {
+          'zh': {
+            tagline: '轻量 · 优雅 · 对白驱动的叙事创作与接入系统',
+            sampleTitle: '尝试示例剧本',
+            writeTitle: '撰写我的剧本',
+            home: '官网',
+            homeTitle: '访问 Ktory 官网',
+            langSwitcherTitle: '切换语言',
+            autoPlayTitle: '自动阅读模式 (A)',
+            restartTitle: '重新从头开始试读 (R)',
+            homeUrl: 'https://ktory.ink',
+            ready: '就绪 (Ready)',
+            stepHint: '点击页面或按 [空格] 推进阅读 ▾'
+          },
+          'en': {
+            tagline: 'Lightweight, elegant, dialogue-driven narrative engine and runtime',
+            sampleTitle: 'Try Sample Script',
+            writeTitle: 'Write My Script',
+            home: 'Home',
+            homeTitle: 'Visit Ktory Homepage',
+            langSwitcherTitle: 'Switch Language',
+            autoPlayTitle: 'Auto-advance mode (A)',
+            restartTitle: 'Restart from beginning (R)',
+            homeUrl: 'https://ktory.ink/en/',
+            ready: 'Ready',
+            stepHint: 'Click screen or press [Space] to advance ▾'
+          },
+          'ja': {
+            tagline: '軽量・優雅・対話主導のシナリオ制作・接続システム',
+            sampleTitle: 'サンプルを試読',
+            writeTitle: '脚本を作成する',
+            home: '公式サイト',
+            homeTitle: 'Ktory 公式サイトへ',
+            langSwitcherTitle: '言語を切り替える',
+            autoPlayTitle: '自動進行モード (A)',
+            restartTitle: '最初からやり直す (R)',
+            homeUrl: 'https://ktory.ink/ja/',
+            ready: '準備完了 (Ready)',
+            stepHint: '画面クリックまたは [Space] で進行 ▾'
+          }
+        };
+
+        window.__applyInitialLocale = function () {
+          var loc = window.__KTORY_INITIAL_LOCALE__ || 'en';
+          var t = window.__KTORY_I18N__[loc] || window.__KTORY_I18N__['en'];
+          var tag = document.getElementById('portalTagline');
+          if (tag) tag.textContent = t.tagline;
+          var st = document.getElementById('portalSampleTitle');
+          if (st) st.textContent = t.sampleTitle;
+          var wt = document.getElementById('portalWriteTitle');
+          if (wt) wt.textContent = t.writeTitle;
+          var ht = document.getElementById('navHomeText');
+          if (ht) ht.textContent = t.home;
+          var gh = document.getElementById('btnGoHome');
+          if (gh) { gh.href = t.homeUrl; gh.title = t.homeTitle; }
+          var ls = document.getElementById('langSwitcher');
+          if (ls) {
+            ls.title = t.langSwitcherTitle;
+            var btns = ls.querySelectorAll('.pill-btn');
+            for (var i = 0; i < btns.length; i++) {
+              btns[i].classList.toggle('active', btns[i].getAttribute('data-locale') === loc);
+            }
+          }
+          var ap = document.getElementById('btnAutoPlay');
+          if (ap) ap.title = t.autoPlayTitle;
+          var rs = document.getElementById('btnRestartSession');
+          if (rs) rs.title = t.restartTitle;
+          var dlt = document.getElementById('dockLocaleTag');
+          if (dlt) dlt.textContent = loc.toUpperCase();
+          var dst = document.getElementById('dockStatusText');
+          if (dst) dst.textContent = t.ready;
+          var dsh = document.getElementById('dockStepHint');
+          if (dsh) dsh.textContent = t.stepHint;
+        };
+      } catch (e) { }
     })();
   </script>
 </head>
@@ -53,8 +128,8 @@
       <div class="nav-right">
 
         <!-- Language Switcher Pills -->
-        <div class="nav-pill-group" id="langSwitcher" title="切换语言">
-          <button class="pill-btn active" data-locale="zh">中</button>
+        <div class="nav-pill-group" id="langSwitcher" title="Switch Language">
+          <button class="pill-btn" data-locale="zh">中</button>
           <button class="pill-btn" data-locale="en">EN</button>
           <button class="pill-btn" data-locale="ja">日</button>
         </div>
@@ -62,13 +137,13 @@
         <div class="nav-divider"></div>
 
         <!-- Auto Advance Toggle -->
-        <button id="btnAutoPlay" class="nav-toggle-btn" title="自动阅读模式 (A)">
+        <button id="btnAutoPlay" class="nav-toggle-btn" title="Auto-advance mode (A)">
           <span class="toggle-dot"></span>
           <span class="btn-label">AUTO</span>
         </button>
 
         <!-- Restart Button -->
-        <button id="btnRestartSession" class="nav-text-btn danger-hover" title="重新从头开始试读 (R)">
+        <button id="btnRestartSession" class="nav-text-btn danger-hover" title="Restart from beginning (R)">
           <span class="btn-icon">↺</span>
           <span>RESTART</span>
         </button>
@@ -76,10 +151,10 @@
         <div class="nav-divider"></div>
 
         <!-- Official Website Link -->
-        <a href="https://ktory.ink" target="_blank" rel="noopener noreferrer" class="nav-text-btn nav-home-link"
-          id="btnGoHome" title="访问 Ktory 官网首页 (ktory.ink)">
+        <a href="https://ktory.ink/en/" target="_blank" rel="noopener noreferrer" class="nav-text-btn nav-home-link"
+          id="btnGoHome" title="Visit Ktory Homepage (ktory.ink)">
           <span class="btn-icon">↗</span>
-          <span id="navHomeText">官网</span>
+          <span id="navHomeText">Home</span>
         </a>
       </div>
     </header>
@@ -92,7 +167,8 @@
           <img src="ktory_logo.webp" alt="Ktory Logo" class="portal-logo" />
           <div class="portal-header-text">
             <h1 class="portal-title">Ktory Web Reader</h1>
-            <p class="portal-tagline" id="portalTagline">轻量 · 优雅 · 对白驱动的叙事创作与接入系统</p>
+            <p class="portal-tagline" id="portalTagline">Lightweight, elegant, dialogue-driven narrative engine and
+              runtime</p>
           </div>
         </div>
 
@@ -100,19 +176,19 @@
         <div class="portal-actions">
           <button id="btnPortalSample" class="portal-btn portal-btn-primary" type="button">
             <span class="portal-btn-icon">▶</span>
-            <span class="portal-btn-title" id="portalSampleTitle">尝试示例剧本</span>
+            <span class="portal-btn-title" id="portalSampleTitle">Try Sample Script</span>
           </button>
 
           <button id="btnPortalWrite" class="portal-btn portal-btn-secondary" type="button">
             <span class="portal-btn-icon">✎</span>
-            <span class="portal-btn-title" id="portalWriteTitle">撰写我的剧本</span>
+            <span class="portal-btn-title" id="portalWriteTitle">Write My Script</span>
           </button>
         </div>
       </div>
     </section>
 
     <details class="runtime-diagnostics" id="runtimeDiagnostics" hidden>
-      <summary id="runtimeDiagnosticSummary">剧本警告</summary>
+      <summary id="runtimeDiagnosticSummary">Script Warnings</summary>
       <pre id="runtimeDiagnosticMessages" aria-live="polite"></pre>
     </details>
 
@@ -144,9 +220,9 @@
         <!-- Story Completed Flourish Banner -->
         <div class="story-completed-banner" id="storyCompletedBanner" style="display: none;">
           <div class="completion-ornament">✦ ✦ ✦</div>
-          <h2 class="completion-title">剧本演练结束</h2>
+          <h2 class="completion-title">The End</h2>
           <p class="completion-desc">— The narrative sequence has reached its conclusion —</p>
-          <button id="btnReplayStory" class="completion-replay-btn">↺ 重新开始试读</button>
+          <button id="btnReplayStory" class="completion-replay-btn">↺ Restart</button>
         </div>
 
       </div>
@@ -163,16 +239,15 @@
         <div class="dock-content">
           <div class="dock-left">
             <span class="status-indicator-dot" id="dockStatusDot"></span>
-            <span class="dock-status-text" id="dockStatusText">就绪 (Ready)</span>
+            <span class="dock-status-text" id="dockStatusText">Ready</span>
           </div>
 
           <div class="dock-center" id="dockStepHintContainer">
-            <span class="dock-hint-text" id="dockStepHint">点击页面或按 [空格] 推进阅读 ▾</span>
+            <span class="dock-hint-text" id="dockStepHint">Click screen or press [Space] to advance ▾</span>
           </div>
 
           <div class="dock-right">
-            <span class="dock-locale-tag" id="dockLocaleTag">ZH</span>
-            <button id="btnFastForward" class="dock-mini-btn" title="立即显示全文 (F)">快显</button>
+            <span class="dock-locale-tag" id="dockLocaleTag">EN</span>
           </div>
         </div>
       </div>
@@ -254,6 +329,10 @@
     <!-- Backdrop for Drawers -->
     <div class="drawer-backdrop" id="drawerBackdrop"></div>
   </div>
+
+  <script>
+    if (window.__applyInitialLocale) window.__applyInitialLocale();
+  </script>
 
   <script src="app.js"></script>
   <script src="highlighting/textmate.js"></script>
