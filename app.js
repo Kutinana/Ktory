@@ -3,12 +3,32 @@
  * Compliant with Ktory Implementation Specification v1.0
  */
 
+function getPreferredLocale() {
+  const supported = ['zh', 'en', 'ja'];
+  try {
+    const saved = localStorage.getItem('ktory-locale');
+    if (saved && supported.includes(saved)) {
+      return saved;
+    }
+  } catch (e) {}
+
+  const langs = (typeof navigator !== 'undefined' && navigator.languages) || [(typeof navigator !== 'undefined' && navigator.language) || ''];
+  for (const lang of langs) {
+    if (!lang) continue;
+    const l = lang.toLowerCase().trim();
+    if (l.startsWith('zh')) return 'zh';
+    if (l.startsWith('ja')) return 'ja';
+    if (l.startsWith('en')) return 'en';
+  }
+  return 'en'; // fallback to en
+}
+
 const state = {
   status: 'Ready',
   payload: null,
   choice: null,
-  requestedLocale: 'zh',
-  defaultLocale: 'zh',
+  requestedLocale: (typeof window !== 'undefined' && window.__KTORY_INITIAL_LOCALE__) || getPreferredLocale(),
+  defaultLocale: 'en',
   autoPlay: false,
 
   // Font & Typography
@@ -116,26 +136,51 @@ const PORTAL_I18N = {
     tagline: '轻量 · 优雅 · 对白驱动的叙事创作与接入系统',
     sampleTitle: '尝试示例剧本',
     writeTitle: '撰写我的剧本',
-    home: '官网'
+    home: '官网',
+    homeTitle: '访问 Ktory 官网首页 (ktory.ink)',
+    langSwitcherTitle: '切换语言',
+    autoPlayTitle: '自动阅读模式 (A)',
+    restartTitle: '重新从头开始试读 (R)',
+    homeUrl: 'https://ktory.ink'
   },
   'en': {
     tagline: 'Lightweight, elegant, dialogue-driven narrative engine and runtime',
     sampleTitle: 'Try Sample Script',
     writeTitle: 'Write My Script',
-    home: 'Home'
+    home: 'Home',
+    homeTitle: 'Visit Ktory Homepage (ktory.ink)',
+    langSwitcherTitle: 'Switch Language',
+    autoPlayTitle: 'Auto-advance mode (A)',
+    restartTitle: 'Restart from beginning (R)',
+    homeUrl: 'https://ktory.ink/en/'
   },
   'ja': {
     tagline: '軽量・優雅・対話主導のシナリオ制作・接続システム',
     sampleTitle: 'サンプルを試読',
     writeTitle: '脚本を作成する',
-    home: '公式サイト'
+    home: '公式サイト',
+    homeTitle: 'Ktory 公式サイトへ (ktory.ink)',
+    langSwitcherTitle: '言語を切り替える',
+    autoPlayTitle: '自動進行モード (A)',
+    restartTitle: '最初からやり直す (R)',
+    homeUrl: 'https://ktory.ink/ja/'
   }
 };
 
 function updatePortalLabels(locale) {
-  const texts = PORTAL_I18N[locale] || PORTAL_I18N['zh'];
+  const texts = PORTAL_I18N[locale] || PORTAL_I18N['en'];
   if (el.portalTagline) el.portalTagline.textContent = texts.tagline;
   if (el.portalSampleTitle) el.portalSampleTitle.textContent = texts.sampleTitle;
+  if (el.portalWriteTitle) el.portalWriteTitle.textContent = texts.writeTitle;
+  if (el.navHomeText) el.navHomeText.textContent = texts.home;
+  if (el.btnGoHome) {
+    el.btnGoHome.href = texts.homeUrl;
+    el.btnGoHome.title = texts.homeTitle;
+  }
+  if (el.langSwitcher) el.langSwitcher.title = texts.langSwitcherTitle;
+  if (el.btnAutoPlay) el.btnAutoPlay.title = texts.autoPlayTitle;
+  if (el.btnRestartSession) el.btnRestartSession.title = texts.restartTitle;
+}leTitle;
   if (el.portalWriteTitle) el.portalWriteTitle.textContent = texts.writeTitle;
   if (el.navHomeText) el.navHomeText.textContent = texts.home;
 }
@@ -160,6 +205,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupDrawerResizer();
   setupCustomSampleSelect();
+
+  const initialLocale = (typeof window !== 'undefined' && window.__KTORY_INITIAL_LOCALE__) || getPreferredLocale();
+  state.requestedLocale = initialLocale;
+  document.documentElement.lang = initialLocale === 'zh' ? 'zh-CN' : initialLocale;
+  updatePortalLabels(initialLocale);
+  if (el.langSwitcher) {
+    el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.locale === initialLocale);
+    });
+  }
+
   if (window.ktoryReaderHost) {
     hidePortal();
     window.ktoryReaderHost.onDomReady();
@@ -239,7 +295,7 @@ function setupEventListeners() {
       const sampleKey = state.currentSampleKey || Object.keys(state.samples)[0];
       const script = (sampleKey && state.samples[sampleKey]) || el.scriptInput.value;
       if (script) {
-        await startSession(script, state.requestedLocale || 'zh');
+        await startSession(script, state.requestedLocale || 'en');
       }
     });
   }
@@ -653,7 +709,7 @@ window.registerKtoryWasmBridge = function(dotNetRef) {
         el.scriptInput.value = state.samples[state.currentSampleKey];
         document.dispatchEvent(new Event('ktory:source-changed'));
         syncSampleSelect(state.currentSampleKey);
-        startSession(state.samples[state.currentSampleKey], 'zh');
+        startSession(state.samples[state.currentSampleKey], state.requestedLocale || 'en');
       }
     });
   }
@@ -728,7 +784,7 @@ function enqueueSessionOp(opFn) {
   return sessionOpChain;
 }
 
-async function startSession(script, requestedLocale = 'zh', entryBlock = null) {
+async function startSession(script, requestedLocale = state.requestedLocale || 'en', entryBlock = null) {
   hidePortal();
   clearTimers();
   resetStoryStream();
@@ -878,6 +934,10 @@ async function submitChoice(choiceId, expectedPresentationId = null, expectedSes
 
 async function changeLanguage(locale) {
   state.requestedLocale = locale;
+  try {
+    localStorage.setItem('ktory-locale', locale);
+  } catch (e) {}
+  document.documentElement.lang = locale === 'zh' ? 'zh-CN' : locale;
   updatePortalLabels(locale);
   el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.locale === locale);
@@ -978,7 +1038,11 @@ function updateState(serverState, isLanguageSwitch = false) {
   if (state.status === 'Completed') {
     clearAllPortraits();
     el.storyCompletedBanner.style.display = 'block';
-    el.dockStepHint.textContent = '剧本演练已全部结束';
+    el.dockStepHint.textContent = state.requestedLocale === 'en'
+      ? 'Story sequence concluded'
+      : state.requestedLocale === 'ja'
+        ? 'シナリオの再生が終了しました'
+        : '剧本演练已全部结束';
     scrollToBottom();
     return;
   }
@@ -1000,7 +1064,11 @@ function renderDiagnostics() {
   // InputIgnored (512) is a background diagnostic, never a player-facing warning.
   const warnings = state.diagnostics.filter(item => item.kind === 'Warning' || item.kind === 256);
   el.runtimeDiagnostics.hidden = warnings.length === 0;
-  el.runtimeDiagnosticSummary.textContent = `剧本警告（${warnings.length}）`;
+  el.runtimeDiagnosticSummary.textContent = state.requestedLocale === 'en'
+    ? `Script Warnings (${warnings.length})`
+    : state.requestedLocale === 'ja'
+      ? `スクリプト警告（${warnings.length}）`
+      : `剧本警告（${warnings.length}）`;
   el.runtimeDiagnosticMessages.textContent = warnings.map(item =>
     `${item.block || 'Root'} · L${item.lineNumber}: ${item.message}`).join('\n');
 }
@@ -1468,12 +1536,12 @@ function renderBeat(payload, isLanguageSwitch = false) {
     // 3. Dynamically update speaker display name in DOM
     if (state.currentActiveSpeakerEl) {
       state.currentActiveSpeakerEl.textContent = payload.speaker || '';
-      state.currentActiveSpeakerEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
+      state.currentActiveSpeakerEl.title = getSpeakerLanguageTitle(payload.speakerActualLanguage);
     } else if (payload.speaker && state.currentActivePassageEl) {
       const spEl = state.currentActivePassageEl.querySelector('.speaker-name');
       if (spEl) {
         spEl.textContent = payload.speaker;
-        spEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
+        spEl.title = getSpeakerLanguageTitle(payload.speakerActualLanguage);
       }
     }
 
@@ -1494,7 +1562,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
       refreshHoldLanguage(payload);
     } else {
       // Already finished typing and not holding (manual wait)
-      el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
+      el.dockStepHint.textContent = getAdvanceHint();
     }
 
     scrollToBottom();
@@ -1543,7 +1611,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
     cursorEl = passage.querySelector('.typing-cursor');
     state.currentActiveSpeakerEl = passage.querySelector('.speaker-name');
     if (state.currentActiveSpeakerEl) {
-      state.currentActiveSpeakerEl.title = payload.speakerActualLanguage ? `名字语言：${payload.speakerActualLanguage}` : '';
+      state.currentActiveSpeakerEl.title = getSpeakerLanguageTitle(payload.speakerActualLanguage);
     }
   } else {
     // Narrator
@@ -1612,7 +1680,11 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
   const typewriterEpoch = currentSessionEpoch;
 
   cursorEl.style.display = 'inline-block';
-  el.dockStepHint.textContent = '文字呈现中... 点击可快速显示全文';
+  el.dockStepHint.textContent = state.requestedLocale === 'en'
+    ? 'Typing... Click to fast-forward'
+    : state.requestedLocale === 'ja'
+      ? 'テキスト表示中... クリックで早送り'
+      : '文字呈现中... 点击可快速显示全文';
 
   // Parse .skippable(false, [duration])
   state.canFastForward = true;
@@ -1632,14 +1704,22 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
       if (hasDuration) {
         const duration = Number(skippableTag.positionalArgs[1]);
         if (duration > 0) {
-          el.dockStepHint.textContent = `快显锁定中 (${duration}s)...`;
+          el.dockStepHint.textContent = state.requestedLocale === 'en'
+            ? `Fast-forward locked (${duration}s)...`
+            : state.requestedLocale === 'ja'
+              ? `早送り待機中 (${duration}s)...`
+              : `快显锁定中 (${duration}s)...`;
           state.fastForwardLockTimer = setTimeout(() => {
             if (typewriterPresentationId !== state.currentPresentationId || typewriterEpoch !== currentSessionEpoch) {
               return;
             }
             state.canFastForward = true;
             if (el.btnFastForward) el.btnFastForward.disabled = false;
-            el.dockStepHint.textContent = '点击可快速显示全文';
+            el.dockStepHint.textContent = state.requestedLocale === 'en'
+              ? 'Click to fast-forward'
+              : state.requestedLocale === 'ja'
+                ? 'クリックで早送り'
+                : '点击可快速显示全文';
           }, duration * 1000);
         } else {
           state.canFastForward = true;
@@ -1647,7 +1727,11 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
         }
       } else {
         // When t is omitted, fast-forward is prohibited for the entire printing duration per Spec §2.6
-        el.dockStepHint.textContent = '文字呈现中 (禁止快显)...';
+        el.dockStepHint.textContent = state.requestedLocale === 'en'
+          ? 'Presenting text (fast-forward disabled)...'
+          : state.requestedLocale === 'ja'
+            ? 'テキスト表示中 (早送り不可)...'
+            : '文字呈现中 (禁止快显)...';
       }
     }
   }
@@ -1817,7 +1901,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
         if (state.autoAdvanceOnHoldEnd) {
           stepSession(holdPresentationId);
         } else {
-          el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
+          el.dockStepHint.textContent = getAdvanceHint();
         }
       }
     }, intervalMs);
@@ -1825,18 +1909,43 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     // Normal manual step
     state.isHolding = false;
     el.dockProgressBar.style.width = '0%';
-    el.dockStepHint.textContent = '点击页面或按 [空格] 推进阅读 ▾';
+    el.dockStepHint.textContent = getAdvanceHint();
   }
+}
+
+function getAdvanceHint() {
+  return state.requestedLocale === 'en'
+    ? 'Click or press [Space] to advance ▾'
+    : state.requestedLocale === 'ja'
+      ? 'クリックまたは [Space] で進行 ▾'
+      : '点击页面或按 [空格] 推进阅读 ▾';
+}
+
+function getSpeakerLanguageTitle(actualLang) {
+  if (!actualLang) return '';
+  return state.requestedLocale === 'en'
+    ? `Name Language: ${actualLang}`
+    : state.requestedLocale === 'ja'
+      ? `名前の言語: ${actualLang}`
+      : `名字语言：${actualLang}`;
 }
 
 function updateHoldHint() {
   const waitRemaining = Math.max(0, state.minimumHoldDuration - state.holdElapsed);
   const autoRemaining = Math.max(0, state.autoAdvanceDuration - state.autoAdvanceElapsed);
   el.dockStepHint.textContent = !state.allowClickInterrupt
-    ? `强制停留中 (${waitRemaining.toFixed(1)}s)... 点击无效`
+    ? (state.requestedLocale === 'en'
+        ? `Waiting (${waitRemaining.toFixed(1)}s)... Click disabled`
+        : state.requestedLocale === 'ja'
+          ? `待機中 (${waitRemaining.toFixed(1)}s)... クリック不可`
+          : `强制停留中 (${waitRemaining.toFixed(1)}s)... 点击无效`)
     : state.autoAdvanceOnHoldEnd
-      ? `自动推进倒计时 (${autoRemaining.toFixed(1)}s)... 点击即刻推进`
-      : '点击页面或按 [空格] 推进阅读 ▾';
+      ? (state.requestedLocale === 'en'
+          ? `Auto-advancing (${autoRemaining.toFixed(1)}s)... Click to advance now`
+          : state.requestedLocale === 'ja'
+            ? `自動進行カウントダウン (${autoRemaining.toFixed(1)}s)... クリックで直ちに進行`
+            : `自动推进倒计时 (${autoRemaining.toFixed(1)}s)... 点击即刻推进`)
+      : getAdvanceHint();
 }
 
 function refreshHoldLanguage(payload) {
@@ -1926,8 +2035,8 @@ function renderChoices(choicePayload) {
 
   const isInvestigate = choicePayload.containerName === 'investigate';
   const titleText = isInvestigate
-    ? (state.requestedLocale === 'en' ? 'Investigation Hub' : '调查中 (Investigation Hub)')
-    : (state.requestedLocale === 'en' ? 'Make a Choice' : '请做出抉择');
+    ? (state.requestedLocale === 'en' ? 'Investigation Hub' : state.requestedLocale === 'ja' ? '調査中 (Investigation Hub)' : '调查中 (Investigation Hub)')
+    : (state.requestedLocale === 'en' ? 'Make a Choice' : state.requestedLocale === 'ja' ? '選択してください' : '请做出抉择');
 
   choiceGroup.innerHTML = `
     <div class="choice-group-header">
@@ -1944,12 +2053,16 @@ function renderChoices(choicePayload) {
     btn.className = 'choice-card-btn';
     btn.disabled = !opt.canSelect;
 
+    const consumedTag = opt.isConsumed
+      ? `<span class="choice-state-tag">${state.requestedLocale === 'en' ? '✓ Visited' : state.requestedLocale === 'ja' ? '✓ 探索済み' : '✓ 已探索'}</span>`
+      : '';
+
     btn.innerHTML = `
       <div class="choice-btn-left">
         <span class="choice-marker">${escapeHtml(opt.marker || '*')}</span>
         <span class="choice-text">${escapeHtml(opt.label)}</span>
       </div>
-      ${opt.isConsumed ? `<span class="choice-state-tag">${state.requestedLocale === 'en' ? '✓ Visited' : '✓ 已探索'}</span>` : ''}
+      ${consumedTag}
     `;
 
     btn.addEventListener('click', (e) => {
@@ -1976,7 +2089,9 @@ function renderChoices(choicePayload) {
 
   el.dockStepHint.textContent = state.requestedLocale === 'en'
     ? 'Please choose an option (press 1, 2... or click)'
-    : '请做出选择 (按数字键 1, 2... 或点击选项)';
+    : state.requestedLocale === 'ja'
+      ? '選択肢を選んでください (数字キー 1, 2... またはクリック)'
+      : '请做出选择 (按数字键 1, 2... 或点击选项)';
 }
 
 // ==========================================================================

@@ -16,6 +16,26 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="highlighting/colors.css" />
+  <script>
+    (function() {
+      try {
+        var supported = ['zh', 'en', 'ja'];
+        var preferred = localStorage.getItem('ktory-locale');
+        if (!preferred || supported.indexOf(preferred) === -1) {
+          var langs = navigator.languages || [navigator.language || ''];
+          for (var i = 0; i < langs.length; i++) {
+            var l = (langs[i] || '').toLowerCase().trim();
+            if (l.indexOf('zh') === 0) { preferred = 'zh'; break; }
+            if (l.indexOf('ja') === 0) { preferred = 'ja'; break; }
+            if (l.indexOf('en') === 0) { preferred = 'en'; break; }
+          }
+          if (!preferred) preferred = 'en';
+        }
+        document.documentElement.lang = preferred === 'zh' ? 'zh-CN' : preferred;
+        window.__KTORY_INITIAL_LOCALE__ = preferred;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 
 <body class="theme-ink font-serif font-size-md">
