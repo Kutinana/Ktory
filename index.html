@@ -262,11 +262,16 @@
   <!-- Optional WebAssembly Runtime (auto-boots on static hosts like Vercel / GitHub Pages) -->
   <script>
     (function () {
+      if (window.ktoryReaderHost) return;
+
       const wasmScript = document.createElement('script');
       wasmScript.src = '_framework/blazor.webassembly.js';
       wasmScript.setAttribute('autostart', 'true');
       wasmScript.onerror = function () {
         console.log('[Ktory] Standalone mode: WebAssembly bundle not found, using REST API.');
+        if (window.__rejectKtoryWasm) {
+          window.__rejectKtoryWasm(new Error('WebAssembly bundle not found'));
+        }
       };
       document.body.appendChild(wasmScript);
     })();
