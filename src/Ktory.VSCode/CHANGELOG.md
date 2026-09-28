@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Graduate extension from pre-release to stable channel.
+- Add integrated offline linter check powered directly by the Core parser and validator via headless WebAssembly, requiring zero external .NET SDK dependencies.
+- Report syntax errors and fatal semantic errors (invalid control flow, unresolved targets, option jump conflicts, forbidden markdown, dangling decorators) as real-time in-editor **Errors**.
+- Introduce narrative script static quality analysis reporting **Warnings**.
+- Native VS Code Problems panel integration with inline squiggles, diagnostic codes, and immediate recovery on edit.
+
 ## 0.1.3
 
 - Synchronize offline WASM reader runtime and asset bundles for the VS Code preview.

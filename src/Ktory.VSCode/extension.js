@@ -2,6 +2,8 @@ const vscode = require('vscode');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { registerLinter } = require('./linter.js');
+
 function escapeAttribute(value) {
   return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -54,7 +56,8 @@ function activate(context) {
   let lastEvent;
   let disposed = false;
   const output = vscode.window.createOutputChannel(l10nText('Ktory Preview'));
-  const diagnostics = vscode.languages.createDiagnosticCollection('ktory-preview');
+  const linter = registerLinter(context, output, 'ktory');
+  const diagnostics = linter.diagnostics;
 
   async function sendDocument() {
     if (!panel || !document || !ready) return;
@@ -71,7 +74,7 @@ function activate(context) {
     const latest = await vscode.workspace.openTextDocument(sourceUri);
     if (disposed || panel !== targetPanel || revision !== targetRevision || document.uri.toString() !== sourceUri.toString()) return;
     document = latest;
-    diagnostics.clear();
+    await linter.runLint(document);
     await panel.webview.postMessage({
       type: 'document', revision: targetRevision, uri: document.uri.toString(),
       name: path.posix.basename(document.uri.path), version: document.version,
@@ -120,14 +123,17 @@ function activate(context) {
         if (message.type === 'error' && document) {
           // Only attach a diagnostic to the exact version that was read.
           if (message.version !== document.version) return;
-          const match = String(message.message).match(/Line: (\d+), Column: (\d+)/);
-          if (match) {
-            const line = Math.max(0, Math.min(document.lineCount - 1, Number(match[1]) - 1));
-            const start = new vscode.Position(line, Math.max(0, Number(match[2]) - 1));
-            const diagnostic = new vscode.Diagnostic(new vscode.Range(start, document.lineAt(line).range.end),
-              String(message.message), vscode.DiagnosticSeverity.Error);
-            diagnostic.source = 'Ktory Core';
-            diagnostics.set(document.uri, [diagnostic]);
+          await linter.runLint(document);
+          if (!diagnostics.get(document.uri)?.length) {
+            const match = String(message.message).match(/Line: (\d+), Column: (\d+)/);
+            if (match) {
+              const line = Math.max(0, Math.min(document.lineCount - 1, Number(match[1]) - 1));
+              const start = new vscode.Position(line, Math.max(0, Number(match[2]) - 1));
+              const diagnostic = new vscode.Diagnostic(new vscode.Range(start, document.lineAt(line).range.end),
+                String(message.message), vscode.DiagnosticSeverity.Error);
+              diagnostic.source = 'Ktory Core';
+              diagnostics.set(document.uri, [diagnostic]);
+            }
           }
         }
       }
@@ -136,7 +142,6 @@ function activate(context) {
       receiver.dispose();
       if (panel === thisPanel) {
         panel = undefined; ready = false; lastEvent = undefined; revision++;
-        if (!disposed) diagnostics.clear();
       }
     });
     thisPanel.webview.html = previewHtml(thisPanel.webview, context.extensionUri);
@@ -153,13 +158,12 @@ function activate(context) {
     vscode.workspace.onDidChangeTextDocument(event => {
       if (document?.uri.toString() !== event.document.uri.toString() || !event.contentChanges.length) return;
       document = event.document;
-      diagnostics.delete(document.uri);
       panel?.webview.postMessage({ type: 'changed', version: document.version });
     }),
-    { dispose: () => { disposed = true; panel?.dispose(); diagnostics.dispose(); output.dispose(); } }
+    { dispose: () => { disposed = true; panel?.dispose(); output.dispose(); } }
   );
   // The integration suite uses the same message channel as the actual panel.
-  return { get panel() { return panel; }, get lastEvent() { return lastEvent; }, diagnostics };
+  return { get panel() { return panel; }, get lastEvent() { return lastEvent; }, diagnostics, linter };
 }
 
 module.exports = { activate, previewHtml, getEffectiveUiLocale };

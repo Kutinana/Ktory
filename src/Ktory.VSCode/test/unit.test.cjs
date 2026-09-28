@@ -107,7 +107,7 @@ test('the staged extension includes current runtime sources and no build tooling
   assert.equal(manifest.scripts, undefined);
   assert.equal(manifest.devDependencies, undefined);
   for (const file of [
-    'extension.js', 'webview.js', 'webview.css', 'LICENSE.txt', 'syntaxes/ktory.tmLanguage.json',
+    'extension.js', 'webview.js', 'linter.js', 'webview.css', 'LICENSE.txt', 'syntaxes/ktory.tmLanguage.json',
     'README.md', 'README.zh-CN.md', 'README.ja.md', 'CHANGELOG.md',
     'package.nls.json', 'package.nls.zh-cn.json', 'package.nls.ja.json',
     'l10n/bundle.l10n.json', 'l10n/bundle.l10n.zh-cn.json', 'l10n/bundle.l10n.ja.json'
@@ -162,3 +162,21 @@ test('shared HTML renderer preserves anonymous anchors, quoted filenames and esc
     assert.ok(escaped.includes('&lt;img'));
   } finally { highlighter.dispose(); }
 });
+
+test('linter service parses .ktr scripts and produces diagnostics via bundled WASM', async () => {
+  const { lintScript } = require('../linter.js');
+  const frameworkDir = path.join(readerRoot, '_framework');
+
+  const valid = await lintScript('@defaultLang: zh\n: 开场\n', frameworkDir);
+  assert.equal(valid.length, 0);
+
+  const error = await lintScript('=== Start ===\n  -> Missing\n', frameworkDir);
+  assert.equal(error.length, 1);
+  assert.equal(error[0].severity, 1);
+  assert.equal(error[0].code, 'KTR_E004');
+
+  const warn = await lintScript('@speaker alice: zh="爱丽丝"\nalice: 对白\n=== Aside ===\n  : 独立\n  -> return\n', frameworkDir);
+  assert.ok(warn.some(item => item.code === 'KTR_W002'));
+  assert.ok(warn.some(item => item.severity === 2));
+});
+

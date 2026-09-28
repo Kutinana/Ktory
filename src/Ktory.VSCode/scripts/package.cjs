@@ -14,8 +14,7 @@ async function packageExtension({ version } = {}) {
     await require('@vscode/vsce').createVSIX({
       cwd: extensionRoot,
       packagePath: temporaryPackage,
-      dependencies: false,
-      preRelease: true
+      dependencies: false
     });
     fs.renameSync(temporaryPackage, packagePath);
     console.log(`VSIX ready: ${packagePath}`);

@@ -98,6 +98,13 @@ public class KtoryWasmBridge
         return JsonSerializer.Serialize(EmbeddedSamples.Catalog);
     }
 
+    [JSInvokable]
+    public string Lint(string script)
+    {
+        var diagnostics = KtoryLinter.Analyze(script);
+        return JsonSerializer.Serialize(diagnostics, JsonOptions);
+    }
+
     private string SerializeState()
     {
         if (_sequencer == null)

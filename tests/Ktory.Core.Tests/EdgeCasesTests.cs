@@ -1328,11 +1328,12 @@ namespace Ktory.Core.Tests
         }
 
         [Fact]
-        public void StaticValidator_NamedSectionStepAfterTerminal_ThrowsParseException()
+        public void StaticValidator_NamedSectionStepAfterTerminal_EmitsWarningNotException()
         {
-            // A step still inside the section cannot follow its terminal return.
+            // A step still inside the section following terminal return is a warning, not a fatal parse exception.
             string script = @"
 : 根节第一句。
+-> SubSection
 
 === SubSection ===
   艾莉丝: 命名节台词。
@@ -1340,9 +1341,13 @@ namespace Ktory.Core.Tests
 
   主角: 这句仍在命名节内，无法执行。
 ";
-            var ex = Assert.Throws<KtoryException>(() => KtoryParser.Parse(script));
-            Assert.Contains("Unreachable code in section '=== SubSection ==='", ex.Message);
-            Assert.Contains("after terminal control flow statement", ex.Message);
+            var file = KtoryParser.Parse(script);
+            Assert.NotNull(file);
+
+            var diagnostics = KtoryLinter.Analyze(script);
+            var warning = Assert.Single(diagnostics, d => d.Code == "KTR_W001");
+            Assert.Equal(KtoryDiagnosticSeverity.Warning, warning.Severity);
+            Assert.Contains("Unreachable code in section '=== SubSection ==='", warning.Message);
         }
 
         [Fact]

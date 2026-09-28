@@ -20,31 +20,9 @@ namespace Ktory.Core.Parser
             foreach (var kvp in file.Blocks)
             {
                 var block = kvp.Value;
-                bool terminalEncountered = false;
-                int terminalLine = 0;
-
                 for (int i = 0; i < block.Steps.Count; i++)
                 {
                     var step = block.Steps[i];
-
-                    // A named section cannot execute another step after return/end.
-                    if (!block.IsRoot)
-                    {
-                        if (terminalEncountered)
-                        {
-                            throw new KtoryException(
-                                $"Unreachable code in section '=== {block.Label} ===' at line {step.LineNumber}. " +
-                                $"Step appears after terminal control flow statement at line {terminalLine}.",
-                                step.LineNumber, 1);
-                        }
-
-                        if (step is ControlFlowStep terminalCf && 
-                            (terminalCf.FlowType == ControlFlowType.Return || terminalCf.FlowType == ControlFlowType.End))
-                        {
-                            terminalEncountered = true;
-                            terminalLine = step.LineNumber;
-                        }
-                    }
 
                     ValidateStep(step, definedBlocks, block.Label);
                 }

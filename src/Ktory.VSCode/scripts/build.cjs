@@ -5,7 +5,7 @@ const vsce = require('@vscode/vsce');
 const { sourceRoot, repoRoot, extensionRoot, buildRoot } = require('./paths.cjs');
 
 async function build({ version } = {}) {
-  for (const file of ['extension.js', 'webview.js']) {
+  for (const file of ['extension.js', 'webview.js', 'linter.js']) {
     execFileSync(process.execPath, ['--check', path.join(sourceRoot, file)], { stdio: 'inherit' });
   }
   const output = path.join(buildRoot, 'publish');
@@ -46,6 +46,7 @@ async function build({ version } = {}) {
         return true;
       }
     });
+    fs.writeFileSync(path.join(reader, '_framework', 'package.json'), JSON.stringify({ type: 'module' }, null, 2) + '\n');
 
     // Keep the runtime's redistribution notices with the offline binaries.
     const assets = JSON.parse(fs.readFileSync(path.join(repoRoot, 'artifacts/obj/Ktory.Wasm/project.assets.json'), 'utf8'));

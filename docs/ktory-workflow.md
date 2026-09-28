@@ -174,7 +174,7 @@ pnpm test:vsix
 
 构建复用 Web/Runner/Core，所有扩展生成物统一放在 `artifacts/vscode/`，源码目录不再生成 `reader/`。`extension.js` 管理文档与面板生命周期，`webview.js` 负责共享 Reader 的编辑器消息及本地资源适配；剧情执行仍归 Core，时序与输入归 Reader。`reader/build-info.json` 记录源提交、dirty 标记和构建时间；dirty 构建不能作为该提交的干净发布证据。
 
-`package` 自动先构建完整扩展，再生成 `artifacts/vscode/packages/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前发布者为 `ktory`，扩展标识为 `ktory.ktory`；打包选项 `preRelease: true` 写入 VSIX 预发布标记，不使用版本字符串后缀。将来发布正式版时须显式调整渠道，并使用不同的三段数字版本。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。
+`package` 自动先构建完整扩展，再生成 `artifacts/vscode/packages/ktory-vscode-<version>.vsix`，不发布到 Marketplace。当前发布者为 `ktory`，扩展标识为 `ktory.ktory`；自 `0.2.0` 起取消 `preRelease: true`，直接打包为正式版 VSIX。版本和 Actions 下载包的对应关系见前文“发布产物与托管入口”。
 
 扩展使用 [专有许可证](../src/Ktory.VSCode/LICENSE.txt)，允许个人和商业使用，修改或再分发扩展须另获书面许可；用户原创剧本不受这些限制。该许可仅覆盖扩展及其包内 Ktory 组件的使用，不自动授权独立 Core／Unity 分发。第三方组件保留各自许可证，包内包含 `reader/notices/`。`package.json` 引用 `LICENSE.txt`，打包必须包含许可文件。
 
