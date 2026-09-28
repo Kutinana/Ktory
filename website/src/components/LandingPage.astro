@@ -50,6 +50,39 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
         document.documentElement.setAttribute('data-theme', 'light');
         document.documentElement.dataset.theme = 'light';
       }
+
+      // Language detection for root landing page ('/' or '/index.html')
+      (() => {
+        const path = window.location.pathname;
+        if (path !== '/' && path !== '/index.html') return;
+
+        const supported = ['zh', 'en', 'ja'];
+        let preferred = null;
+        try {
+          const saved = localStorage.getItem('ktory-locale');
+          if (saved && supported.includes(saved)) {
+            preferred = saved;
+          }
+        } catch (e) {}
+
+        if (!preferred) {
+          const langs = navigator.languages || [navigator.language || ''];
+          for (const lang of langs) {
+            if (!lang) continue;
+            const l = lang.toLowerCase().trim();
+            if (l.startsWith('zh')) { preferred = 'zh'; break; }
+            if (l.startsWith('ja')) { preferred = 'ja'; break; }
+            if (l.startsWith('en')) { preferred = 'en'; break; }
+          }
+          if (!preferred) preferred = 'en'; // fallback to en
+        }
+
+        if (preferred === 'en') {
+          window.location.replace('/en/' + window.location.search + window.location.hash);
+        } else if (preferred === 'ja') {
+          window.location.replace('/ja/' + window.location.search + window.location.hash);
+        }
+      })();
     </script>
   </head>
   <body class="min-h-screen flex flex-col bg-[var(--color-canvas)] text-[var(--color-ink)]">
@@ -110,6 +143,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
               {supportedLocales.map((loc) => (
                 <a
                   href={loc.href}
+                  data-locale-key={loc.key}
                   class={`flex items-center justify-between px-3 py-1.5 text-xs font-mono transition-colors ${
                     loc.key === lang
                       ? 'text-[var(--color-ink)] font-semibold bg-[var(--color-surface)]'
@@ -418,6 +452,18 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
         if (e.key === 'Escape') {
           toggleLangMenu(false);
         }
+      });
+
+      // Language menu clicks: persist user's manual choice
+      document.querySelectorAll('#lang-dropdown-menu a[data-locale-key]').forEach(a => {
+        a.addEventListener('click', () => {
+          const key = a.getAttribute('data-locale-key');
+          if (key) {
+            try {
+              localStorage.setItem('ktory-locale', key);
+            } catch (e) {}
+          }
+        });
       });
 
       // 3. Dynamic Ktory Parser (Runtime simulator)

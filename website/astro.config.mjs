@@ -41,6 +41,42 @@ export default defineConfig({
       customCss: [
         './src/styles/custom.css',
       ],
+      head: [
+        {
+          tag: 'script',
+          content: `(() => {
+  const path = window.location.pathname;
+  if (path === '/' || path === '/index.html' || path.startsWith('/en/') || path.startsWith('/ja/') || path === '/en' || path === '/ja') return;
+
+  const supported = ['zh', 'en', 'ja'];
+  let preferred = null;
+  try {
+    const saved = localStorage.getItem('ktory-locale');
+    if (saved && supported.includes(saved)) {
+      preferred = saved;
+    }
+  } catch (e) {}
+
+  if (!preferred) {
+    const langs = navigator.languages || [navigator.language || ''];
+    for (const lang of langs) {
+      if (!lang) continue;
+      const l = lang.toLowerCase().trim();
+      if (l.startsWith('zh')) { preferred = 'zh'; break; }
+      if (l.startsWith('ja')) { preferred = 'ja'; break; }
+      if (l.startsWith('en')) { preferred = 'en'; break; }
+    }
+    if (!preferred) preferred = 'en';
+  }
+
+  if (preferred === 'en') {
+    window.location.replace('/en' + path + window.location.search + window.location.hash);
+  } else if (preferred === 'ja') {
+    window.location.replace('/ja' + path + window.location.search + window.location.hash);
+  }
+})();`,
+        },
+      ],
       components: {
         LanguageSelect: './src/components/starlight/LanguageSelect.astro',
         ThemeSelect: './src/components/starlight/ThemeSelect.astro',

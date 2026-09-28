@@ -47,6 +47,7 @@ const activeLocale = locales.find(l => (currentLocale ? l.key === currentLocale 
       return (
         <a
           href={loc.href}
+          data-locale-key={loc.key === 'root' ? 'zh' : loc.key}
           role="menuitem"
           class={`flex items-center justify-between px-3 py-1.5 text-xs font-mono transition-colors ${
             isSelected
@@ -86,6 +87,17 @@ const activeLocale = locales.find(l => (currentLocale ? l.key === currentLocale 
       btn?.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleMenu();
+      });
+
+      this.querySelectorAll<HTMLAnchorElement>('a[data-locale-key]').forEach(a => {
+        a.addEventListener('click', () => {
+          const key = a.getAttribute('data-locale-key');
+          if (key) {
+            try {
+              localStorage.setItem('ktory-locale', key);
+            } catch (e) {}
+          }
+        });
       });
 
       document.addEventListener('click', (e) => {

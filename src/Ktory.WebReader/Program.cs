@@ -39,7 +39,7 @@ app.MapPost("/api/session/start", (StartSessionRequest req, RunnerSessionService
 {
     try
     {
-        var state = sessionService.Start(req.Script, req.RequestedLocale ?? "zh", req.EntryBlock);
+        var state = sessionService.Start(req.Script, req.RequestedLocale ?? "en", req.EntryBlock);
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -130,7 +130,7 @@ public class RunnerSessionState
     public long PresentationId { get; set; }
     public TextPayload? Payload { get; set; }
     public ChoicePayload? Choice { get; set; }
-    public string RequestedLanguage { get; set; } = "zh";
+    public string RequestedLanguage { get; set; } = "en";
     public string? DefaultLanguage { get; set; }
     public List<string> VisitedItems { get; set; } = new List<string>();
     public int CallStackDepth { get; set; }
