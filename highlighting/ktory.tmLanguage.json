@@ -13,12 +13,33 @@
       "match": "//.*$"
     },
     {
+      "include": "#raw-text"
+    },
+    {
       "name": "string.quoted.double.ktory",
-      "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+      "begin": "\"",
+      "end": "\"|$",
+      "patterns": [
+        {
+          "match": "\\\\."
+        },
+        {
+          "include": "#raw-text"
+        }
+      ]
     },
     {
       "name": "string.quoted.single.ktory",
-      "match": "(?<![\\p{L}\\p{N}])'(?:[^'\\\\]|\\\\.)*'"
+      "begin": "(?<![\\p{L}\\p{N}'\\\\])'(?!')",
+      "end": "'(?!')|$",
+      "patterns": [
+        {
+          "match": "\\\\."
+        },
+        {
+          "include": "#raw-text"
+        }
+      ]
     },
     {
       "match": "^[ \\t]*((?i:@?defaultLang))([ \\t]*[:=])[ \\t]*([a-zA-Z0-9_-]+)",
@@ -94,16 +115,28 @@
       "match": "(->|=>)"
     },
     {
-      "name": "entity.name.function.decorator.ktory",
-      "match": "\\.[a-zA-Z0-9_]+"
+      "comment": "Inline decorators start at a whitespace boundary and form a complete trailing sequence; prose dots remain text.",
+      "begin": "(?<!\\S)(?=(?:[ \\t]*\\.[\\p{L}_][\\p{L}\\p{N}_]*(?:\\((?:[^)\"'\\\\]|\\\\.|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')*\\))?)+[ \\t]*(?://.*)?$)",
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#decorators"
+        }
+      ]
     },
     {
-      "match": "^[ \\t]*(#[a-zA-Z0-9_]*)",
-      "captures": {
+      "begin": "^[ \\t]*(#[a-zA-Z0-9_]*)",
+      "beginCaptures": {
         "1": {
           "name": "keyword.control.anchor.ktory"
         }
-      }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#decorators"
+        }
+      ]
     },
     {
       "name": "string.quoted.choice.ktory",
@@ -121,6 +154,9 @@
       },
       "patterns": [
         {
+          "include": "#raw-text"
+        },
+        {
           "match": "(@[a-zA-Z0-9_-]+)([ \\t]*[:：])",
           "captures": {
             "1": {
@@ -133,11 +169,29 @@
         },
         {
           "name": "string.quoted.double.ktory",
-          "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+          "begin": "\"",
+          "end": "\"|$",
+          "patterns": [
+            {
+              "match": "\\\\."
+            },
+            {
+              "include": "#raw-text"
+            }
+          ]
         },
         {
           "name": "string.quoted.single.ktory",
-          "match": "(?<![\\p{L}\\p{N}])'(?:[^'\\\\]|\\\\.)*'"
+          "begin": "(?<![\\p{L}\\p{N}'\\\\])'(?!')",
+          "end": "'(?!')|$",
+          "patterns": [
+            {
+              "match": "\\\\."
+            },
+            {
+              "include": "#raw-text"
+            }
+          ]
         }
       ]
     },
@@ -147,7 +201,44 @@
     },
     {
       "name": "entity.name.type.speaker.ktory",
-      "match": "^[ \\t]*[^\\s:：@#.*+=>\\[\\]-][^:：\\n]*(?=[:：])"
+      "match": "^[ \\t]*[^\\s:：@#.*+=>'\\[\\]-](?:(?!'{3})[^:：\\n])*(?=[:：])"
     }
-  ]
+  ],
+  "repository": {
+    "decorators": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.ktory",
+          "match": "//.*$"
+        },
+        {
+          "name": "string.quoted.double.ktory",
+          "match": "\"(?:[^\"\\\\]|\\\\.)*\""
+        },
+        {
+          "name": "string.quoted.single.ktory",
+          "match": "(?<![\\p{L}\\p{N}])'(?:[^'\\\\]|\\\\.)*'"
+        },
+        {
+          "name": "entity.name.function.decorator.ktory",
+          "match": "\\.[\\p{L}_][\\p{L}\\p{N}_]*"
+        }
+      ]
+    },
+    "raw-text": {
+      "name": "string.quoted.raw.ktory",
+      "begin": "(?<!')('{3,})(?!')",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.ktory"
+        }
+      },
+      "end": "(?<!')\\1(?!')",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.ktory"
+        }
+      }
+    }
+  }
 }
