@@ -19,6 +19,8 @@
 
 Ktory aims to keep text and story flow together in `.ktr`, reducing repeated presentation settings and scene-specific integration code. The recommended workflow keeps dialogue order, choices and branches in the script while the host provides rendering, world state and actual event detection.
 
+Text supports inline and multiline literal fragments fenced with three or more ASCII single quotes. Each locale can mix literal and formatted text. Renderers consume `Segments` when present to keep `.wait`, `//`, Markdown and native markup literal; see the [syntax and output contract](docs/ktory-implementation_v1.md).
+
 - [Try Ktory Web Reader](https://reader.ktory.ink/)
 
 The repository contains the shared core (`src/Ktory.Core`), local and WASM Reader hosts (`src/Ktory.WebReader`, `src/Ktory.Wasm`), Unity package sources (`src/Ktory.Unity`), the VS Code extension (`src/Ktory.VSCode`), and the portal (`website`). The extension bundles the same WASM core and Reader frontend for offline use; its single TextMate grammar is also used by the portal, landing page and Reader source editor. Generated packages and deployed sites are distribution artifacts, not independently maintained core implementations.

@@ -1076,17 +1076,23 @@ function syncSampleSelect(sampleKey) {
   if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
 }
 
+function renderTextValue(value, fallback = '', plain = false) {
+  if (!Array.isArray(value?.segments)) return plain ? escapeHtml(value?.content ?? fallback) : value?.content ?? fallback;
+  return value.segments.map(segment => segment.isLiteral
+    ? `<span class="ktory-literal">${escapeHtml(segment.content)}</span>`
+    : (plain ? escapeHtml(segment.content) : segment.content)).join('');
+}
+
+function prepareReaderPayload(payload) {
+  if (!payload || payload.stepType === 1 || payload.stepType === 'Directive') return payload;
+  const html = renderTextValue(payload, payload.content || '');
+  return { ...payload, readingContent: payload.content,
+    content: window.ktoryReaderHost?.sanitizeHtml ? window.ktoryReaderHost.sanitizeHtml(html) : html };
+}
+
 function updateState(serverState, isLanguageSwitch = false) {
   window.ktoryReaderHost?.onState(serverState);
-  if (window.ktoryReaderHost?.sanitizeHtml && serverState.payload &&
-    serverState.payload.stepType !== 1 && serverState.payload.stepType !== 'Directive') {
-    serverState = {
-      ...serverState, payload: {
-        ...serverState.payload,
-        content: window.ktoryReaderHost.sanitizeHtml(serverState.payload.content || '')
-      }
-    };
-  }
+  serverState = { ...serverState, payload: prepareReaderPayload(serverState.payload) };
   state.status = serverState.status;
   state.payload = serverState.payload;
   state.choice = serverState.choice;
@@ -1815,6 +1821,7 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
 
   const tokens = tokenizeHtml(htmlContent);
   let tokenIdx = 0;
+  let visibleHtml = '';
   targetEl.innerHTML = '';
 
   const speedMs = 18; // literary typewriter speed
@@ -1829,7 +1836,8 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
       return;
     }
 
-    targetEl.innerHTML += tokens[tokenIdx++];
+    visibleHtml += tokens[tokenIdx++];
+    targetEl.innerHTML = visibleHtml;
     scrollToBottom();
   }, speedMs);
 }
@@ -1881,8 +1889,13 @@ function tokenizeHtml(html) {
         continue;
       }
     }
-    tokens.push(html[i]);
-    i++;
+    if (html[i] === '&') {
+      const entity = html.slice(i).match(/^&(?:#[0-9]+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i);
+      if (entity) { tokens.push(entity[0]); i += entity[0].length; continue; }
+    }
+    const character = String.fromCodePoint(html.codePointAt(i));
+    tokens.push(character);
+    i += character.length;
   }
   return tokens;
 }
@@ -2026,7 +2039,7 @@ function updateHoldHint() {
 }
 
 function refreshHoldLanguage(payload) {
-  const duration = estimateReadingTime(payload.content || '', payload.actualLanguage || state.requestedLocale);
+  const duration = estimateReadingTime(payload.readingContent ?? payload.content ?? '', payload.actualLanguage || state.requestedLocale);
   if (state.usesEstimatedWait) {
     const progress = state.minimumHoldDuration > 0 ? Math.min(1, state.holdElapsed / state.minimumHoldDuration) : 1;
     state.minimumHoldDuration = duration;
@@ -2137,7 +2150,7 @@ function renderChoices(choicePayload) {
     btn.innerHTML = `
       <div class="choice-btn-left">
         <span class="choice-marker">${escapeHtml(opt.marker || '*')}</span>
-        <span class="choice-text">${escapeHtml(opt.label)}</span>
+        <span class="choice-text">${renderTextValue(opt, opt.label, true)}</span>
       </div>
       ${consumedTag}
     `;

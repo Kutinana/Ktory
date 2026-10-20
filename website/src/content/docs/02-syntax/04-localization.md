@@ -80,3 +80,9 @@ player.SetLanguage("en");
 切换会更新当前文本、说话人或菜单标签，不重新分发演出修饰符、不清空会话记录。宿主随后刷新显示；若使用 `PresentationController`，调用其 `RefreshLanguage()` 处理当前呈现时序，不要为切换语言额外调用 `Step()`。
 
 同文件维护适合独立写作与翻译。然而，Ktory 不阻止您离散地维护多个语言 Ktory 剧本文件，
+
+## 与纯文本围栏组合
+
+`@locale:` 写在围栏外，每个版本独立包围需要原样显示的片段；详见[纯文本片段与区块](/02-syntax/01-anchor-decorator/#纯文本片段与区块)。围栏内的 `@en:` 仅是文字，不声明新译文。选择普通或纯文本写法不改变既有语言回退或切语言时的副作用规则。
+
+`TextPayload.Segments`／`ChoiceOption.Segments` 逐段提供 `Content` 与 `IsLiteral`，随实际选中的语言和回退版本一起输出。

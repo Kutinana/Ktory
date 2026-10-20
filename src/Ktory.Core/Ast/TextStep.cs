@@ -12,9 +12,13 @@ namespace Ktory.Core.Ast
 
         /// <summary>
         /// Localized text variants mapped by locale code (e.g. "zh", "en", "ja").
-        /// Content has been desugared (Markdown inline -> rich text, [base]{ruby} -> <ruby="ruby">base</ruby>).
+        /// Nonliteral content has been desugared (Markdown inline -> rich text, [base]{ruby} -> <ruby="ruby">base</ruby>).
+        /// Variants containing raw text also require TextVariantSegments for correct rendering.
         /// </summary>
         public Dictionary<string, string> TextVariants { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Fragment boundaries for variants containing raw text. Other variants use TextVariants directly.</summary>
+        public Dictionary<string, IReadOnlyList<TextSegment>> TextVariantSegments { get; } = new Dictionary<string, IReadOnlyList<TextSegment>>(StringComparer.OrdinalIgnoreCase);
 
         public bool IsNarration => string.IsNullOrWhiteSpace(Speaker);
 

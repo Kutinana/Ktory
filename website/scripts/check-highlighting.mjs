@@ -31,5 +31,10 @@ for (const locale of ['', 'en/', 'ja/']) {
     const color = roles.find(role => role.name === roleName).dark.toUpperCase();
     assert.ok(tokens.some(([, style, value]) => value === text && style.toUpperCase().includes(color)), `Stale or missing ${roleName} highlighting in ${file}`);
   }
+  const rawPage = await fs.readFile(path.join(dist, locale, '02-syntax/01-anchor-decorator/index.html'), 'utf8');
+  const stringColor = roles.find(role => role.name === 'string').dark.toUpperCase();
+  assert.ok([...rawPage.matchAll(/<span style="([^"]+)">([^<]+)<\/span>/g)]
+    .some(([, style, value]) => value === '.wait' && style.toUpperCase().includes(stringColor)),
+    `Missing literal .wait highlighting in ${locale || 'zh'} documentation`);
 }
 console.log(`Highlighting verified: code assets in ${pages} pages and current token colors in all three documentation languages.`);

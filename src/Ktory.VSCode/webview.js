@@ -202,24 +202,17 @@
     language.value = locale;
   }
 
-  function updateLanguages(script) {
+  function updateLanguages(sourceLocales = []) {
     if (!language) return;
     const locales = new Set(['zh', 'en', 'ja']);
-    // Suggestions only; parsing, language selection and fallback remain in Core.
-    for (const raw of script.split(/\r?\n/)) {
-      const line = raw.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/.*$/g, '');
-      const defaultLang = line.match(/^\s*@?defaultLang\s*[:=]\s*([\w-]+)/i);
-      if (defaultLang) locales.add(defaultLang[1]);
-      const variant = line.match(/^\s*(?:[*+]\s*)?\[?@([\w-]+)[:：]/);
-      if (variant && !['speaker', 'defaultlang'].includes(variant[1].toLowerCase())) locales.add(variant[1]);
-      const speaker = line.match(/^\s*@speaker(?:\s+[\w-]+)?\s*[:：](.*)$/);
-      if (speaker) {
-        for (const mapping of speaker[1].matchAll(/(?:^|\|)\s*([\w-]+)\s*=/g)) locales.add(mapping[1]);
-      }
-    }
+    // Suggestions only. The shared TextMate tokenizer excludes raw text and comments;
+    // actual language selection and fallback remain in Core.
+    for (const locale of sourceLocales) locales.add(locale);
     language.replaceChildren(...Array.from(locales, locale => new Option(locale, locale)));
     selectLanguage(state.requestedLocale || 'zh');
   }
+
+  document.addEventListener('ktory:source-locales', event => updateLanguages(event.detail));
 
   // Rich text is presentation data, never an executable document or resource request.
   function sanitizeHtml(html) {
@@ -230,6 +223,7 @@
       if (node.nodeType === Node.TEXT_NODE) { parent.appendChild(document.createTextNode(node.textContent)); return; }
       if (node.nodeType !== Node.ELEMENT_NODE || discarded.has(node.tagName)) return;
       const output = allowed.has(node.tagName) ? document.createElement(node.tagName.toLowerCase()) : parent;
+      if (node.tagName === 'SPAN' && node.classList.contains('ktory-literal')) output.className = 'ktory-literal';
       if (output !== parent) parent.appendChild(output);
       for (const child of node.childNodes) copy(child, output);
     }
@@ -330,7 +324,7 @@
       error.hidden = true;
       el.scriptInput.value = message.text;
       document.dispatchEvent(new Event('ktory:source-changed'));
-      updateLanguages(message.text);
+      updateLanguages();
       updateSourceButton();
       await startSession(message.text, state.requestedLocale || 'zh', null);
     } else if (message.type === 'changed' && currentDocument && message.version !== currentDocument.version) {

@@ -60,6 +60,85 @@ test('the contributed TextMate grammar highlights a representative .ktr document
   registry.dispose();
 });
 
+test('decorator highlighting distinguishes prose dots from trailing and directive tags', async () => {
+  const wasm = fs.readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
+  await onig.loadWASM(wasm.buffer.slice(wasm.byteOffset, wasm.byteOffset + wasm.byteLength));
+  const registry = new tm.Registry({
+    onigLib: Promise.resolve({ createOnigScanner: patterns => new onig.OnigScanner(patterns), createOnigString: value => new onig.OnigString(value) }),
+    loadGrammar: async () => JSON.parse(fs.readFileSync(path.join(root, 'syntaxes/ktory.tmLanguage.json'), 'utf8'))
+  });
+  const grammar = await registry.loadGrammar('source.ktory');
+  const decorators = line => grammar.tokenizeLine(line, tm.INITIAL).tokens
+    .filter(token => token.scopes.includes('entity.name.function.decorator.ktory'))
+    .map(token => line.slice(token.startIndex, token.endIndex));
+  try {
+    for (const line of [
+      '....wait', ': ....wait', 'Alice: ....wait', '@en: ....wait',
+      ': wait...please', ': example.com', ': story.ktr', ': version 1.2',
+      ': 请打开 .ktr 文件。', ': .wait is ordinary prose here.',
+      ': "a .wait"', ': \\.wait', '* [....wait]', '// .wait'
+    ]) assert.deepEqual(decorators(line), [], line);
+    for (const [line, expected] of [
+      ['  .wait', ['.wait']],
+      ['  .wait(0).next .custom_tag', ['.wait', '.next', '.custom_tag']],
+      ['#choice.loop', ['.loop']],
+      ['#.sfx("wind.ogg").wait(1).next()', ['.sfx', '.wait', '.next']],
+      [': ....wait .next', ['.next']],
+      ['Alice: Hello. .wait(1).next // .ignored', ['.wait', '.next']],
+      ['@en: Hello .sfx("a) .wav").next', ['.sfx', '.next']],
+      [": Hello .sfx('it\\'s.wav').next", ['.sfx', '.next']],
+      ['* [Continue] .once', ['.once']]
+    ]) assert.deepEqual(decorators(line), expected, line);
+  } finally { registry.dispose(); }
+});
+
+test('raw fences protect inline and multilingual multiline content with exact delimiter lengths', async () => {
+  const wasm = fs.readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm'));
+  await onig.loadWASM(wasm.buffer.slice(wasm.byteOffset, wasm.byteOffset + wasm.byteLength));
+  const registry = new tm.Registry({
+    onigLib: Promise.resolve({ createOnigScanner: patterns => new onig.OnigScanner(patterns), createOnigString: value => new onig.OnigString(value) }),
+    loadGrammar: async () => JSON.parse(fs.readFileSync(path.join(root, 'syntaxes/ktory.tmLanguage.json'), 'utf8'))
+  });
+  const grammar = await registry.loadGrammar('source.ktory');
+  const rawScope = 'string.quoted.raw.ktory';
+  const scopesAt = (tokens, index) => tokens.find(t => t.startIndex <= index && t.endIndex > index).scopes;
+  try {
+    for (const line of [
+      "Alice: 我想写'''.wait''' .next", ': "请写\'\'\'.wait\'\'\'。" .next',
+      "  @en: before'''// .wait [x]{y}''' .next", "  + [@en: '''[literal] .wait'''] .next"
+    ]) {
+      const tokens = grammar.tokenizeLine(line, tm.INITIAL).tokens;
+      const scopes = scopesAt(tokens, line.indexOf('.wait'));
+      assert.ok(scopes.includes(rawScope), line);
+      assert.ok(!scopes.includes('entity.name.function.decorator.ktory'), line);
+      assert.ok(!scopes.includes('comment.line.double-slash.ktory'), line);
+      assert.ok(scopesAt(tokens, line.indexOf('.next')).includes('entity.name.function.decorator.ktory'), line);
+    }
+    let stack = tm.INITIAL;
+    for (const [line, raw] of [
+      ['Alice:', false], ["  @zh: ''''", true], ['    // .wait', true],
+      ["    ''' shorter fence", true], ['#lane literal', true], ['@en: also literal', true],
+      ["  ''''", true], ['  @en: translation .next', false]
+    ]) {
+      const result = grammar.tokenizeLine(line, stack);
+      stack = result.ruleStack;
+      assert.equal(result.tokens.some(t => t.scopes.includes(rawScope)), raw, line);
+      if (raw) assert.ok(!result.tokens.filter(t => t.scopes.includes(rawScope)).some(t => t.scopes.some(scope => /^(comment|constant.other.locale|keyword.control|entity.name.function)/.test(scope))), line);
+    }
+    const code = grammar.tokenizeLine('#.sfx("\'\'\'")', tm.INITIAL);
+    assert.ok(!code.tokens.some(t => t.scopes.includes(rawScope)), 'decorator strings retain their own quoting rules');
+    const { createKtoryHighlighter } = await import('../../Ktory.Highlighting/renderer.mjs');
+    const highlighter = await createKtoryHighlighter(tm, onig, JSON.parse(fs.readFileSync(path.join(root, 'syntaxes/ktory.tmLanguage.json'), 'utf8')));
+    try {
+      const html = highlighter.highlightLines(": '''\n// <b>.wait</b>\n'''")[1];
+      assert.ok(html.includes('ktr-string'));
+      assert.ok(!html.includes('ktr-comment') && !html.includes('ktr-decorator'));
+      assert.ok(html.includes('&lt;b&gt;.wait&lt;/b&gt;'));
+      assert.deepEqual(highlighter.sourceLocales("@defaultLang: zh\nAlice:\n  @en: '''\n@fr: literal\n'''\n// @de: comment"), ['zh', 'en']);
+    } finally { highlighter.dispose(); }
+  } finally { registry.dispose(); }
+});
+
 test('the portal consumes the extension grammar instead of maintaining another copy', () => {
   const config = fs.readFileSync(path.resolve(root, '../../website/astro.config.mjs'), 'utf8');
   assert.ok(config.includes('../src/Ktory.VSCode/syntaxes/ktory.tmLanguage.json'));

@@ -80,3 +80,9 @@ player.SetLanguage("en");
 Switching updates the active text, speaker, or menu labels without redispatching presentation decorators or clearing session history. The host then refreshes its display; if using `PresentationController`, call its `RefreshLanguage()` to handle the active presentation timing, and do not make an extra call to `Step()` for switching language.
 
 Maintaining translations in the same file is well-suited for independent writing and translation. However, Ktory does not prevent you from maintaining separate Ktory script files for different languages.
+
+## Combining locales with literal fences
+
+Keep `@locale:` outside the fence and wrap literal fragments separately in each variant; see [literal fragments and blocks](/en/02-syntax/01-anchor-decorator/#literal-fragments-and-blocks). An `@en:` inside a fence is text, not a new translation. Literal formatting does not change existing fallback or side-effect-free language refresh.
+
+`TextPayload.Segments` / `ChoiceOption.Segments` carry `Content` and `IsLiteral` per piece, following the actual selected language and fallback variant.

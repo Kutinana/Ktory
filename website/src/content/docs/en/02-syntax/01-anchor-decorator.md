@@ -47,3 +47,28 @@ Clicks blocked by `.skippable(false[, t])` are also discarded, never replayed wh
 Supported forms include `*italic*`, `**bold**`, `~~strikethrough~~` and `[desk]{pronunciation}`. Desugaring currently produces tag strings such as `<ruby="pronunciation">desk</ruby>`, not a separate structured Ruby object. Native tags pass through; the renderer determines whether it supports them.
 
 Escape reserved characters with a backslash when they should appear literally. Do not use Markdown headings, lists or code fences as dialogue structure. Rich-text presentation must be checked separately in Web and Unity renderers.
+
+## Literal fragments and blocks
+
+Wrap literal text in three or more ASCII single quotes, inline or across multiple lines:
+
+```ktory
+Alice: Write '''.wait''' here; **bold** outside still works. .wait(1)
+Alice:
+  @en: '''
+    .wait
+    // This is text too
+    <b>**This stays literal**</b>
+  '''
+  @zh: 正文包含'''.wait'''。
+  .next(1)
+: ''''Display ''' without an escape''''
+```
+
+Inside a fence, decorators, comments, locale labels, control flow, Markdown, Ruby, native markup and backslash escapes are all literal. Decorators outside belong to the whole beat. A multiline block is still one beat, and each locale can mix formatted and literal fragments independently.
+
+Opening and closing fences must have exactly the same number of quotes, at least three. Other quote-run lengths inside are text, with no nesting. Choose a fence longer than any quote run in its content. To display only `'''`, place it on its own line inside a four-quote block so content does not merge with delimiters. Curly quotes are always ordinary text.
+
+Inline fragments preserve their internal whitespace. A block starting with a newline removes the opening/closing layout lines and common body indentation, preserving relative indentation, interior blank lines and trailing spaces. Tabs count as two columns. An unclosed fence stops loading and reports its opening line and column.
+
+Hosts use each resolved locale's `Segments`, when present: render `IsLiteral=true` as text with whitespace preserved, and other pieces with the existing rich-text handling. Reinterpreting the combined `Content` as markup loses this distinction. The shared Reader supports these fragments; other hosts must implement their own rendering.

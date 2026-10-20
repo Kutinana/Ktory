@@ -11,6 +11,9 @@ namespace Ktory.Core.Runtime
         public string? ActualLanguage { get; set; }
         public string? RequestedLanguage { get; set; }
         public string Label { get; set; } = string.Empty;
+
+        /// <summary>Literal/rich fragment boundaries. Render literal pieces as text when present.</summary>
+        public IReadOnlyList<TextSegment>? Segments { get; set; }
         public char Marker { get; set; } = '*';
         public bool IsConsumed { get; set; }
         public bool CanSelect { get; set; } = true;

@@ -21,6 +21,9 @@ namespace Ktory.Core.Runtime
 
         public string Content { get; set; } = string.Empty;
 
+        /// <summary>Literal/rich fragment boundaries. Render literal pieces as text when present.</summary>
+        public IReadOnlyList<TextSegment>? Segments { get; set; }
+
         /// <summary>
         /// The actual language of the content (after fallback if requested was missing).
         /// Null for unlocalized content when script has no @defaultLang and no @locale.

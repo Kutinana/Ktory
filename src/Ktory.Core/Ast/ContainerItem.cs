@@ -18,6 +18,8 @@ namespace Ktory.Core.Ast
         /// </summary>
         public Dictionary<string, string> LabelVariants { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        public Dictionary<string, IReadOnlyList<TextSegment>> LabelVariantSegments { get; } = new Dictionary<string, IReadOnlyList<TextSegment>>(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>
         /// Guard condition expression from ? {expr}
         /// </summary>

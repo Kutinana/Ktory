@@ -19,9 +19,20 @@ namespace Ktory.Core.Ast
             out string? actualLocale,
             out bool usedAvailableFallback,
             out bool usedUnlocalizedLiteral)
+            => Select(variants, requestedLocale, defaultLocale, out actualLocale, out usedAvailableFallback, out usedUnlocalizedLiteral, out _);
+
+        internal static string Select(
+            Dictionary<string, string> variants,
+            string? requestedLocale,
+            string? defaultLocale,
+            out string? actualLocale,
+            out bool usedAvailableFallback,
+            out bool usedUnlocalizedLiteral,
+            out string? selectedKey)
         {
             usedAvailableFallback = false;
             usedUnlocalizedLiteral = false;
+            selectedKey = null;
 
             // 1. Requested locale exact match
             if (!string.IsNullOrEmpty(requestedLocale) &&
@@ -29,6 +40,7 @@ namespace Ktory.Core.Ast
                 !string.IsNullOrEmpty(requested))
             {
                 actualLocale = requestedLocale;
+                selectedKey = requestedLocale;
                 return requested;
             }
 
@@ -38,12 +50,14 @@ namespace Ktory.Core.Ast
                 !string.IsNullOrEmpty(fallback))
             {
                 actualLocale = defaultLocale;
+                selectedKey = defaultLocale;
                 return fallback;
             }
 
             // 3. Unadorned / literal variant (stored under empty string key "")
             if (variants.TryGetValue("", out var unadorned) && !string.IsNullOrEmpty(unadorned))
             {
+                selectedKey = string.Empty;
                 if (!string.IsNullOrEmpty(defaultLocale))
                 {
                     actualLocale = defaultLocale;
@@ -63,6 +77,7 @@ namespace Ktory.Core.Ast
                 if (!string.IsNullOrEmpty(variant.Key) && !string.IsNullOrEmpty(variant.Value))
                 {
                     actualLocale = variant.Key;
+                    selectedKey = variant.Key;
                     usedAvailableFallback = true;
                     return variant.Value;
                 }

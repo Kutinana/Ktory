@@ -46,6 +46,8 @@ public void CollectDebugInfo(
 
 ## 显示与生命周期
 
+包含纯文本围栏的正文／选项版本通过`TextPayload.Segments`／`ChoiceOption.Segments` 保留片段边界。游戏渲染器应将 `IsLiteral=true` 的片段按字面显示并保留换行、空白，其他片段沿用已有富文本处理；不要仅把拼接后的 `Content` 再交给富文本组件。每次语言切换和回退随实际选中的版本读取片段。调试窗口继续以文本查看 `Content`，它的显示不代替游戏内富文本适配验收；具体语法及载荷见[实现规格](ktory-implementation_v1.md)。
+
 语言栏分别显示剧本默认、当前请求、正文实际语言和回退；选项各自显示实际语言。已声明名字有 `SpeakerActualLanguage` 时另列 Speaker output，不用正文语言代替名字语言。没有本地化文本的指令拍不伪报输出语言。取消“Follow script default”后可输入 locale，确认输入即时刷新。
 
 正文、选项和已声明名字在请求／默认语言都缺失时按已有有效译文顺序选取第三语言，报告 `Warning` 并保留真实语言。`TextPayload.SpeakerActualLanguage` 单独标记已声明名字；未声明名字按字面显示，不伪报语言。如 `@speaker alice:` 的空名字声明须加载时报错并指出行号；正文／选项空声明不据此新增规则。内置游戏求值器对未知条件 `Warning + false`，独立试读才显式启用宽容模式。

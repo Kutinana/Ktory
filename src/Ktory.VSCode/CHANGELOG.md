@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add inline and multiline literal text with variable-length single-quote fences, including localized variants and literal markup in the offline preview.
+- Keep raw text out of decorator highlighting and locale suggestions; report unclosed fences at their opening position.
+- Fix prose dots such as `....wait` being highlighted as decorators.
+
 ## 0.2.1
 
 - Fix linter initialization failure on Windows where local paths caused `@vscode/proxy-agent` to throw `InvalidArgumentError` due to missing `file://` protocol.

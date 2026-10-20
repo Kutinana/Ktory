@@ -769,6 +769,7 @@ namespace Ktory.Core.Runtime
                 {
                     Id = item.Id,
                     Label = label,
+                    Segments = ResolveSegments(item.LabelVariants, item.LabelVariantSegments),
                     ActualLanguage = actualLanguage,
                     RequestedLanguage = RequestedLanguage,
                     LineNumber = item.LineNumber,

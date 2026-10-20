@@ -37,7 +37,9 @@ exports.run = async () => {
   };
   const action = data => api.panel.webview.postMessage({ type: 'action', revision: api.lastEvent.revision,
     sessionId: api.lastEvent.snapshot?.sessionId, presentationId: api.lastEvent.snapshot?.presentationId, ...data });
-  const first = await waitFor(e => e?.snapshot?.payload?.content === '开场。', 'offline WASM boot and first beat');
+  await waitFor(e => e?.snapshot?.payload?.content, 'offline WASM boot');
+  await action({ action: 'language', locale: 'zh' });
+  const first = await waitFor(e => e?.snapshot?.payload?.content === '开场。', 'first beat in explicit primary language');
   assert.equal(first.version, document.version);
   assert.equal(first.snapshot.recentTags.length, 1);
   await action({ action: 'language', locale: 'en' });
@@ -98,6 +100,34 @@ exports.run = async () => {
   await action({ action: 'advance', sessionId: defaultFirst.snapshot.sessionId, presentationId: defaultFirst.snapshot.presentationId });
   const defaultSecond = await waitFor(e => e?.snapshot?.payload?.content === 'second', 'speaker default restored');
   assert.equal(defaultSecond.snapshot.payload.tags.find(tag => tag.name === 'emotion').positionalArgs[0], 'normal');
+
+  await edit(`@defaultLang: zh
+Alice:
+  @zh: '''
+    <b>.wait & **literal**</b>
+    // @fr: literal too
+  '''
+  @en: **Normal** with '''<i>.next</i>'''.
+  .effect
+`);
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  await waitFor(e => e?.snapshot?.payload?.segments?.some(piece => piece.isLiteral), 'raw text in real WASM');
+  await action({ action: 'language', locale: 'zh' });
+  const raw = await waitFor(e => e?.snapshot?.payload?.actualLanguage === 'zh' &&
+    e.snapshot.payload.segments?.some(piece => piece.isLiteral), 'multiline raw text in explicit language');
+  assert.equal(raw.snapshot.payload.content, '<b>.wait & **literal**</b>\n// @fr: literal too');
+  assert.deepEqual(raw.snapshot.recentTags.map(tag => tag.name), ['effect']);
+  await action({ action: 'language', locale: 'en' });
+  const rawEnglish = await waitFor(e => e?.snapshot?.payload?.actualLanguage === 'en', 'raw language refresh');
+  assert.equal(rawEnglish.snapshot.presentationId, raw.snapshot.presentationId);
+  assert.equal(rawEnglish.snapshot.payload.segments[0].content, '<b>Normal</b> with ');
+  assert.equal(rawEnglish.snapshot.payload.segments[1].content, '<i>.next</i>');
+  assert.equal(rawEnglish.snapshot.recentTags.length, 1, 'raw language refresh does not replay tags');
+  await edit(": before\nAlice: '''unclosed");
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  await waitFor(e => e?.type === 'error' && /Unterminated raw text fence/.test(e.message), 'raw fence diagnostic', true);
+  await waitFor(() => api.diagnostics.get(document.uri)?.length === 1, 'raw editor diagnostic', true);
+  assert.equal(api.diagnostics.get(document.uri)[0].range.start.line, 1);
 
   await edit('-> Missing');
   await vscode.commands.executeCommand('ktory.reloadPreview');

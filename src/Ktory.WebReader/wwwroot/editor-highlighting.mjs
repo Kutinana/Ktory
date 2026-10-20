@@ -19,6 +19,7 @@ if (input && output) {
       requestAnimationFrame(() => {
         pending = false;
         output.innerHTML = highlighter.highlightLines(input.value).join('\n') + '\n';
+        document.dispatchEvent(new CustomEvent('ktory:source-locales', { detail: highlighter.sourceLocales(input.value) }));
         syncScroll();
       });
     };

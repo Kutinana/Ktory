@@ -26,6 +26,7 @@ namespace Ktory.Core.Parser
         private static readonly Regex GuardConditionRegex = new Regex(@"^\?\s*\{([^\{\}]+)\}\s*(.*)$", RegexOptions.Compiled);
         private static readonly Regex SpeakerDeclarationRegex = new Regex(@"^@speaker(?:\s+([a-zA-Z0-9_\-]+))?\s*[:：]\s*(.*)$", RegexOptions.Compiled);
         private static readonly Regex OptionVariantRegex = new Regex(@"^@([a-zA-Z0-9_\-]+)\s*[:：]\s*(.*)$", RegexOptions.Compiled);
+        private RawTextProcessor _rawText = null!;
 
         public static KtoryFile Parse(string source)
         {
@@ -40,6 +41,7 @@ namespace Ktory.Core.Parser
         private KtoryFile ParseInternal(string source)
         {
             var file = new KtoryFile();
+            _rawText = new RawTextProcessor(source);
             var lines = PreprocessLines(source);
 
             int index = 0;
@@ -121,7 +123,6 @@ namespace Ktory.Core.Parser
         {
             if (index >= lines.Count) return null;
             var line = lines[index];
-
             // 0. Check @speaker declaration
             if (line.Text.StartsWith("@speaker"))
             {
@@ -254,7 +255,7 @@ namespace Ktory.Core.Parser
             file.AddSpeaker(speakerDef);
         }
 
-        private static void ParseOptionLabelVariant(string rawLabel, ContainerItem item, KtoryFile file, int lineNumber)
+        private void ParseOptionLabelVariant(string rawLabel, ContainerItem item, KtoryFile file, int lineNumber)
         {
             var match = OptionVariantRegex.Match(rawLabel);
             if (match.Success)
@@ -263,12 +264,16 @@ namespace Ktory.Core.Parser
                 string locale = match.Groups[1].Value.Trim();
                 string text = match.Groups[2].Value.Trim();
                 text = Unquote(text);
-                item.LabelVariants[locale] = TextDesugarer.Desugar(text, lineNumber);
+                item.LabelVariants[locale] = _rawText.Desugar(text, lineNumber, out var segments);
+                item.LabelVariantSegments.Remove(locale);
+                if (segments != null) item.LabelVariantSegments[locale] = segments;
             }
             else
             {
                 string text = Unquote(rawLabel);
-                item.LabelVariants[""] = TextDesugarer.Desugar(text, lineNumber);
+                item.LabelVariants[""] = _rawText.Desugar(text, lineNumber, out var segments);
+                item.LabelVariantSegments.Remove("");
+                if (segments != null) item.LabelVariantSegments[""] = segments;
             }
         }
 
@@ -551,7 +556,8 @@ namespace Ktory.Core.Parser
                 // Check if content ends with decorators, e.g. "Some text .emotion(smile)"
                 // Note: decorators must be separated by whitespace and start with .tag
                 ExtractTrailingTags(ref content, textStep.Tags);
-                textStep.TextVariants[""] = TextDesugarer.Desugar(content, line.LineNumber);
+                textStep.TextVariants[""] = _rawText.Desugar(content, line.LineNumber, out var segments);
+                if (segments != null) textStep.TextVariantSegments[""] = segments;
             }
 
             index++;
@@ -574,7 +580,9 @@ namespace Ktory.Core.Parser
                     string locale = locMatch.Groups[1].Value.Trim();
                     string locContent = locMatch.Groups[2].Value.Trim();
                     ExtractTrailingTags(ref locContent, textStep.Tags);
-                    textStep.TextVariants[locale] = TextDesugarer.Desugar(locContent, nextLine.LineNumber);
+                    textStep.TextVariants[locale] = _rawText.Desugar(locContent, nextLine.LineNumber, out var segments);
+                    textStep.TextVariantSegments.Remove(locale);
+                    if (segments != null) textStep.TextVariantSegments[locale] = segments;
                     index++;
                     continue;
                 }
@@ -636,7 +644,7 @@ namespace Ktory.Core.Parser
             }
         }
 
-        private static List<SourceLine> PreprocessLines(string source)
+        private List<SourceLine> PreprocessLines(string source)
         {
             var result = new List<SourceLine>();
             using var reader = new StringReader(source);
@@ -646,10 +654,18 @@ namespace Ktory.Core.Parser
             while ((lineStr = reader.ReadLine()) != null)
             {
                 lineNum++;
+                int startLine = lineNum;
                 string raw = lineStr;
 
-                // Strip comments
-                string uncommented = LexicalScanner.StripComment(raw);
+                // Raw spans must be protected before comments, indentation or structural headers.
+                // Directive arguments and declarations keep their existing string syntax.
+                string head = raw.TrimStart();
+                var guard = GuardConditionRegex.Match(head);
+                if (guard.Success) head = guard.Groups[2].Value.TrimStart();
+                bool textLine = !head.StartsWith("#") && !head.StartsWith(".") &&
+                    !head.StartsWith("->") && !head.StartsWith("=>") && !head.StartsWith("===") &&
+                    !head.StartsWith("@speaker") && !DefaultLangRegex.IsMatch(head);
+                string uncommented = textLine ? _rawText.ProtectLine(raw, reader, ref lineNum) : LexicalScanner.StripComment(raw);
                 if (string.IsNullOrWhiteSpace(uncommented))
                 {
                     continue; // Skip blank lines and pure comments
@@ -666,7 +682,7 @@ namespace Ktory.Core.Parser
 
                 result.Add(new SourceLine
                 {
-                    LineNumber = lineNum,
+                    LineNumber = startLine,
                     Indent = indent,
                     Raw = raw,
                     Text = uncommented.Trim()

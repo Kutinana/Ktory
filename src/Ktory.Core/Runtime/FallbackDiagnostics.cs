@@ -28,6 +28,7 @@ namespace Ktory.Core.Runtime
             payload.Content = step.GetText(RequestedLanguage, DefaultLanguage, out var actualLocale, out var textFallback);
             payload.ActualLanguage = actualLocale;
             payload.RequestedLanguage = RequestedLanguage;
+            payload.Segments = ResolveSegments(step.TextVariants, step.TextVariantSegments);
             if (textFallback) WarnMissingTranslations("Text", step.LineNumber, actualLocale ?? string.Empty);
 
             payload.SpeakerActualLanguage = null;
@@ -42,6 +43,13 @@ namespace Ktory.Core.Runtime
             {
                 payload.Speaker = File.ResolveSpeaker(step.Speaker, RequestedLanguage, DefaultLanguage);
             }
+        }
+
+        private IReadOnlyList<TextSegment>? ResolveSegments(Dictionary<string, string> variants,
+            Dictionary<string, IReadOnlyList<TextSegment>> segments)
+        {
+            LocalizedValueSelector.Select(variants, RequestedLanguage, DefaultLanguage, out _, out _, out _, out var key);
+            return key != null && segments.TryGetValue(key, out var pieces) ? pieces : null;
         }
 
         private bool EvaluateGuard(string expression, int line)

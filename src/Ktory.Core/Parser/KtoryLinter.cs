@@ -74,6 +74,7 @@ namespace Ktory.Core.Parser
 
         private static string ClassifyErrorCode(string message)
         {
+            if (message.StartsWith("Unterminated raw text fence", StringComparison.Ordinal)) return "KTR_E012";
             if (message.IndexOf("Unrecognized control flow", StringComparison.OrdinalIgnoreCase) >= 0) return "KTR_E002";
             if (message.IndexOf("has no target specified", StringComparison.OrdinalIgnoreCase) >= 0) return "KTR_E003";
             if (message.IndexOf("Target section", StringComparison.OrdinalIgnoreCase) >= 0 &&

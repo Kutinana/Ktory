@@ -1924,3 +1924,5 @@ body.is-resizing-drawer * {
 .source-highlight { color: #e4e7ed; background: #090a0d; pointer-events: none; }
 .highlight-ready .drawer-textarea { color: transparent; caret-color: #e4e7ed; background: transparent; }
 .highlight-ready .drawer-textarea::selection { color: transparent; background: rgba(112, 154, 211, .3); }
+
+.ktory-literal { white-space: pre-wrap; overflow-wrap: anywhere; }
