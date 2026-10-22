@@ -88,19 +88,20 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
   <body class="min-h-screen flex flex-col bg-[var(--color-canvas)] text-[var(--color-ink)]">
     <!-- Top Navigation Header -->
     <header class="border-b border-[var(--color-border)] sticky top-0 z-40 bg-[var(--color-canvas)]/90 backdrop-blur-md">
-      <div class="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
+      <div class="mx-auto max-w-6xl flex items-center justify-between gap-3 px-4 sm:px-6 py-4">
         <a href={currentLocale.href} class="flex items-center gap-3 group">
           <img src="/logo.webp" alt="Ktory Logo" class="w-8 h-8 rounded-full border border-[var(--color-border)]" />
           <span class="font-serif text-xl tracking-tight font-normal">Ktory</span>
         </a>
 
-        <nav class="flex items-center gap-4 sm:gap-6">
+        <nav class="flex items-center gap-3 sm:gap-6">
           <a
             href={t.nav.docsHref}
+            aria-label={t.nav.docs}
             class="text-xs font-mono uppercase tracking-widest text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors flex items-center gap-1.5"
           >
-            <BookOpen size={13} />
-            <span>{t.nav.docs}</span>
+            <BookOpen size={14} />
+            <span class="hidden sm:inline">{t.nav.docs}</span>
           </a>
           <a
             href="https://reader.ktory.ink"
@@ -128,12 +129,12 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
             <button
               type="button"
               id="lang-dropdown-btn"
-              class="custom-dropdown-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] border border-[var(--color-border)] transition-colors cursor-pointer"
+              class="custom-dropdown-btn flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] border border-[var(--color-border)] transition-colors cursor-pointer"
               aria-expanded="false"
               aria-label={t.nav.language}
             >
               <Globe size={13} class="opacity-80 shrink-0" />
-              <span>{currentLocale.label}</span>
+              <span class="hidden sm:inline">{currentLocale.label}</span>
               <ChevronDown size={11} class="opacity-60 shrink-0 transition-transform duration-200" id="lang-chevron" />
             </button>
             <div
@@ -172,7 +173,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
 
     <!-- Hero Section -->
     <main class="flex-1 flex flex-col">
-      <section class="relative flex-1 flex flex-col items-center justify-center py-20 md:py-28 px-6 text-center">
+      <section class="hero-glow relative flex-1 flex flex-col items-center justify-center py-16 md:py-28 px-6 text-center">
         <div class="max-w-4xl mx-auto">
           <!-- Logo presentation -->
           <div class="inline-block mb-8 animate-fade-in">
@@ -195,7 +196,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
 
           <!-- Subtitle / Intro (with Serif font) -->
           <p class="text-[var(--color-ink-muted)] text-base md:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-serif animate-slide-up" style="animation-delay: 200ms;">
-            {t.hero.description1}<br class="hidden sm:inline" />
+            {t.hero.description1}{" "}<br class="hidden sm:inline" />
             {t.hero.description2}
           </p>
 
@@ -344,7 +345,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <!-- Card 1 -->
-          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] hover:-translate-y-0.5 transition-all duration-200">
             <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
               <Sparkles size={16} />
             </div>
@@ -355,7 +356,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
           </div>
 
           <!-- Card 2 -->
-          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] hover:-translate-y-0.5 transition-all duration-200">
             <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
               <Layers size={16} />
             </div>
@@ -366,7 +367,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
           </div>
 
           <!-- Card 3 -->
-          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] hover:-translate-y-0.5 transition-all duration-200">
             <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
               <Terminal size={16} />
             </div>
@@ -377,7 +378,7 @@ const currentLocale = supportedLocales.find(l => l.key === lang) || supportedLoc
           </div>
 
           <!-- Card 4 -->
-          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] transition-all">
+          <div class="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/30 hover:border-[var(--color-border-hover)] hover:-translate-y-0.5 transition-all duration-200">
             <div class="w-8 h-8 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-ink)] mb-4">
               <Globe size={16} />
             </div>

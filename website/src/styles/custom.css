@@ -40,8 +40,9 @@
 
   --theme-border: #e5e5e5;
   --theme-border-strong: #d4d4d4;
-  --theme-selection: rgba(0, 0, 0, 0.08);
+  --theme-selection: rgba(0, 0, 0, 0.12);
   --theme-ring: rgba(0, 0, 0, 0.75);
+  --theme-glow: rgba(0, 0, 0, 0.045);
 
   --color-canvas: var(--theme-canvas);
   --color-surface: var(--theme-surface);
@@ -102,6 +103,7 @@
   --theme-border-strong: #404040;
   --theme-selection: rgba(255, 255, 255, 0.16);
   --theme-ring: rgba(255, 255, 255, 0.8);
+  --theme-glow: rgba(255, 255, 255, 0.06);
 
   --color-link: #a3a3a3;
   --color-link-hover: #ffffff;
@@ -142,6 +144,29 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+}
+
+::selection {
+  background: var(--theme-selection);
+}
+
+:where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--theme-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Soft top-down glow behind the landing hero */
+.hero-glow {
+  background-image: radial-gradient(ellipse 70% 55% at 50% 0%, var(--theme-glow), transparent 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-scale-in {
+    animation: none !important;
+  }
 }
 
 /* Headings typography: Serif font with strong editorial weight */
