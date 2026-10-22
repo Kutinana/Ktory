@@ -38,3 +38,7 @@ sidebar:
 
 
 `SetLanguage(locale, token)` はセッション設定です。同じ有効なセッションなら、拍が進んだ後や自然終了後も言語を変更できますが、古いセッションからの要求は無視します。
+
+## Main／補助の接入
+
+上の単一軌例は Main の例です。複数ヘッドでは `Sequencer.OnOutput` を順番に処理し、CurrentPayload や最終活動一覧だけに頼らないでください。補助は末句の直後に終了できます。保留表示は GetRetainedPresentations／ReleaseOutput、入力は Main だけに対応させます。wait／next は Main に適用し、duration は進行を止めません。独立 # は自動、空 : は手動が既定です。[実行と時計](/ja/04-architecture/01-discrete-steps/)も参照してください。新 API は検証中で、インストール済みパッケージの版は別途確認が必要です。

@@ -146,3 +146,4 @@ dotnet run
 - 探索 [多语言与国际化](/02-syntax/04-localization/)，感受无需复制多套剧本即可无缝热切语言的便利。
 - 查阅 [Unity 集成指南](/03-integration/01-unity-upm/)，将提词器接入真正的游戏画面与演出世界。
 
+上面的控制台示例即时显示 Main 文本；游戏里的原始点击须先经呈现策略，可能只快显，不等于每次点击都推进。辅助和普通独立 # 不逐拍等待玩家，见[Main／辅助执行](/04-architecture/01-discrete-steps/)。

@@ -145,3 +145,5 @@ Now you have mastered Ktory's core interaction loop! From here, you can:
 - Head over to [Script Syntax](/en/02-syntax/01-anchor-decorator/) to unlock loops, conditions, and custom decorators.
 - Explore [Localization & Multilingual Support](/en/02-syntax/04-localization/) to experience the convenience of seamless hot-reloading across languages without duplicating script files.
 - Check out the [Unity Integration Guide](/en/03-integration/01-unity-upm/) to connect the teleprompter into real game visuals and staging.
+
+The console example renders Main text immediately. In a game, raw clicks first pass through presentation policy and may only reveal text; not every click advances. Auxiliaries and standalone # directives do not wait for player input at every beat. See [Main/auxiliary execution](/en/04-architecture/01-discrete-steps/).

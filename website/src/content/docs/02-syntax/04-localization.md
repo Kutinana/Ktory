@@ -9,9 +9,9 @@ sidebar:
 
 ## 同文件多语言
 
-`@defaultLang` 声明本 Ktory 剧本默认使用的语言。这不是一个强制声明，留空或不声明时，Ktory 也能正常工作。在此情况下 Ktory 不会自行推断语言。如果您确信您的剧本、游戏仅使用一种语言，您可以不写 `@defaultLang` 声明。否则，这可能会为后续多语言本地化带来不便。
+`@defaultLang: <locale>` 声明文件默认语言，用于未标注文本归属和缺译回退，不是运行时主／副语言开关。可以省略：存在 `@locale` 变体时，当前解析器为兼容性默认使用 `zh`；无任何多语言声明时视为未本地化，实际语言为 `null`。多语言剧本建议显式声明，以免依赖隐式默认值。
 
-`@[locale]` 显式声明某个文本的语言。这不会影响 Ktory 的默认语言。然而，如果您在剧本中使用 `@[locale]` 声明了任意文本的语言，`@defaultLang` 声明就是必须的。此时，没有 `@[locale]` 标注的其它文本会被自动视为 `@defaultLang` 的语言。
+`@locale:` 标注具体文本的语言；它不要求每个文件都显式写出 `@defaultLang`。正文、选项及名字的解析规则以实现规格为准。
 
 目前，`@[locale]` 声明已经支持了对白和选项标签。
 
@@ -81,8 +81,29 @@ player.SetLanguage("en");
 
 同文件维护适合独立写作与翻译。然而，Ktory 不阻止您离散地维护多个语言 Ktory 剧本文件，
 
+## 主／副语言结构化输出
+
+`RequestedLanguage` 是主语言，`SecondaryLanguage` 是可选副语言；文件 `defaultLang` 仍负责未标注文本归属及主语言回退。主语言继续使用上文规则，副语言**只选精确译文，不回退**。
+
+`TextPayload.Text`、可空的 `TextPayload.SpeakerName` 与 `ChoiceOption.Text` 分别包含 `Primary` 和可空的 `Secondary`。各份结果有 `Content`、`RequestedLanguage`、`ActualLanguage`；旧 `Content`、`Speaker`、`Label` 等属性映射主语言。
+
+副语言没有该字段的译文时为 null；副语言与该字段主语言的实际语言相同也省略。两种语言文字相同仍保留；正文与名字独立判断，因此可出现只有名字具备副语言的情况。未本地化值和未声明名字不伪造语言身份；未标注值只有在文件默认语言已知时才可作为该语言的精确译文。
+
+```csharp
+sequencer.Start(requestedLocale: "zh", secondaryLocale: "en");
+sequencer.SetSecondaryLanguage("ja");
+presentations.RefreshLanguage(secondaryOnly: true);
+sequencer.SetSecondaryLanguage(null); // 关闭副语言
+```
+
+这里 `presentations` 为 `MultiTrackPresentationController`；单轨 `PresentationController` 使用 `RefreshSecondaryLanguage()`。`SetLanguage(locale)` 保留副语言设置，`SetLanguageOutput(primary, secondary)` 可同时设置两者。
+
+副语言变化只刷新尚保留的显示内容与 Main 当前文本／选择，不推进、重求选项条件、消费选项或重放标签，也不重新打印或重置计时。已结束辅助和已结束会话的保留内容仍可切语言；已隐藏内容不会因此重新出现。阅读预估仍只按主语言实际内容计算；切换主语言继续使用原有进度保留规则。renderer 自行显示、隐藏或排版两份内容，无需把它们拼成一个字符串。
+
+每个播放头只有一条当前语句。后一句进入时结束前一句显示，与显示位置无关；空 : 同样替换前句。等待后句 at／await 时尚未进入后句，EOF／stop 也没有后句，因此原内容可按自身寿命继续显示并切语言。`LanguageRefresh` 按 token 更新当前内容，不重跑路由标签、重启 duration 或复活已撤下的句子。宿主隐藏当前内容后调用 `ReleaseOutput(token)`；阅读历史与当前呈现另行维护。
+
 ## 与纯文本围栏组合
 
-`@locale:` 写在围栏外，每个版本独立包围需要原样显示的片段；详见[纯文本片段与区块](/02-syntax/01-anchor-decorator/#纯文本片段与区块)。围栏内的 `@en:` 仅是文字，不声明新译文。选择普通或纯文本写法不改变既有语言回退或切语言时的副作用规则。
+`@locale:` 写在围栏外，每个版本独立包围需要原样显示的片段；详见[纯文本片段与区块](/02-syntax/01-anchor-decorator/#纯文本片段与区块)。围栏内的 `@en:` 仅是文字，不声明新译文。选择普通或纯文本写法不改变回退、副语言缺译省略或切语言时的副作用规则。
 
-`TextPayload.Segments`／`ChoiceOption.Segments` 逐段提供 `Content` 与 `IsLiteral`，随实际选中的语言和回退版本一起输出。
+`Primary`／`Secondary` 结果还可含 `Segments`，逐段提供 `Content` 与 `IsLiteral`。片段随实际选中的版本一起输出，不能给整拍或所有语言共用一个纯文本开关。

@@ -9,9 +9,9 @@ sidebar:
 
 ## 同一ファイルの多言語
 
-`@defaultLang` は本 Ktory スクリプトで既定で使用する言語を宣言します。これは必須の宣言ではなく、空欄のままや未宣言の場合でも Ktory は正常に動作します。この場合、Ktory は言語を独自に推測することはありません。スクリプトやゲームで単一の言語のみを使用することが確実である場合は、`@defaultLang` の宣言を省略できます。そうでない場合、後々の多言語ローカライズで不便が生じる可能性があります。
+`@defaultLang: <locale>` は注釈のない本文の所属とフォールバックに使うファイル言語です。実行時の主／副言語切替ではありません。省略可能で、`@locale` バリアントがある場合、現行パーサーは互換性のため `zh` を既定値とします。多言語宣言がなければ未ローカライズとみなし、実際の言語は `null` です。多言語スクリプトでは暗黙の既定値を避けるため明示してください。
 
-`@[locale]` は特定のテキストの言語を明示的に宣言します。これによって Ktory の既定言語が変わることはありません。ただし、スクリプト内で `@[locale]` を使って任意のテキストの言語を宣言した場合、`@defaultLang` の宣言が必須となります。このとき、`@[locale]` の注釈がない他のテキストは、自動的に `@defaultLang` の言語として扱われます。
+`@locale:` は個別のテキストの言語を示します。明示的な `@defaultLang` 宣言が必須になるわけではありません。本文、選択肢、名前の解決規則は実装仕様に従います。
 
 現在、`@[locale]` 宣言はセリフと選択肢ラベルをサポートしています。
 
@@ -81,8 +81,29 @@ player.SetLanguage("en");
 
 同一ファイルでの管理は独立した執筆や翻訳に適しています。ただし、Ktory は言語ごとに複数の Ktory スクリプトファイルを個別に管理することを妨げるものではありません。
 
+## 主言語／副言語の構造化出力
+
+`RequestedLanguage` が主言語、`SecondaryLanguage` が任意の副言語です。ファイルの `defaultLang` は注釈のない本文の所属と主言語のフォールバックを定めます。主言語には上記の規則を使い、副言語は**一致する訳だけを選び、フォールバックしません**。
+
+`TextPayload.Text`、null を許す `TextPayload.SpeakerName`、`ChoiceOption.Text` は、それぞれ `Primary` と null を許す `Secondary` を持ちます。各値は `Content`、`RequestedLanguage`、`ActualLanguage` を返します。既存の `Content`、`Speaker`、`Label` は主言語に対応します。
+
+副言語の訳がないフィールドは null です。副言語がそのフィールドの主言語の実際の言語と一致する場合も省略します。異なる言語で同じ文字列の場合は残します。本文と名前は独立して解決するため、副言語の名前だけがある場合もあります。未ローカライズ値や未宣言の名前に言語を捏造しません。注釈のない値は、既知のファイル既定言語と一致する場合にその訳として利用できます。
+
+```csharp
+sequencer.Start(requestedLocale: "zh", secondaryLocale: "en");
+sequencer.SetSecondaryLanguage("ja");
+presentations.RefreshLanguage(secondaryOnly: true);
+sequencer.SetSecondaryLanguage(null); // 副言語を無効化
+```
+
+`presentations` は `MultiTrackPresentationController` です。単一 Main の `PresentationController` では `RefreshSecondaryLanguage()` を使います。`SetLanguage(locale)` は副言語設定を保ち、`SetLanguageOutput(primary, secondary)` は両方を更新します。
+
+副言語の変更は保持中の表示内容と Main の現在の本文・選択肢を更新しますが、進行、選択条件の再評価、消費、タグの再実行を行いません。文字表示と計時も維持します。補助再生ヘッドやセッションが終了した後も保持中の本文は更新でき、非表示になった内容を再表示することはありません。推定読書時間は主言語の実際の内容のみで計算し、主言語の変更には既存の進捗保持規則を使います。二つの値の表示・非表示や配置は renderer が独立して決めます。
+
+各再生ヘッドの現在の文は一つだけです。次の文に入ると表示先にかかわらず前の文を撤去し、空 : も置き換えます。次の at／await で待機している間はまだ次の文に入っておらず、EOF／stop 後も次の文がないため、元の表示寿命まで残して言語を更新できます。`LanguageRefresh` は token に対応する現在の表示だけを更新し、配置タグの再実行、duration のリセット、撤去済みの文の復活を行いません。現在の表示を隠したら `ReleaseOutput(token)` を呼びます。読書履歴は現在の表示と別に管理します。
+
 ## 言語ラベルとプレーンテキスト囲み
 
-`@locale:` は囲みの外に置き、言語ごとに必要な断片を囲みます。[プレーンテキストの断片とブロック](/ja/02-syntax/01-anchor-decorator/#プレーンテキストの断片とブロック)を参照してください。囲み内の `@en:` は文字であり、別の訳文を宣言しません。既存のフォールバックと副作用を再実行しない言語切り替えの規則は変わりません。
+`@locale:` は囲みの外に置き、言語ごとに必要な断片を囲みます。[プレーンテキストの断片とブロック](/ja/02-syntax/01-anchor-decorator/#プレーンテキストの断片とブロック)を参照してください。囲み内の `@en:` は文字であり、別の訳文を宣言しません。主言語のフォールバック、副言語の欠落時の省略、副作用を再実行しない言語切り替えの規則は変わりません。
 
-`TextPayload.Segments`／`ChoiceOption.Segments` は断片ごとの `Content` と `IsLiteral` を含み、実際に選ばれた言語版とともに渡されます。
+各 `Primary`／`Secondary` の結果には、断片ごとの `Content` と `IsLiteral` を持つ `Segments` が付くことがあります。実際に選ばれた言語版とともに渡されるため、拍全体や全言語に共通のプレーンテキストフラグでは扱えません。

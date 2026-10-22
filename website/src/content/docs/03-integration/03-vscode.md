@@ -9,7 +9,7 @@ sidebar:
 
 ## 安装插件
 
-若您使用的是 VS Code，您可以直接在 <a href="https://marketplace.visualstudio.com/items?itemName=Kutinana.ktory" target="_blank">Extension Marketplace</a> 中搜索 "Ktory" 来安装插件。或直接 <a href="vscode:extension/ktory.ktory" target="_blank">点此链接以安装</a>。
+若您使用的是 VS Code，您可以直接在 <a href="https://marketplace.visualstudio.com/items?itemName=Ktory.ktory" target="_blank">Extension Marketplace</a> 中搜索 "Ktory" 来安装插件。或直接 <a href="vscode:extension/ktory.ktory" target="_blank">点此链接以安装</a>。
 
 若您使用的是衍生自 VS Code 的编辑器，如 Cursor, Antigravity IDE 等，您可以在其扩展市场中搜索 "Ktory" 来安装扩展。
 

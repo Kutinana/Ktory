@@ -5,42 +5,39 @@ sidebar:
   order: 1
 ---
 
-> This page follows the [Ktory design principles](/en/01-overview/03-design-principles/), which distinguish current contracts from longer-term goals.
+Anchors declare executable beats or options; decorators carry parameters. This page follows the contract confirmed on 2026-10-22. Implementation and validation are in progress, so installed versions may differ.
 
-# Anchors and Decorators
+## Nodes and advancement
 
-Anchors create executable beats or options. Decorators such as `.tag(args)` attach parameters to them. A beat defines where the narrative stops; the host implements presentation and its duration.
-
-## Nodes and structure
-
-| Syntax | Parsed structure | Meaning |
+| Syntax | Structure | Default behavior |
 | --- | --- | --- |
-| `Speaker: Line` | `TextStep` | Text beat with a speaker |
-| `: Narration` or text without a reserved prefix | `TextStep` | Anonymous text beat with an empty `Speaker` |
-| `#do` without child options | `DirectiveStep` | Textless directive that still stops execution |
-| `#choice` with indented `*` / `+` children | `ContainerStep` | Option container |
+| `Speaker: Line` / `: Narration` | TextStep | Main waits for valid input |
+| Empty `:` / `: .effect()` | TextStep | Ends the previous statement on this playhead, dispatches tags, then waits; persistent BGM is unaffected |
+| `#` / `#.effect()` / `#do` without children | DirectiveStep | Standalone directives advance automatically |
+| `#choice` with indented `*` / `+` | ContainerStep | Main choice; auxiliaries skip the entire container |
 
-The child structure distinguishes a directive from a container; `choice` is not a parser keyword. Check actual runtime support for custom container names. A name alone does not establish that a business Handler exists.
+Indentation still distinguishes a container from a directive; not every # is automatic. Sections and [playhead roles](/en/04-architecture/01-discrete-steps/) are separate. Old `#parallel/#lane` requires explicit migration.
 
 ```ktory
-Alice: That's unbelievable...
-  .expression(surprised)
-  .next(0.5)
-
-#do .sfx("door")
+Alice: That's unbelievable... .next(seconds=0.5)
+#.sfx("door")
+: .camera_shake(0.5)
+#.wait(seconds=3)
 ```
 
-Decorators attach to their owning anchor; indentation bounds options and branch bodies. `.tag` and `.tag()` both have no arguments, while `.tag(0)` explicitly passes integer zero. Positional and named arguments are supported, for example `.bgm("main", volume=0.6)`. These names do not supply audio or portrait implementations.
+Built-ins use fully named arguments: `.clock(name="song")`, `.track(source="Lyrics", name="lyric")`, `.at(value=3, clock="song")`, `.wait(seconds=2)`, `.next(seconds=1)`, `.duration(seconds=3)`, `.skippable(enabled=false, seconds=3)`, `.loop(count=2)`. Positional built-in arguments are not supported in this version. Host tags such as `.bgm("main", volume=0.6)` may still use positional arguments; the host implements their effects.
 
-A decorator without a preceding anchor in its block, such as `.effect` on the first line, stops loading with a parse error and source line. It is neither discarded nor attached to the following line. Named section and branch boundaries do not supply anchors from another block.
+`.tag` equals `.tag()`; explicit zero differs from omission. Optional arguments may remain omitted. Bare wait estimates reading time from primary text; bare next means zero seconds. A decorator without a preceding anchor in its block is still a located parse error and cannot attach across a section or branch boundary.
 
-Presentation timing conventions use seconds. `.next(0.5)` requests advancement half a second after text finishes displaying. `.skippable(false, 3)` restricts text fast-forwarding for the first three seconds. The core parses these declarations; the host or presentation controller implements their timing.
+## Main presentation timing
 
-`.wait(t)` only enforces a minimum hold after printing; it does not enable automatic advancement. Clicks during that hold are discarded, so manual playback needs a fresh click afterwards. Bare `.wait` uses estimated reading time. `.next(t)` schedules automatic advancement after printing; an omitted argument means zero seconds.
+wait and next start together when text finishes displaying; textless beats start on entry. wait is a minimum hold, not an automatic policy. next schedules automatic advancement, and the combined time is max. `.wait(seconds=2).next(seconds=5)` allows input after two seconds and advances automatically at five. `.wait(seconds=5).next(seconds=2)` advances at five. Manual clicks rejected by wait or skippable are discarded, not queued.
 
-The timers run concurrently, regardless of decorator order. Both `.wait(2).next(2)` and `.next(2).wait(2)` advance after two seconds. `.wait(2).next(5)` advances at five seconds, with fresh clicks allowed from two seconds onwards. `.wait(5).next(2)` cannot advance until five seconds. `.wait.next` advances after the estimated reading hold. `#AUTO` or host autoplay can also supply the automatic policy, but must respect the minimum hold.
+Standalone # already defaults to automatic, so `#.wait(seconds=3)` continues after three seconds; `: .wait(seconds=3)` then waits for a fresh click. An allowed click during typing only reveals text. Main AUTO still respects the minimum hold.
 
-Clicks blocked by `.skippable(false[, t])` are also discarded, never replayed when the lock expires or printing finishes.
+duration starts with wait but never blocks advance. An accepted advance may enter the next statement early; entering it withdraws the previous statement on that playhead even if its display destination changes. Empty : also ends the previous display. While waiting at the next at gate, or after EOF/stop, the previous display may finish its own lifetime. Display expiry does not advance Main; wait does not hide text.
+
+Auxiliaries continue directly to at/Core boundaries, unaffected by wait/next/AUTO or reading estimates. Their duration remains purely visual. Old duration/fade callbacks may affect old content only, never its replacement.
 
 ## Inline formatting
 
@@ -53,7 +50,7 @@ Escape reserved characters with a backslash when they should appear literally. D
 Wrap literal text in three or more ASCII single quotes, inline or across multiple lines:
 
 ```ktory
-Alice: Write '''.wait''' here; **bold** outside still works. .wait(1)
+Alice: Write '''.wait''' here; **bold** outside still works. .wait(seconds=1)
 Alice:
   @en: '''
     .wait
@@ -61,7 +58,7 @@ Alice:
     <b>**This stays literal**</b>
   '''
   @zh: 正文包含'''.wait'''。
-  .next(1)
+  .next(seconds=1)
 : ''''Display ''' without an escape''''
 ```
 

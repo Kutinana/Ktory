@@ -5,7 +5,7 @@
 <h1 align="center">Ktory</h1>
 
 <p align="center">
-  Narrative authoring and integration for dialogue-driven games.
+  Text-first narrative authoring, orchestration and integration for dialogue-driven games.
 </p>
 
 <p align="center">

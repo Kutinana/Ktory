@@ -9,9 +9,9 @@ This section introduces how to implement single-file multilingual authoring in K
 
 ## Single-file Localization
 
-`@defaultLang` declares the default language used by this Ktory script. This is not a mandatory declaration: if left blank or omitted, Ktory still works normally. In this case, Ktory will not infer the language on its own. If you are certain your script or game uses only a single language, you can omit the `@defaultLang` declaration. Otherwise, this may cause inconvenience for subsequent multilingual localization.
+`@defaultLang: <locale>` declares the file language for untagged text and fallback; it is not a runtime primary/secondary locale switch. It may be omitted: with `@locale` variants, the current parser defaults to `zh` for compatibility; without multilingual declarations, the script is unlocalized and its actual language is `null`. Explicitly declare it for multilingual scripts to avoid relying on an implicit default.
 
-`@[locale]` explicitly declares the language of a specific text. This does not affect Ktory's default language. However, if you use `@[locale]` in your script to declare the language of any text, the `@defaultLang` declaration becomes mandatory. In this case, other texts without an `@[locale]` annotation are automatically treated as being in the `@defaultLang` language.
+`@locale:` labels an individual text variant. It does not make an explicit `@defaultLang` declaration mandatory. The implementation specification defines resolution for text, choices and names.
 
 Currently, `@[locale]` declarations are supported for dialogue lines and choice option labels.
 
@@ -81,8 +81,29 @@ Switching updates the active text, speaker, or menu labels without redispatching
 
 Maintaining translations in the same file is well-suited for independent writing and translation. However, Ktory does not prevent you from maintaining separate Ktory script files for different languages.
 
+## Structured primary / secondary output
+
+`RequestedLanguage` is primary and `SecondaryLanguage` is optional secondary output. File `defaultLang` still assigns untagged text and defines primary fallback. Primary follows the rules above; secondary **requires an exact translation and never falls back**.
+
+`TextPayload.Text`, nullable `TextPayload.SpeakerName` and `ChoiceOption.Text` each contain `Primary` and nullable `Secondary`. Each resolved value reports `Content`, `RequestedLanguage` and `ActualLanguage`. Existing `Content`, `Speaker` and `Label` properties map to primary output.
+
+A missing secondary translation produces null for that field. A secondary language matching that field's primary actual language is also omitted. Identical text in different languages is retained. Body and name resolve independently, so a secondary name may exist without secondary body text. Unlocalized values and undeclared literal names do not gain fabricated language identities; an untagged value can match the file's known default language exactly.
+
+```csharp
+sequencer.Start(requestedLocale: "zh", secondaryLocale: "en");
+sequencer.SetSecondaryLanguage("ja");
+presentations.RefreshLanguage(secondaryOnly: true);
+sequencer.SetSecondaryLanguage(null); // Disable secondary output.
+```
+
+Here `presentations` is a `MultiTrackPresentationController`; a single-Main `PresentationController` uses `RefreshSecondaryLanguage()`. `SetLanguage(locale)` preserves the secondary preference; `SetLanguageOutput(primary, secondary)` updates both.
+
+Secondary changes refresh retained display content and Main's current text or choice without advancing, re-evaluating choice conditions, consuming options or replaying tags. They preserve typing and timing. Retained text can change language after its auxiliary playhead or session finishes; hidden text is not shown again. Reading estimates still use primary's actual content only; primary changes retain the existing timing-progress rules. Renderers may show, hide or arrange the two values independently.
+
+Each playhead has one current statement. Entering the next withdraws the previous display regardless of destination; empty : also replaces it. Waiting at the next at/await gate has not entered the next statement, and EOF/stop has no next statement, so the previous display may finish its lifetime and remain refreshable. Apply `LanguageRefresh` by token without replaying routing tags, restarting duration or reviving withdrawn statements. Call `ReleaseOutput(token)` when hiding current content; reading history is separate from current presentation.
+
 ## Combining locales with literal fences
 
-Keep `@locale:` outside the fence and wrap literal fragments separately in each variant; see [literal fragments and blocks](/en/02-syntax/01-anchor-decorator/#literal-fragments-and-blocks). An `@en:` inside a fence is text, not a new translation. Literal formatting does not change existing fallback or side-effect-free language refresh.
+Keep `@locale:` outside the fence and wrap literal fragments separately in each variant; see [literal fragments and blocks](/en/02-syntax/01-anchor-decorator/#literal-fragments-and-blocks). An `@en:` inside a fence is text, not a new translation. Literal formatting does not change primary fallback, absent secondary translations or side-effect-free language refresh.
 
-`TextPayload.Segments` / `ChoiceOption.Segments` carry `Content` and `IsLiteral` per piece, following the actual selected language and fallback variant.
+Each `Primary` / `Secondary` result may also contain `Segments`, with `Content` and `IsLiteral` per piece. The fragments follow the actual selected variant; a single plain-text flag for a beat or all locales is insufficient.

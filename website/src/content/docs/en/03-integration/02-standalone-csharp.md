@@ -38,3 +38,7 @@ The [real Web reader](https://ktory.vercel.app) uses the shared C# core. The hom
 
 
 `SetLanguage(locale, token)` changes a session preference: it accepts an earlier beat or natural completion within the same valid session, while rejecting requests from an old session.
+
+## Main and auxiliary integration
+
+The single-track examples above demonstrate Main. For multiple playheads, consume `Sequencer.OnOutput` in order instead of relying only on CurrentPayload or a final active snapshot: an auxiliary may end immediately after its last output. Retained displays use GetRetainedPresentations/ReleaseOutput, while input targets Main only. wait/next apply to Main; duration never blocks advancement. Standalone # defaults to automatic and empty : to manual. See [execution and clocks](/en/04-architecture/01-discrete-steps/). New-interface validation is in progress; verify installed package versions separately.

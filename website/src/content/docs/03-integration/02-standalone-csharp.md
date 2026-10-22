@@ -34,3 +34,7 @@ sidebar:
 
 
 `SetLanguage(locale, token)` 是会话设置：只要捕获的会话仍有效，同会话已换拍或自然结束后仍可修改语言；旧会话的请求会被忽略。
+
+## Main／辅助接入补充
+
+以上单轨示例展示 Main。多轨请订阅 `Sequencer.OnOutput` 顺序交付，不能只读 CurrentPayload 或最终活动头快照；辅助可输出末句后立即结束。保留显示用 GetRetainedPresentations／ReleaseOutput 管理，输入只路由 Main。wait／next 只用于 Main，duration 不阻挡推进，普通独立 # 默认自动、空 : 默认手动。详见[执行与时钟](/04-architecture/01-discrete-steps/)。新接口的实现验证进行中，安装包版本须另核对。

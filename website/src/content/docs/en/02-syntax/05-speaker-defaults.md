@@ -21,4 +21,4 @@ Any decorator may be a default, behaving as if written on each line. Existing `.
 
 There is no cancellation syntax in this increment. Hosts define resources and actions; these defaults do not automatically bind Unity portraits. Rebuild the current dialogue presentation from the effective list, clearing an expression when neither a local nor a default value exists. This does not imply stopping BGM when its decorator is omitted.
 
-An anonymous `#` anchor can be followed directly by decorators: `#.sfx("wind.ogg").wait(1).next()`. The portal, Reader source editor and VS Code use the same TextMate grammar, though themes may choose different colors.
+An anonymous `#` anchor can be followed directly by decorators: `#.sfx("wind.ogg").wait(seconds=1).next()`. The portal, Reader source editor and VS Code use the same TextMate grammar, though themes may choose different colors.

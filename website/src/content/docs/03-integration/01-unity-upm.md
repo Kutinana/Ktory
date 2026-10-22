@@ -92,7 +92,7 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 | 快显当前文本 | 订阅 `OnFastForwardRequested`，只显示全文，不再次通知完成 |
 | 当前语言变化 | `player.SetLanguage(...)` 后 `RefreshLanguage()`，并刷新显示 |
 
-最低停留与自动推进分别处理：`.wait` 到期仅解除限制，期间点击不排队；`.wait.next` 才在停留结束后自动推进（AUTO 区域或宿主自动模式也可提供自动策略）。`.wait(s).next(t)` 从全文显示完成时同时计时，顺序无关。`HandleUserClick(token)` 接收原始用户输入；不要直接用 `Step()` 绕过呈现策略。`QueuedAdvance` 为兼容保留，始终为 `false`。
+最低停留与自动推进分别处理：`.wait` 到期仅解除限制，期间点击不排队；`.wait.next` 才在停留结束后自动推进（AUTO 区域或宿主自动模式也可提供自动策略）。`.wait(seconds=s).next(seconds=t)` 从全文显示完成时同时计时，顺序无关。`HandleUserClick(token)` 接收原始用户输入；不要直接用 `Step()` 绕过呈现策略。`QueuedAdvance` 为兼容保留，始终为 `false`。
 
 默认 `AutoStepSequencer == true` 时，控制器自己推进；不要在任一推进事件中重复 `Step()`。宿主管理推进时将其设为 `false`，只通过 `OnAdvanceRequestedWithToken` 捕获令牌，接受后 `Step(token)` 并建立下一拍；过期回调不得重新 Setup 当前拍或重置计时。资源与立绘映射、世界状态和外部演出限制仍由宿主持有。
 
@@ -105,3 +105,7 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 窗口支持多实例、节点与源码跳行、正文／Speaker、真实控制器的推进阻塞与 AUTO 计时、跟随默认或指定语言、正常快显／推进、合法选项及重启，以及调用栈、循环和消费历史。切语言通过宿主调用 `SetLanguage`、`RefreshLanguage(false)` 并刷新 UI，不能重跑标签或推进。标准计时仅在宿主提供真实 `PresentationController` 时可用。
 
 标签等执行记录在注册后开始收集，全部实例最多 2000 条，支持筛选、清空和复制；窗口开关不改变剧情。自定义动画、额外输入锁、项目 AUTO 通过 `InputBlockReason` 和可选 `IKtoryDebugInfoProvider` 提供，Package 不推测其语义。本版没有强制跳过；UI 与注册日志不进入正式构建。详细接线和真实 Unity 验收清单位于生成包的 `DEBUGGING.md`。Core 测试通过不代表 Unity 窗口与实际演出已经实机验证。
+
+## Main／辅助接入补充
+
+以上单轨示例展示 Main。多轨请订阅 `Sequencer.OnOutput` 顺序交付，不能只读 CurrentPayload 或最终活动头快照；辅助可输出末句后立即结束。保留显示用 GetRetainedPresentations／ReleaseOutput 管理，输入只路由 Main。wait／next 只用于 Main，duration 不阻挡推进，普通独立 # 默认自动、空 : 默认手动。详见[执行与时钟](/04-architecture/01-discrete-steps/)。新接口的实现验证进行中，安装包版本须另核对。

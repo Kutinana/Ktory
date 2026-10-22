@@ -96,7 +96,7 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 | 現在の全文を即時表示 | `OnFastForwardRequested` で全文を表示し、完了通知は再送しない |
 | 実行中の言語変更 | `player.SetLanguage(...)`、`RefreshLanguage()`、表示更新 |
 
-最低待機時間と自動進行は別の条件です。`.wait` は終了時に入力制限を解除するだけで、クリックを保留しません。`.wait.next` は待機後に自動進行します。AUTO 領域やホストの自動再生も自動進行を指定できます。`.wait(s).next(t)` は全文表示完了時に同時に計時し、順序には依存しません。入力は `HandleUserClick(token)` に渡し、`Step()` で表示制御を迂回しないでください。互換性のための `QueuedAdvance` は常に `false` です。
+最低待機時間と自動進行は別の条件です。`.wait` は終了時に入力制限を解除するだけで、クリックを保留しません。`.wait.next` は待機後に自動進行します。AUTO 領域やホストの自動再生も自動進行を指定できます。`.wait(seconds=s).next(seconds=t)` は全文表示完了時に同時に計時し、順序には依存しません。入力は `HandleUserClick(token)` に渡し、`Step()` で表示制御を迂回しないでください。互換性のための `QueuedAdvance` は常に `false` です。
 
 既定の `AutoStepSequencer == true` ではコントローラー自身が進行します。どちらの進行イベントからも追加の `Step()` を呼ばないでください。ホストが進行を担当する場合は `false` にし、`OnAdvanceRequestedWithToken` でトークンを保存します。有効な要求を受け入れて `Step(token)` を実行した後、次の拍を設定します。古いコールバックで Setup を再実行したり、現在の計時を初期化したりしないでください。リソースと立ち絵の対応付け、世界状態、外部演出の条件はホストが管理します。
 
@@ -109,3 +109,7 @@ public sealed class KtoryCoreProbe : MonoBehaviour
 複数インスタンス、ノードとソース行、本文と話者、実際のコントローラーの入力制限と AUTO タイマー、デフォルト言語への追従と言語指定、通常の全文表示・送り、有効な選択と再起動、呼び出しスタック、ループ、消費済み選択肢を表示します。言語変更はホストの `SetLanguage`、`RefreshLanguage(false)`、UI 更新を使用し、進行やタグの再発行を行いません。標準タイマーの表示には、実際の `PresentationController` の公開が必要です。
 
 履歴は登録後から収集し、全インスタンス合計で最大 2000 件です。フィルター、消去、コピーに対応し、ウィンドウの開閉は進行に影響しません。アニメーション、追加の入力制限、独自 AUTO は `InputBlockReason` と任意の `IKtoryDebugInfoProvider` でプロジェクト側が提供します。Package は独自修飾子の意味を推測しません。強制スキップは提供せず、UI・登録表・ログは正式ビルドに含まれません。接続と Unity 検証項目は生成パッケージ内の `DEBUGGING.md` を参照してください。Core テストは Unity UI や実際の演出の検証を代替しません。
+
+## Main／補助の接入
+
+上の単一軌例は Main の例です。複数ヘッドでは `Sequencer.OnOutput` を順番に処理し、CurrentPayload や最終活動一覧だけに頼らないでください。補助は末句の直後に終了できます。保留表示は GetRetainedPresentations／ReleaseOutput、入力は Main だけに対応させます。wait／next は Main に適用し、duration は進行を止めません。独立 # は自動、空 : は手動が既定です。[実行と時計](/ja/04-architecture/01-discrete-steps/)も参照してください。新 API は検証中で、インストール済みパッケージの版は別途確認が必要です。
