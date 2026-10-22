@@ -45,8 +45,23 @@
             autoPlayTitle: '自动阅读模式 (A)',
             restartTitle: '重新从头开始试读 (R)',
             homeUrl: 'https://ktory.ink',
-            ready: '就绪 (Ready)',
-            stepHint: '点击页面或按 [空格] 推进阅读 ▾'
+            ready: '就绪',
+            stepHint: '点击页面或按 [空格] 推进阅读 ▾',
+            hintAdvance: '推进',
+            hintAuto: '自动阅读',
+            hintRestart: '重新开始',
+            hintEditor: '编辑器',
+            editorTitle: '剧本编辑器 (.ktr)',
+            editorToggleTitle: '展开 / 收起编辑器 (E)',
+            editorCloseTitle: '关闭 (Esc)',
+            editorResizeTitle: '按住拖拽调整宽度',
+            catalogLabel: '内置示例剧本',
+            sourceLabel: '脚本源码 (.ktr)',
+            uploadLabel: '上传剧本',
+            uploadTitle: '上传本地 .ktr 文件并试读',
+            runLabel: '重新加载并试读',
+            samplePlaceholder: '选择示例剧本',
+            uploadedTag: '上传'
           },
           'en': {
             tagline: 'Lightweight, elegant, dialogue-driven narrative engine and runtime',
@@ -59,7 +74,22 @@
             restartTitle: 'Restart from beginning (R)',
             homeUrl: 'https://ktory.ink/en/',
             ready: 'Ready',
-            stepHint: 'Click screen or press [Space] to advance ▾'
+            stepHint: 'Click screen or press [Space] to advance ▾',
+            hintAdvance: 'Advance',
+            hintAuto: 'Auto-read',
+            hintRestart: 'Restart',
+            hintEditor: 'Editor',
+            editorTitle: 'Script Editor (.ktr)',
+            editorToggleTitle: 'Toggle editor (E)',
+            editorCloseTitle: 'Close (Esc)',
+            editorResizeTitle: 'Drag to resize',
+            catalogLabel: 'Built-in samples',
+            sourceLabel: 'Script source (.ktr)',
+            uploadLabel: 'Upload script',
+            uploadTitle: 'Upload a local .ktr file and preview it',
+            runLabel: 'Reload & preview',
+            samplePlaceholder: 'Choose a sample',
+            uploadedTag: 'Uploaded'
           },
           'ja': {
             tagline: '軽量・優雅・対話主導のシナリオ制作・接続システム',
@@ -71,8 +101,23 @@
             autoPlayTitle: '自動進行モード (A)',
             restartTitle: '最初からやり直す (R)',
             homeUrl: 'https://ktory.ink/ja/',
-            ready: '準備完了 (Ready)',
-            stepHint: '画面クリックまたは [Space] で進行 ▾'
+            ready: '準備完了',
+            stepHint: '画面クリックまたは [Space] で進行 ▾',
+            hintAdvance: '進行',
+            hintAuto: '自動進行',
+            hintRestart: '最初から',
+            hintEditor: 'エディタ',
+            editorTitle: 'スクリプトエディタ (.ktr)',
+            editorToggleTitle: 'エディタを開く / 閉じる (E)',
+            editorCloseTitle: '閉じる (Esc)',
+            editorResizeTitle: 'ドラッグで幅を変更',
+            catalogLabel: '内蔵サンプル',
+            sourceLabel: 'スクリプトソース (.ktr)',
+            uploadLabel: 'スクリプトを読み込む',
+            uploadTitle: 'ローカルの .ktr ファイルを読み込んで試読',
+            runLabel: '再読み込みして試読',
+            samplePlaceholder: 'サンプルを選択',
+            uploadedTag: 'アップロード'
           }
         };
 
@@ -107,6 +152,16 @@
           if (dst) dst.textContent = t.ready;
           var dsh = document.getElementById('dockStepHint');
           if (dsh) dsh.textContent = t.stepHint;
+          var tx = document.querySelectorAll('[data-i18n]');
+          for (var j = 0; j < tx.length; j++) {
+            var v = t[tx[j].getAttribute('data-i18n')];
+            if (v) tx[j].textContent = v;
+          }
+          var ti = document.querySelectorAll('[data-i18n-title]');
+          for (var k = 0; k < ti.length; k++) {
+            var tv = t[ti[k].getAttribute('data-i18n-title')];
+            if (tv) ti[k].title = tv;
+          }
         };
       } catch (e) { }
     })();
@@ -121,23 +176,33 @@
       <div class="nav-left">
         <div class="brand">
           <img src="ktory_logo.webp" alt="Ktory Logo" class="brand-logo" />
-          <span class="brand-title">Ktory Web Reader</span>
+          <span class="brand-title">Ktory<span class="brand-title-suffix"> Web Reader</span></span>
         </div>
       </div>
 
       <div class="nav-right">
 
         <!-- Language Switcher Pills -->
-        <div class="nav-pill-group" id="langSwitcher" title="Switch Language">
-          <button class="pill-btn" data-locale="zh">中</button>
-          <button class="pill-btn" data-locale="en">EN</button>
-          <button class="pill-btn" data-locale="ja">日</button>
+        <div class="nav-pill-group" id="langSwitcher" role="group" title="Switch Language">
+          <button class="pill-btn" data-locale="zh" lang="zh">中</button>
+          <button class="pill-btn" data-locale="en" lang="en">EN</button>
+          <button class="pill-btn" data-locale="ja" lang="ja">日</button>
         </div>
+
+        <label class="secondary-language-control">
+          <span id="secondaryLanguageLabel">Translation</span>
+          <select id="secondaryLanguage" aria-labelledby="secondaryLanguageLabel">
+            <option value="" id="secondaryLanguageOff">Off</option>
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+          </select>
+        </label>
 
         <div class="nav-divider"></div>
 
         <!-- Auto Advance Toggle -->
-        <button id="btnAutoPlay" class="nav-toggle-btn" title="Auto-advance mode (A)">
+        <button id="btnAutoPlay" class="nav-toggle-btn" title="Auto-advance mode (A)" aria-pressed="false">
           <span class="toggle-dot"></span>
           <span class="btn-label">AUTO</span>
         </button>
@@ -145,7 +210,7 @@
         <!-- Restart Button -->
         <button id="btnRestartSession" class="nav-text-btn danger-hover" title="Restart from beginning (R)">
           <span class="btn-icon">↺</span>
-          <span>RESTART</span>
+          <span class="btn-label">RESTART</span>
         </button>
 
         <div class="nav-divider"></div>
@@ -154,7 +219,7 @@
         <a href="https://ktory.ink/en/" target="_blank" rel="noopener noreferrer" class="nav-text-btn nav-home-link"
           id="btnGoHome" title="Visit Ktory Homepage (ktory.ink)">
           <span class="btn-icon">↗</span>
-          <span id="navHomeText">Home</span>
+          <span class="btn-label" id="navHomeText">Home</span>
         </a>
       </div>
     </header>
@@ -162,28 +227,31 @@
     <!-- Portal Landing Overlay -->
     <section class="portal-overlay" id="portalOverlay" aria-label="Ktory Portal">
       <div class="portal-hero">
-        <!-- Logo on the left, Title & Tagline on the right -->
-        <div class="portal-header-row">
-          <img src="ktory_logo.webp" alt="Ktory Logo" class="portal-logo" />
-          <div class="portal-header-text">
-            <h1 class="portal-title">Ktory Web Reader</h1>
-            <p class="portal-tagline" id="portalTagline">Lightweight, elegant, dialogue-driven narrative engine and
-              runtime</p>
-          </div>
+        <img src="ktory_logo.webp" alt="" class="portal-logo" />
+        <div class="portal-header-text">
+          <h1 class="portal-title">Ktory Web Reader</h1>
+          <p class="portal-tagline" id="portalTagline">Lightweight, elegant, dialogue-driven narrative engine and
+            runtime</p>
         </div>
 
-        <!-- Action Buttons with icon on the left of text -->
         <div class="portal-actions">
           <button id="btnPortalSample" class="portal-btn portal-btn-primary" type="button">
-            <span class="portal-btn-icon">▶</span>
+            <span class="portal-btn-icon" aria-hidden="true">▶</span>
             <span class="portal-btn-title" id="portalSampleTitle">Try Sample Script</span>
           </button>
 
           <button id="btnPortalWrite" class="portal-btn portal-btn-secondary" type="button">
-            <span class="portal-btn-icon">✎</span>
+            <span class="portal-btn-icon" aria-hidden="true">✎</span>
             <span class="portal-btn-title" id="portalWriteTitle">Write My Script</span>
           </button>
         </div>
+
+        <ul class="portal-hints" aria-label="Keyboard shortcuts">
+          <li><kbd>Space</kbd><span data-i18n="hintAdvance">Advance</span></li>
+          <li><kbd>A</kbd><span data-i18n="hintAuto">Auto-read</span></li>
+          <li><kbd>R</kbd><span data-i18n="hintRestart">Restart</span></li>
+          <li><kbd>E</kbd><span data-i18n="hintEditor">Editor</span></li>
+        </ul>
       </div>
     </section>
 
@@ -228,6 +296,10 @@
       </div>
     </main>
 
+    <!-- Desktop Lyrics Gradient Scrim & Dock (Above Status Bar) -->
+    <div class="lyrics-gradient-scrim" id="readerLyricsScrim" aria-hidden="true" hidden></div>
+    <aside class="reader-lyrics-dock" id="readerLyricsDock" role="region" aria-label="Lyrics" hidden></aside>
+
     <!-- Bottom Floating Dock (Minimalist Progress & Controls) -->
     <footer class="floating-dock" id="floatingDock">
       <div class="dock-container">
@@ -256,10 +328,10 @@
     <!-- Side Drawer: Script Editor (Docked Left with Pull Handle & Resizer) -->
     <aside class="drawer drawer-left" id="editorDrawer">
       <!-- Drag Resize Handle on Right Border -->
-      <div class="drawer-resizer" id="drawerResizer" title="按住拖拽调整宽度"></div>
+      <div class="drawer-resizer" id="drawerResizer" title="Drag to resize" data-i18n-title="editorResizeTitle"></div>
 
       <!-- Pull Tab Handle attached to the Right Border -->
-      <button id="btnToggleEditor" class="drawer-pull-handle" title="展开 / 收起编辑器 (E)">
+      <button id="btnToggleEditor" class="drawer-pull-handle" title="Toggle editor (E)" data-i18n-title="editorToggleTitle">
         <span class="handle-icon">✎</span>
         <span class="handle-label">EDITOR</span>
         <span class="handle-chevron">›</span>
@@ -268,16 +340,16 @@
       <div class="drawer-header">
         <div class="drawer-title-group">
           <span class="drawer-eyebrow">SOURCE CODE</span>
-          <h3 class="drawer-title">剧本编辑器 (.ktr)</h3>
+          <h3 class="drawer-title" data-i18n="editorTitle">Script Editor (.ktr)</h3>
         </div>
-        <button class="drawer-close-btn" id="btnCloseEditor" title="关闭 (Esc)">×</button>
+        <button class="drawer-close-btn" id="btnCloseEditor" title="Close (Esc)" data-i18n-title="editorCloseTitle" aria-label="Close">×</button>
       </div>
 
       <div class="drawer-body">
         <div class="drawer-form-group">
           <div class="form-label-row">
             <span class="label-glyph">✦</span>
-            <label for="sampleSelect" class="form-label-title">内置示例剧本</label>
+            <label for="sampleSelect" class="form-label-title" data-i18n="catalogLabel">Built-in samples</label>
             <span class="form-label-badge">CATALOG</span>
           </div>
 
@@ -285,7 +357,7 @@
           <div class="custom-select-wrapper" id="sampleSelectWrapper">
             <!-- Native select kept visually hidden for accessibility and value syncing -->
             <select id="sampleSelect" class="sr-only-select">
-              <option value="">-- 选择示例剧本 --</option>
+              <option value="" data-i18n="samplePlaceholder">Choose a sample</option>
             </select>
 
             <!-- Custom Trigger -->
@@ -293,7 +365,7 @@
               aria-expanded="false">
               <div class="trigger-label-group">
                 <span class="trigger-icon">📜</span>
-                <span class="trigger-text" id="sampleSelectTriggerText">-- 选择示例剧本 --</span>
+                <span class="trigger-text" id="sampleSelectTriggerText">Choose a sample</span>
               </div>
               <span class="trigger-chevron">▾</span>
             </button>
@@ -309,7 +381,7 @@
 
 
         <div class="drawer-form-group flex-1">
-          <label for="scriptInput">脚本源码 (.ktr):</label>
+          <label for="scriptInput" class="source-label" data-i18n="sourceLabel">Script source (.ktr)</label>
           <div class="source-editor">
             <pre id="scriptHighlight" class="source-highlight" aria-hidden="true"></pre>
             <textarea id="scriptInput" class="drawer-textarea" spellcheck="false" wrap="off"></textarea>
@@ -318,10 +390,10 @@
 
         <div class="drawer-actions">
           <input type="file" id="fileInputKtr" accept=".ktr,.ktory,.txt" style="display: none;" />
-          <button id="btnUploadScript" class="secondary-pill-btn" title="上传本地 .ktr 文件并试读">
-            <span class="btn-icon">↑</span> 上传剧本
+          <button id="btnUploadScript" class="secondary-pill-btn" title="Upload a local .ktr file and preview it" data-i18n-title="uploadTitle">
+            <span class="btn-icon" aria-hidden="true">↑</span> <span data-i18n="uploadLabel">Upload script</span>
           </button>
-          <button id="btnRunScript" class="primary-pill-btn">▶ 重新加载并试读</button>
+          <button id="btnRunScript" class="primary-pill-btn"><span aria-hidden="true">▶</span> <span data-i18n="runLabel">Reload &amp; preview</span></button>
         </div>
       </div>
     </aside>

@@ -125,6 +125,25 @@
       ]
     },
     {
+      "match": "^[ \\t]*((?i:#parallel))(?=[ \\t]*(?://|$))",
+      "captures": {
+        "1": {
+          "name": "invalid.deprecated.parallel.ktory"
+        }
+      }
+    },
+    {
+      "match": "^[ \\t]*((?i:#lane))[ \\t]+([a-zA-Z0-9_-]+)(?=[ \\t]*(?://|$))",
+      "captures": {
+        "1": {
+          "name": "invalid.deprecated.lane.ktory"
+        },
+        "2": {
+          "name": "invalid.deprecated.lane-name.ktory"
+        }
+      }
+    },
+    {
       "begin": "^[ \\t]*(#[a-zA-Z0-9_]*)",
       "beginCaptures": {
         "1": {
