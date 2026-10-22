@@ -1,5 +1,5 @@
 /* global acquireVsCodeApi, Blazor, el, state, startSession,
-   handleAdvanceAction, submitChoice, changeLanguage, restartSession, reportSessionError */
+   handleAdvanceAction, submitChoice, changeLanguage, restartSession */
 (() => {
   const MESSAGES = {
     'en': {
@@ -17,8 +17,6 @@
       errorResource: 'Failed to load resource: {uri}',
       errorCsp: 'Resource blocked by Content Security Policy: {directive} · {uri}',
       brandTitle: 'Ktory Preview',
-      fastForward: 'Fast-forward',
-      fastForwardTitle: 'Show full text immediately (F)',
       autoPlayTitle: 'Auto-advance mode (A)',
       restartSessionTitle: 'Restart from beginning (R)',
       replayStory: '↺ Restart Preview',
@@ -41,8 +39,6 @@
       errorResource: '资源加载失败：{uri}',
       errorCsp: '资源被内容策略拦截：{directive} · {uri}',
       brandTitle: 'Ktory Preview',
-      fastForward: '快显',
-      fastForwardTitle: '立即显示全文 (F)',
       autoPlayTitle: '自动阅读模式 (A)',
       restartSessionTitle: '重新从头开始试读 (R)',
       replayStory: '↺ 重新开始试读',
@@ -65,8 +61,6 @@
       errorResource: 'リソースの読み込みに失敗しました: {uri}',
       errorCsp: 'コンテンツセキュリティポリシーによりリソースがブロックされました: {directive} · {uri}',
       brandTitle: 'Ktory Preview',
-      fastForward: '早送り',
-      fastForwardTitle: '全文を即時表示 (F)',
       autoPlayTitle: '自動送りモード (A)',
       restartSessionTitle: '最初からやり直す (R)',
       replayStory: '↺ 試読をやり直す',
@@ -172,11 +166,6 @@
     if (brand) brand.textContent = t('brandTitle');
 
     // Reader UI overrides in webview
-    const ffBtn = document.getElementById('btnFastForward');
-    if (ffBtn) {
-      ffBtn.textContent = t('fastForward');
-      ffBtn.title = t('fastForwardTitle');
-    }
     const autoBtn = document.getElementById('btnAutoPlay');
     if (autoBtn) autoBtn.title = t('autoPlayTitle');
     const restartBtn = document.getElementById('btnRestartSession');
@@ -334,16 +323,30 @@
       currentUiLocale = normalizeUiLocale(message.locale);
       applyUiLocale();
     } else if (message.type === 'action' && currentDocument && message.revision === currentDocument.revision) {
+      const isNarrativeInput = message.action === 'advance' || message.action === 'choice';
+      const targetToken = message.presentationId ? {
+        sessionId: message.sessionId, presentationId: message.presentationId
+      } : (multiTrackReader.active ? {
+        sessionId: message.sessionId || state.currentSessionId,
+        presentationId: multiTrackReader.interactiveLane()?.state.currentPresentationId
+      } : null);
+      const lane = multiTrackReader.active && targetToken ? multiTrackReader.findToken(targetToken) : null;
       if (message.sessionId !== state.currentSessionId ||
-          ((message.action === 'advance' || message.action === 'choice') &&
-           message.presentationId !== state.currentPresentationId)) {
+          (isNarrativeInput && (multiTrackReader.active
+            ? !lane || !lane.requiresInput
+            : (message.presentationId && message.presentationId !== state.currentPresentationId)))) {
         console.debug('[Ktory] Ignored editor action for an expired session or presentation.');
         return;
       }
       // Editor commands share exactly the same presentation/input paths as the buttons.
-      if (message.action === 'advance') await handleAdvanceAction();
+      if (message.action === 'advance') {
+        if (lane) withPresentationContext(lane, handleAdvanceAction);
+        else handleAdvanceAction();
+      }
       if (message.action === 'restart') await restartSession();
       if (message.action === 'language' && typeof message.locale === 'string') await changeLanguage(message.locale);
+      if (message.action === 'secondary-language' && (message.locale === null || typeof message.locale === 'string'))
+        await changeSecondaryLanguage(message.locale);
       if (message.action === 'choice' && typeof message.id === 'string') await submitChoice(message.id, message.presentationId, message.sessionId);
     }
   });

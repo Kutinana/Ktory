@@ -10,7 +10,7 @@ function reader(fetch) {
     const classes = new Set();
     return {
       style: {}, dataset: {}, children: [], events: {}, textContent: '', innerHTML: '',
-      classList: { add: name => classes.add(name), contains: name => classes.has(name), toggle() {} },
+      classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name), toggle() {} },
       appendChild(child) { this.children.push(child); },
       addEventListener(type, listener) { this.events[type] = listener; },
       remove() { this.removed = true; },

@@ -23,19 +23,14 @@ function getPreferredLocale() {
   return 'en'; // fallback to en
 }
 
-const state = {
+let state = {
   status: 'Ready',
   payload: null,
   choice: null,
   requestedLocale: (typeof window !== 'undefined' && window.__KTORY_INITIAL_LOCALE__) || getPreferredLocale(),
+  secondaryLocale: null,
   defaultLocale: 'en',
   autoPlay: false,
-
-  // Font & Typography
-  fontMode: 'serif', // 'serif' | 'sans'
-  fontSizeIndex: 1, // 0: sm, 1: md, 2: lg
-  fontSizes: ['font-size-sm', 'font-size-md', 'font-size-lg'],
-  fontSizeLabels: ['85%', '100%', '115%'],
 
   // Typewriter & Presentation
   isTyping: false,
@@ -74,9 +69,10 @@ const state = {
   currentSampleKey: '',
   samples: {}
 };
+const primaryReaderState = state;
 
 // DOM Elements Cache
-const el = {
+let el = {
   body: document.body,
   readerViewport: document.getElementById('readerViewport'),
   readerContainer: document.getElementById('readerContainer'),
@@ -92,11 +88,10 @@ const el = {
 
   // Top Nav
   langSwitcher: document.getElementById('langSwitcher'),
+  secondaryLanguage: document.getElementById('secondaryLanguage'),
+  secondaryLanguageLabel: document.getElementById('secondaryLanguageLabel'),
+  secondaryLanguageOff: document.getElementById('secondaryLanguageOff'),
   btnAutoPlay: document.getElementById('btnAutoPlay'),
-  btnFontToggle: document.getElementById('btnFontToggle'),
-  fontToggleLabel: document.getElementById('fontToggleLabel'),
-  btnFontSizeToggle: document.getElementById('btnFontSizeToggle'),
-  fontSizeLabel: document.getElementById('fontSizeLabel'),
   btnToggleEditor: document.getElementById('btnToggleEditor'),
   btnRestartSession: document.getElementById('btnRestartSession'),
   btnGoHome: document.getElementById('btnGoHome'),
@@ -110,6 +105,10 @@ const el = {
   portalSampleTitle: document.getElementById('portalSampleTitle'),
   portalWriteTitle: document.getElementById('portalWriteTitle'),
 
+  // Desktop Lyrics Dock
+  readerLyricsScrim: document.getElementById('readerLyricsScrim'),
+  readerLyricsDock: document.getElementById('readerLyricsDock'),
+
   // Floating Dock
   floatingDock: document.getElementById('floatingDock'),
   dockProgressBar: document.getElementById('dockProgressBar'),
@@ -117,7 +116,6 @@ const el = {
   dockStatusText: document.getElementById('dockStatusText'),
   dockStepHint: document.getElementById('dockStepHint'),
   dockLocaleTag: document.getElementById('dockLocaleTag'),
-  btnFastForward: document.getElementById('btnFastForward'),
 
   // Drawers & Backdrop
   editorDrawer: document.getElementById('editorDrawer'),
@@ -130,6 +128,39 @@ const el = {
   btnRunScript: document.getElementById('btnRunScript'),
   drawerResizer: document.getElementById('drawerResizer')
 };
+const primaryReaderElements = el;
+
+// Existing rendering and timing policies run against one presentation at a time.
+// Capture that context at callback creation, so sibling timers never read each
+// other's state or accidentally target the session's legacy "current" output.
+let currentPresentationLane = null;
+
+function withPresentationContext(context, action) {
+  const previous = { state, elements: el, portraits: portraitState, lane: currentPresentationLane };
+  state = context.state;
+  el = context.elements;
+  portraitState = context.portraits;
+  currentPresentationLane = context;
+  if (context.isPassive !== undefined) state.isPassive = context.isPassive;
+  try { return action(); }
+  finally {
+    state = previous.state;
+    el = previous.elements;
+    portraitState = previous.portraits;
+    currentPresentationLane = previous.lane;
+  }
+}
+
+function capturePresentationCallback(action) {
+  const context = currentPresentationLane || { state, elements: el, portraits: portraitState };
+  const epoch = currentSessionEpoch;
+  return (...args) => {
+    if (epoch !== currentSessionEpoch) return;
+    const result = withPresentationContext(context, () => action(...args));
+    if (multiTrackReader.active) multiTrackReader.updateDock();
+    return result;
+  };
+}
 
 const PORTAL_I18N = (typeof window !== 'undefined' && window.__KTORY_I18N__) || {
   'zh': {
@@ -142,8 +173,22 @@ const PORTAL_I18N = (typeof window !== 'undefined' && window.__KTORY_I18N__) || 
     autoPlayTitle: '自动阅读模式 (A)',
     restartTitle: '重新从头开始试读 (R)',
     homeUrl: 'https://ktory.ink',
-    ready: '就绪 (Ready)',
-    stepHint: '点击页面或按 [空格] 推进阅读 ▾'
+    stepHint: '点击页面或按 [空格] 推进阅读 ▾',
+    hintAdvance: '推进',
+    hintAuto: '自动阅读',
+    hintRestart: '重新开始',
+    hintEditor: '编辑器',
+    editorTitle: '剧本编辑器 (.ktr)',
+    editorToggleTitle: '展开 / 收起编辑器 (E)',
+    editorCloseTitle: '关闭 (Esc)',
+    editorResizeTitle: '按住拖拽调整宽度',
+    catalogLabel: '内置示例剧本',
+    sourceLabel: '脚本源码 (.ktr)',
+    uploadLabel: '上传剧本',
+    uploadTitle: '上传本地 .ktr 文件并试读',
+    runLabel: '重新加载并试读',
+    samplePlaceholder: '选择示例剧本',
+    uploadedTag: '上传'
   },
   'en': {
     tagline: 'Lightweight, elegant, dialogue-driven narrative engine and runtime',
@@ -155,8 +200,22 @@ const PORTAL_I18N = (typeof window !== 'undefined' && window.__KTORY_I18N__) || 
     autoPlayTitle: 'Auto-advance mode (A)',
     restartTitle: 'Restart from beginning (R)',
     homeUrl: 'https://ktory.ink/en/',
-    ready: 'Ready',
-    stepHint: 'Click screen or press [Space] to advance ▾'
+    stepHint: 'Click screen or press [Space] to advance ▾',
+    hintAdvance: 'Advance',
+    hintAuto: 'Auto-read',
+    hintRestart: 'Restart',
+    hintEditor: 'Editor',
+    editorTitle: 'Script Editor (.ktr)',
+    editorToggleTitle: 'Toggle editor (E)',
+    editorCloseTitle: 'Close (Esc)',
+    editorResizeTitle: 'Drag to resize',
+    catalogLabel: 'Built-in samples',
+    sourceLabel: 'Script source (.ktr)',
+    uploadLabel: 'Upload script',
+    uploadTitle: 'Upload a local .ktr file and preview it',
+    runLabel: 'Reload & preview',
+    samplePlaceholder: 'Choose a sample',
+    uploadedTag: 'Uploaded'
   },
   'ja': {
     tagline: '軽量・優雅・対話主導のシナリオ制作・接続システム',
@@ -168,8 +227,22 @@ const PORTAL_I18N = (typeof window !== 'undefined' && window.__KTORY_I18N__) || 
     autoPlayTitle: '自動進行モード (A)',
     restartTitle: '最初からやり直す (R)',
     homeUrl: 'https://ktory.ink/ja/',
-    ready: '準備完了 (Ready)',
-    stepHint: '画面クリックまたは [Space] で進行 ▾'
+    stepHint: '画面クリックまたは [Space] で進行 ▾',
+    hintAdvance: '進行',
+    hintAuto: '自動進行',
+    hintRestart: '最初から',
+    hintEditor: 'エディタ',
+    editorTitle: 'スクリプトエディタ (.ktr)',
+    editorToggleTitle: 'エディタを開く / 閉じる (E)',
+    editorCloseTitle: '閉じる (Esc)',
+    editorResizeTitle: 'ドラッグで幅を変更',
+    catalogLabel: '内蔵サンプル',
+    sourceLabel: 'スクリプトソース (.ktr)',
+    uploadLabel: 'スクリプトを読み込む',
+    uploadTitle: 'ローカルの .ktr ファイルを読み込んで試読',
+    runLabel: '再読み込みして試読',
+    samplePlaceholder: 'サンプルを選択',
+    uploadedTag: 'アップロード'
   }
 };
 
@@ -184,11 +257,26 @@ function updatePortalLabels(locale) {
     el.btnGoHome.title = texts.homeTitle;
   }
   if (el.langSwitcher) el.langSwitcher.title = texts.langSwitcherTitle;
+  if (el.secondaryLanguageLabel) el.secondaryLanguageLabel.textContent = locale === 'zh' ? '副语言' : locale === 'ja' ? '副言語' : 'Translation';
+  if (el.secondaryLanguageOff) el.secondaryLanguageOff.textContent = locale === 'zh' ? '关闭' : locale === 'ja' ? 'オフ' : 'Off';
   if (el.btnAutoPlay) el.btnAutoPlay.title = texts.autoPlayTitle;
   if (el.btnRestartSession) el.btnRestartSession.title = texts.restartTitle;
   if (el.dockLocaleTag) el.dockLocaleTag.textContent = locale.toUpperCase();
-  if (el.dockStatusText && state.status === 'Ready') el.dockStatusText.textContent = texts.ready || 'Ready';
+  if (el.dockStatusText && state.status === 'Ready') el.dockStatusText.textContent = statusLabel('Ready', locale);
   if (el.dockStepHint && state.status === 'Ready') el.dockStepHint.textContent = texts.stepHint || 'Click screen or press [Space] to advance ▾';
+  document.querySelectorAll('[data-i18n]').forEach(node => {
+    const value = texts[node.dataset.i18n];
+    if (value) node.textContent = value;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(node => {
+    const value = texts[node.dataset.i18nTitle];
+    if (value) node.title = value;
+  });
+  if (window.refreshCustomSampleSelect) window.refreshCustomSampleSelect();
+}
+
+function samplePlaceholder() {
+  return (PORTAL_I18N[state.requestedLocale] || PORTAL_I18N.en).samplePlaceholder;
 }
 
 function hidePortal() {
@@ -265,6 +353,11 @@ function setupEventListeners() {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
       return;
     }
+    // Escape must work even while a button (e.g. the drawer handle) holds focus.
+    if (e.code === 'Escape') {
+      if (!document.querySelector('#sampleSelectWrapper.open')) closeAllDrawers();
+      return;
+    }
     if (e.target.closest('button, a, [role="button"]')) return;
 
     if (e.code === 'Space' || e.code === 'Enter') {
@@ -278,8 +371,8 @@ function setupEventListeners() {
       toggleEditorDrawer();
     } else if (e.code === 'KeyR') {
       restartSession();
-    } else if (e.code === 'Escape') {
-      closeAllDrawers();
+    } else if (multiTrackReader.active) {
+      multiTrackReader.chooseNumber(Number(e.key));
     } else if (state.status === 'AwaitingChoice' && state.choice) {
       // Numerical hotkeys for choices: 1, 2, 3...
       const num = parseInt(e.key, 10);
@@ -329,6 +422,8 @@ function setupEventListeners() {
   }
 
   // Language buttons
+  el.secondaryLanguage?.addEventListener('change', e => changeSecondaryLanguage(e.target.value || null));
+  el.secondaryLanguage?.addEventListener('click', e => e.stopPropagation());
   el.langSwitcher.querySelectorAll('.pill-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -361,14 +456,6 @@ function setupEventListeners() {
   el.btnReplayStory.addEventListener('click', () => {
     restartSession();
   });
-
-  // Fast forward dock button
-  if (el.btnFastForward) {
-    el.btnFastForward.addEventListener('click', (e) => {
-      e.stopPropagation();
-      fastForwardTypewriter();
-    });
-  }
 
   // Drawer sample select
   el.sampleSelect.addEventListener('change', () => {
@@ -405,7 +492,7 @@ function setupEventListeners() {
         }
 
         // Add uploaded script to samples dictionary and select it
-        const customKey = `[上传] ${title}`;
+        const customKey = `[${(PORTAL_I18N[state.requestedLocale] || PORTAL_I18N.en).uploadedTag}] ${title}`;
         state.samples[customKey] = content;
         state.currentSampleKey = customKey;
 
@@ -598,7 +685,7 @@ function setupCustomSampleSelect() {
     const options = Array.from(el.sampleSelect.options);
     const selectedVal = el.sampleSelect.value;
 
-    let selectedText = '-- 选择示例剧本 --';
+    let selectedText = samplePlaceholder();
 
     options.forEach(opt => {
       if (!opt.value) return;
@@ -656,8 +743,13 @@ function setupCustomSampleSelect() {
 
 
 function toggleAutoPlay() {
+  if (state === primaryReaderState && multiTrackReader.active) {
+    multiTrackReader.toggleAutoPlay();
+    return;
+  }
   state.autoPlay = !state.autoPlay;
   el.btnAutoPlay.classList.toggle('active', state.autoPlay);
+  el.btnAutoPlay.setAttribute('aria-pressed', String(state.autoPlay));
 
   if (state.status === 'SuspendedAtBeat' && state.isHolding) {
     const hasNext = state.activeTags.some(t => t.name.toLowerCase() === 'next');
@@ -718,25 +810,39 @@ async function ensureRuntimeReady() {
 // ==========================================================================
 window.registerKtoryWasmBridge = function (dotNetRef) {
   window.KtoryWasm = {
-    async start(script, requestedLocale, entryBlock) {
-      const json = await dotNetRef.invokeMethodAsync('Start', script, requestedLocale, entryBlock || null);
+    async start(script, requestedLocale, entryBlock, secondaryLocale = null) {
+      const json = await dotNetRef.invokeMethodAsync('StartWithLanguages', script, requestedLocale, entryBlock || null, secondaryLocale);
       return JSON.parse(json);
     },
-    async step(expectedPresentationId = null, expectedSessionId = null) {
-      const json = await dotNetRef.invokeMethodAsync('Step', expectedPresentationId, expectedSessionId);
+    async step(expectedPresentationId = null, expectedSessionId = null, deltaTime, sourcePositions = {}) {
+      const json = await dotNetRef.invokeMethodAsync(deltaTime === undefined ? 'Step' : 'StepWithClock',
+        expectedPresentationId, expectedSessionId, ...(deltaTime === undefined ? [] : [deltaTime, sourcePositions]));
       return JSON.parse(json);
     },
-    async choice(choiceId, expectedPresentationId = null, expectedSessionId = null) {
-      const json = await dotNetRef.invokeMethodAsync('Choice', choiceId, expectedPresentationId, expectedSessionId);
+    async choice(choiceId, expectedPresentationId = null, expectedSessionId = null, deltaTime, sourcePositions = {}) {
+      const json = await dotNetRef.invokeMethodAsync(deltaTime === undefined ? 'Choice' : 'ChoiceWithClock',
+        choiceId, expectedPresentationId, expectedSessionId, ...(deltaTime === undefined ? [] : [deltaTime, sourcePositions]));
       return JSON.parse(json);
     },
-    async break(expectedPresentationId = null, expectedSessionId = null) {
-      const json = await dotNetRef.invokeMethodAsync('Break', expectedPresentationId, expectedSessionId);
+    async break(expectedPresentationId = null, expectedSessionId = null, deltaTime, sourcePositions = {}) {
+      const json = await dotNetRef.invokeMethodAsync(deltaTime === undefined ? 'Break' : 'BreakWithClock',
+        expectedPresentationId, expectedSessionId, ...(deltaTime === undefined ? [] : [deltaTime, sourcePositions]));
       return JSON.parse(json);
     },
     async setLanguage(locale, expectedPresentationId = null, expectedSessionId = null) {
       const json = await dotNetRef.invokeMethodAsync('SetLanguage', locale, expectedPresentationId, expectedSessionId);
       return JSON.parse(json);
+    },
+    async setSecondaryLanguage(locale, expectedPresentationId = null, expectedSessionId = null) {
+      const json = await dotNetRef.invokeMethodAsync('SetSecondaryLanguage', locale, expectedPresentationId, expectedSessionId);
+      return JSON.parse(json);
+    },
+    async reportClockPosition(sourceName, position, sessionId, deltaTime, sourcePositions = {}) {
+      return JSON.parse(await dotNetRef.invokeMethodAsync(deltaTime === undefined ? 'ReportClockPosition' : 'ReportClockPositionWithClock',
+        sourceName, position, sessionId, ...(deltaTime === undefined ? [] : [deltaTime, sourcePositions])));
+    },
+    async advanceClocks(deltaTime, sessionId, sourcePositions = {}) {
+      return JSON.parse(await dotNetRef.invokeMethodAsync('AdvanceClocksWithSources', deltaTime, sessionId, sourcePositions));
     },
     async getSamples() {
       const json = await dotNetRef.invokeMethodAsync('GetSamples');
@@ -793,7 +899,7 @@ async function loadSamples() {
       // Populate drawer dropdown
       if (el.sampleSelect) {
         const prevValue = el.sampleSelect.value;
-        el.sampleSelect.innerHTML = '<option value="">-- 选择示例剧本 --</option>';
+        el.sampleSelect.innerHTML = `<option value="">${escapeHtml(samplePlaceholder())}</option>`;
 
         for (const name of Object.keys(state.samples)) {
           const opt = document.createElement('option');
@@ -824,6 +930,7 @@ async function loadSamples() {
 // ==========================================================================
 let currentSessionEpoch = 0;
 let sessionOpChain = Promise.resolve();
+let sessionOpsSinceYield = 0;
 
 function enqueueSessionOp(opFn) {
   const opEpoch = currentSessionEpoch;
@@ -831,6 +938,13 @@ function enqueueSessionOp(opFn) {
     // If epoch changed before this op began, discard it immediately
     if (opEpoch !== currentSessionEpoch) {
       return;
+    }
+    // WASM calls may settle in one microtask chain. Yield periodically so a
+    // zero-duration automatic lane cannot monopolize rendering or sibling input.
+    if (++sessionOpsSinceYield > 32) {
+      sessionOpsSinceYield = 0;
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (opEpoch !== currentSessionEpoch) return;
     }
     try {
       await opFn(opEpoch);
@@ -854,6 +968,7 @@ async function startSession(script, requestedLocale = state.requestedLocale || '
   renderDiagnostics();
   state.currentActiveChoiceEl = null;
   state.requestedLocale = requestedLocale;
+  const secondaryLocale = state.secondaryLocale;
   currentSessionEpoch++;
   const sessionEpoch = currentSessionEpoch;
 
@@ -872,12 +987,12 @@ async function startSession(script, requestedLocale = state.requestedLocale || '
 
       let data = null;
       if (window.KtoryWasm && window.KtoryWasm.start) {
-        data = await window.KtoryWasm.start(script, requestedLocale, entryBlock);
+        data = await window.KtoryWasm.start(script, requestedLocale, entryBlock, secondaryLocale);
       } else {
         const res = await fetch('/api/session/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ script, requestedLocale, entryBlock })
+          body: JSON.stringify({ script, requestedLocale, entryBlock, secondaryLocale })
         });
         if (sessionEpoch !== currentSessionEpoch) return;
         if (res.ok) {
@@ -901,6 +1016,11 @@ async function startSession(script, requestedLocale = state.requestedLocale || '
 }
 
 async function stepSession(expectedPresentationId = null) {
+  if (multiTrackReader.active) {
+    return multiTrackReader.command('step', {
+      sessionId: state.currentSessionId, presentationId: expectedPresentationId || state.currentPresentationId
+    });
+  }
   if (expectedPresentationId && expectedPresentationId !== state.currentPresentationId) {
     return;
   }
@@ -922,13 +1042,14 @@ async function stepSession(expectedPresentationId = null) {
       }
 
       let data = null;
+      const clockInput = readerClocks.captureInput(targetSessionId);
       if (window.KtoryWasm && window.KtoryWasm.step) {
-        data = await window.KtoryWasm.step(targetPresentationId, targetSessionId);
+        data = await window.KtoryWasm.step(targetPresentationId, targetSessionId, clockInput.deltaTime, clockInput.sourcePositions);
       } else {
         const res = await fetch('/api/session/step', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ presentationId: targetPresentationId, sessionId: targetSessionId })
+          body: JSON.stringify({ presentationId: targetPresentationId, sessionId: targetSessionId, ...clockInput })
         });
         if (opEpoch !== currentSessionEpoch) return;
         if (res.ok) {
@@ -948,6 +1069,12 @@ async function stepSession(expectedPresentationId = null) {
 }
 
 async function submitChoice(choiceId, expectedPresentationId = null, expectedSessionId = null) {
+  if (multiTrackReader.active) {
+    return multiTrackReader.command('choice', {
+      sessionId: expectedSessionId || state.currentSessionId,
+      presentationId: expectedPresentationId || state.currentPresentationId
+    }, choiceId);
+  }
   if (expectedSessionId !== null && expectedSessionId !== state.currentSessionId) {
     console.debug('[Ktory] Ignored choice from a previous session.');
     return;
@@ -976,13 +1103,14 @@ async function submitChoice(choiceId, expectedPresentationId = null, expectedSes
       }
 
       let data = null;
+      const clockInput = readerClocks.captureInput(targetSessionId);
       if (window.KtoryWasm && window.KtoryWasm.choice) {
-        data = await window.KtoryWasm.choice(choiceId, targetPresentationId, targetSessionId);
+        data = await window.KtoryWasm.choice(choiceId, targetPresentationId, targetSessionId, clockInput.deltaTime, clockInput.sourcePositions);
       } else {
         const res = await fetch('/api/session/choice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ choiceId, presentationId: targetPresentationId, sessionId: targetSessionId })
+          body: JSON.stringify({ choiceId, presentationId: targetPresentationId, sessionId: targetSessionId, ...clockInput })
         });
         if (opEpoch !== currentSessionEpoch) return;
         if (res.ok) {
@@ -1049,6 +1177,39 @@ async function changeLanguage(locale) {
   });
 }
 
+async function changeSecondaryLanguage(locale) {
+  state.secondaryLocale = locale || null;
+  if (el.secondaryLanguage) el.secondaryLanguage.value = state.secondaryLocale || '';
+  if (state.status === 'Error' || state.status === 'Ready') return;
+
+  return enqueueSessionOp(async (opEpoch) => {
+    if (opEpoch !== currentSessionEpoch || !state.currentSessionId) return;
+    // Language settings apply to the active presentation after earlier queued inputs.
+    const token = { presentationId: state.currentPresentationId, sessionId: state.currentSessionId };
+    try {
+      if (isWasmPending()) await ensureRuntimeReady();
+      let data;
+      if (window.KtoryWasm?.setSecondaryLanguage) {
+        data = await window.KtoryWasm.setSecondaryLanguage(locale || null, token.presentationId, token.sessionId);
+      } else {
+        const res = await fetch('/api/session/secondary-language', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locale: locale || null, ...token })
+        });
+        if (opEpoch !== currentSessionEpoch) return;
+        if (!res.ok) throw new Error((await res.json()).error || 'Language refresh failed');
+        data = await res.json();
+      }
+      if (opEpoch !== currentSessionEpoch) return;
+      if (data) updateState(data, 'secondary');
+    } catch (err) {
+      if (opEpoch !== currentSessionEpoch) return;
+      console.error('Failed to change secondary language:', err);
+      reportSessionError(err.message || String(err));
+    }
+  });
+}
+
 async function restartSession() {
   const script = (el.scriptInput && el.scriptInput.value) || (state.samples[state.currentSampleKey] || '');
   if (script) {
@@ -1060,6 +1221,8 @@ async function restartSession() {
 // Narrative Stream & State Management
 // ==========================================================================
 function resetStoryStream() {
+  multiTrackReader.reset();
+  readerClocks.reset();
   clearAllPortraits();
   stopBgm(0);
   el.storyStream.innerHTML = '';
@@ -1084,14 +1247,25 @@ function renderTextValue(value, fallback = '', plain = false) {
 }
 
 function prepareReaderPayload(payload) {
-  if (!payload || payload.stepType === 1 || payload.stepType === 'Directive') return payload;
-  const html = renderTextValue(payload, payload.content || '');
-  return { ...payload, readingContent: payload.content,
-    content: window.ktoryReaderHost?.sanitizeHtml ? window.ktoryReaderHost.sanitizeHtml(html) : html };
+  if (!payload) return payload;
+  if (payload.text?.primary) {
+    payload = {
+      ...payload, content: renderTextValue(payload.text.primary), actualLanguage: payload.text.primary.actualLanguage,
+      readingContent: payload.text.primary.content,
+      speaker: payload.speakerName?.primary?.content ?? payload.speaker,
+      speakerActualLanguage: payload.speakerName?.primary?.actualLanguage ?? payload.speakerActualLanguage
+    };
+  }
+  if (window.ktoryReaderHost?.sanitizeHtml && payload.stepType !== 1 && payload.stepType !== 'Directive') {
+    payload = { ...payload, content: window.ktoryReaderHost.sanitizeHtml(payload.content || '') };
+  }
+  return payload;
 }
 
 function updateState(serverState, isLanguageSwitch = false) {
-  window.ktoryReaderHost?.onState(serverState);
+  window.ktoryReaderHost?.onState?.(serverState);
+  const samePresentation = state.currentSessionId === serverState.sessionId &&
+    state.currentPresentationId === serverState.presentationId && state.status === serverState.status;
   serverState = { ...serverState, payload: prepareReaderPayload(serverState.payload) };
   state.status = serverState.status;
   state.payload = serverState.payload;
@@ -1102,6 +1276,8 @@ function updateState(serverState, isLanguageSwitch = false) {
     serverState.choice?.presentationId ??
     0;
   state.requestedLocale = serverState.requestedLanguage;
+  state.secondaryLocale = serverState.secondaryLanguage || null;
+  if (el.secondaryLanguage) el.secondaryLanguage.value = state.secondaryLocale || '';
   state.defaultLocale = serverState.defaultLanguage;
   state.visitedItems = serverState.visitedItems || [];
   state.callStackDepth = serverState.callStackDepth || 0;
@@ -1109,6 +1285,8 @@ function updateState(serverState, isLanguageSwitch = false) {
   state.diagnostics = serverState.diagnostics || [];
   renderDiagnostics();
   state.autoPolicy = serverState.autoPolicy || serverState.payload?.autoPolicy || null;
+  readerClocks.sync(serverState);
+  if (multiTrackReader.sync(serverState, isLanguageSwitch)) return;
 
   if (el.dockLocaleTag) {
     const act = serverState.payload?.actualLanguage;
@@ -1116,10 +1294,19 @@ function updateState(serverState, isLanguageSwitch = false) {
   }
 
   updateDockStatus(state.status);
+  if (isLanguageSwitch === 'clock' && samePresentation) return;
+  if (!samePresentation) isLanguageSwitch = false;
+
+  // Supplementary text has no presentation lifecycle. In particular, preserve the
+  // running primary typewriter, its timers, and the existing choice button listeners.
+  if (isLanguageSwitch === 'secondary') {
+    if (state.status === 'AwaitingChoice') refreshSecondaryChoices(state.choice);
+    else if (state.status === 'SuspendedAtBeat') renderSecondaryText(state.payload);
+    return;
+  }
 
   // If Completed
   if (state.status === 'Completed') {
-    clearAllPortraits();
     el.storyCompletedBanner.style.display = 'block';
     el.dockStepHint.textContent = state.requestedLocale === 'en'
       ? 'Story sequence concluded'
@@ -1139,6 +1326,17 @@ function updateState(serverState, isLanguageSwitch = false) {
   // If Beat Active
   if (state.status === 'SuspendedAtBeat' && state.payload) {
     renderBeat(state.payload, isLanguageSwitch);
+    return;
+  }
+
+  // If Clock Waiting
+  if (state.status === 'WaitingForClock') {
+    const gate = serverState.pendingClockGates?.[0];
+    state.requiresInput = false;
+    state.clockGate = gate || null;
+    if (el.dockStepHint && gate) {
+      el.dockStepHint.textContent = readerClocks.waitHint(gate, state.requestedLocale);
+    }
   }
 }
 
@@ -1159,7 +1357,7 @@ function renderDiagnostics() {
 // ==========================================================================
 // Portrait Stage & Character Presentation Manager
 // ==========================================================================
-const portraitState = {
+let portraitState = {
   left: { id: null, src: null, timer: null },
   right: { id: null, src: null, timer: null }
 };
@@ -1460,9 +1658,10 @@ function playBgm(track, initialVolume = 1.0) {
 
   const volume = Math.max(0, Math.min(1, initialVolume != null ? Number(initialVolume) : 1.0));
 
-  // If already playing this track, adjust volume if needed
-  if (currentBgmAudio && currentBgmTrack === resolvedUrl && !currentBgmAudio.paused) {
+  // Reusing this player preserves the position when resuming a paused track.
+  if (currentBgmAudio && currentBgmTrack === resolvedUrl) {
     setBgmVolume(volume, 0);
+    if (currentBgmAudio.paused) attemptBgmPlayback(currentBgmAudio, volume);
     return;
   }
 
@@ -1473,22 +1672,28 @@ function playBgm(track, initialVolume = 1.0) {
   audio.volume = volume;
   audio.src = resolvedUrl;
 
+  let fallbackAttempted = false;
   audio.onerror = () => {
+    // A late error belongs to this player, never the replacement song or session.
+    if (currentBgmAudio !== audio || fallbackAttempted) return;
     if (resolvedUrl.startsWith('audio/')) {
-      const fallbackUrl = resolvedUrl.slice(6);
-      if (audio.src !== fallbackUrl) {
-        audio.src = fallbackUrl;
-        audio.play().catch(() => { });
-      }
+      fallbackAttempted = true;
+      audio.src = resolvedUrl.slice(6);
+      attemptBgmPlayback(audio, volume);
     }
   };
 
   currentBgmAudio = audio;
   currentBgmTrack = resolvedUrl;
 
+  attemptBgmPlayback(audio, volume);
+}
+
+function attemptBgmPlayback(audio, volume) {
   const playPromise = audio.play();
   if (playPromise !== undefined) {
     playPromise.catch(err => {
+      if (currentBgmAudio !== audio) return;
       if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
         pendingBgm = { audio, targetVolume: volume };
       } else {
@@ -1498,14 +1703,19 @@ function playBgm(track, initialVolume = 1.0) {
   }
 }
 
+function pauseBgm() {
+  if (window.ktoryReaderHost) return;
+  stopBgmFade();
+  pendingBgm = null;
+  currentBgmAudio?.pause();
+}
+
 function resumePendingAudio() {
-  if (pendingBgm && pendingBgm.audio) {
+  if (pendingBgm && pendingBgm.audio === currentBgmAudio) {
     const { audio, targetVolume } = pendingBgm;
     pendingBgm = null;
     audio.volume = targetVolume;
-    audio.play().catch(e => {
-      console.warn('Failed to resume pending audio:', e);
-    });
+    attemptBgmPlayback(audio, targetVolume);
   }
 }
 
@@ -1563,7 +1773,9 @@ function processAudioTags(tags) {
       if (duration == null) duration = 0;
 
       setBgmVolume(targetVol, duration);
-    } else if (name === 'stopbgm' || name === 'stop_bgm' || name === 'pausebgm' || name === 'pause_bgm') {
+    } else if (name === 'pausebgm' || name === 'pause_bgm') {
+      pauseBgm();
+    } else if (name === 'stopbgm' || name === 'stop_bgm') {
       let duration = parseDurationArg(namedArgs.duration ?? namedArgs.fade);
       if (duration == null && posArgs.length > 0) {
         duration = parseDurationArg(posArgs[0]);
@@ -1575,8 +1787,43 @@ function processAudioTags(tags) {
   }
 }
 
+function retireCurrentSentence() {
+  clearTimers();
+  clearTimeout(state.displayTimer);
+  state.displayTimer = null;
+  state.displayLifetimeIdentity = null;
+  const passage = state.currentActivePassageEl;
+  if (passage) {
+    passage.classList.remove('lyrics-active');
+    passage.classList.add('sentence-history');
+    if (currentPresentationLane?.isPassive || state.isPassive) {
+      passage.hidden = true;
+      passage.remove();
+      if (currentPresentationLane) currentPresentationLane.panel.hidden = true;
+    }
+  }
+  if (state.currentActiveCursorEl) state.currentActiveCursorEl.style.display = 'none';
+  state.currentActivePassageEl = null;
+  state.currentActiveTypingEl = null;
+  state.currentActiveSpeakerEl = null;
+  state.currentActiveCursorEl = null;
+  state.fullTextHtml = '';
+}
+
 function renderBeat(payload, isLanguageSwitch = false) {
   const isDirective = payload.stepType === 1 || payload.stepType === 'Directive';
+
+  if (!isLanguageSwitch) retireCurrentSentence();
+
+  // An empty input anchor is a new sentence without a printing phase.
+  if (!isDirective && !payload.content) {
+    if (!isLanguageSwitch) {
+      state.activeTags = payload.tags || [];
+      processAudioTags(state.activeTags);
+      setupHoldTimer(state.activeTags);
+    }
+    return;
+  }
 
   // 1. Directives beat (#do, .bg, .sfx, etc.)
   if (isDirective) {
@@ -1609,7 +1856,6 @@ function renderBeat(payload, isLanguageSwitch = false) {
     state.fastForwardLockTimer = null;
     state.isTyping = false;
     state.canFastForward = true;
-    if (el.btnFastForward) el.btnFastForward.disabled = true;
 
     // 2. Hide typing cursor
     if (state.currentActiveCursorEl) {
@@ -1631,6 +1877,7 @@ function renderBeat(payload, isLanguageSwitch = false) {
     // 4. Update the text content
     state.fullTextHtml = payload.content;
     state.currentActiveTypingEl.innerHTML = payload.content;
+    renderSecondaryText(payload);
 
     if (payload.tags) {
       state.activeTags = payload.tags;
@@ -1708,11 +1955,70 @@ function renderBeat(payload, isLanguageSwitch = false) {
     state.currentActiveSpeakerEl = null;
   }
 
+  const isPassiveLyrics = Boolean(currentPresentationLane?.isPassive || state.isPassive);
+  if (isPassiveLyrics) {
+    passage.classList.add('lyrics-passage-item', 'lyrics-active');
+  }
+
   state.currentActivePassageEl = passage;
+  if (currentPresentationLane) currentPresentationLane.panel.hidden = false;
   el.storyStream.appendChild(passage);
+  renderSecondaryText(payload);
   scrollToBottom();
 
-  startTypewriter(textContainer, cursorEl, payload.content, tags);
+  if (isPassiveLyrics) {
+    if (cursorEl) cursorEl.style.display = 'none';
+    textContainer.innerHTML = payload.content;
+    state.fullTextHtml = payload.content;
+    state.isTyping = false;
+    state.canFastForward = true;
+    state.currentActiveTypingEl = textContainer;
+    state.currentActiveCursorEl = cursorEl;
+    setupHoldTimer(tags);
+  } else {
+    startTypewriter(textContainer, cursorEl, payload.content, tags);
+  }
+}
+
+function renderSecondaryText(payload) {
+  const passage = state.currentActivePassageEl;
+  // Empty anchors have no current sentence to translate.
+  if (!passage || !payload?.content || payload.stepType === 1 || payload.stepType === 'Directive') return;
+  const text = payload.text?.secondary;
+  const speaker = payload.speakerName?.secondary;
+  let block = passage.querySelector('.secondary-translation');
+  if (!block && !text && !speaker) return;
+  if (!block) {
+    block = document.createElement('div');
+    block.className = 'secondary-translation';
+    block.innerHTML = '<div class="secondary-speaker"></div><div class="secondary-content"></div>';
+    passage.appendChild(block);
+  }
+  block.hidden = !text && !speaker;
+  const speakerEl = block.querySelector('.secondary-speaker');
+  speakerEl.hidden = !speaker;
+  speakerEl.textContent = speaker?.content || '';
+  speakerEl.lang = speaker?.actualLanguage || '';
+  const textEl = block.querySelector('.secondary-content');
+  textEl.hidden = !text;
+  textEl.lang = text?.actualLanguage || '';
+  const html = renderTextValue(text);
+  textEl.innerHTML = window.ktoryReaderHost?.sanitizeHtml ? window.ktoryReaderHost.sanitizeHtml(html) : html;
+}
+
+function refreshSecondaryChoices(choicePayload) {
+  const group = state.currentActiveChoiceEl;
+  if (!group || !choicePayload) return;
+  const options = new Map((choicePayload.options || []).map(option => [option.id, option]));
+  group.querySelectorAll('.choice-card-btn').forEach(button => {
+    const secondary = options.get(button.dataset.choiceId)?.text?.secondary;
+    const label = button.querySelector('.choice-secondary');
+    if (!label) return;
+    if (secondary?.segments) label.innerHTML = renderTextValue(secondary, '', true);
+    else label.textContent = secondary?.content || '';
+    label.lang = secondary?.actualLanguage || '';
+    label.hidden = !secondary;
+  });
 }
 
 function renderDirectiveBeat(payload) {
@@ -1771,42 +2077,36 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
 
   // Parse .skippable(false, [duration])
   state.canFastForward = true;
-  if (el.btnFastForward) el.btnFastForward.disabled = false;
   const skippableTag = tags.find(t => t.name.toLowerCase() === 'skippable');
   if (skippableTag) {
-    const rawAllowed = skippableTag.positionalArgs.length > 0 ? skippableTag.positionalArgs[0] : true;
+    const rawAllowed = skippableTag.namedArgs?.enabled ?? true;
     const allowed = rawAllowed !== false && rawAllowed !== 'false';
     if (!allowed) {
       state.canFastForward = false;
-      if (el.btnFastForward) el.btnFastForward.disabled = true;
 
       // Check if explicit duration parameter t is provided
-      const hasDuration = skippableTag.positionalArgs.length > 1 &&
-        skippableTag.positionalArgs[1] !== null &&
-        skippableTag.positionalArgs[1] !== '';
+      const hasDuration = skippableTag.namedArgs?.seconds !== undefined;
       if (hasDuration) {
-        const duration = Number(skippableTag.positionalArgs[1]);
+        const duration = Number(skippableTag.namedArgs.seconds);
         if (duration > 0) {
           el.dockStepHint.textContent = state.requestedLocale === 'en'
             ? `Fast-forward locked (${duration}s)...`
             : state.requestedLocale === 'ja'
               ? `早送り待機中 (${duration}s)...`
               : `快显锁定中 (${duration}s)...`;
-          state.fastForwardLockTimer = setTimeout(() => {
+          state.fastForwardLockTimer = setTimeout(capturePresentationCallback(() => {
             if (typewriterPresentationId !== state.currentPresentationId || typewriterEpoch !== currentSessionEpoch) {
               return;
             }
             state.canFastForward = true;
-            if (el.btnFastForward) el.btnFastForward.disabled = false;
             el.dockStepHint.textContent = state.requestedLocale === 'en'
               ? 'Click to fast-forward'
               : state.requestedLocale === 'ja'
                 ? 'クリックで早送り'
                 : '点击可快速显示全文';
-          }, duration * 1000);
+          }), duration * 1000);
         } else {
           state.canFastForward = true;
-          if (el.btnFastForward) el.btnFastForward.disabled = false;
         }
       } else {
         // When t is omitted, fast-forward is prohibited for the entire printing duration per Spec §2.6
@@ -1825,7 +2125,7 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
   targetEl.innerHTML = '';
 
   const speedMs = 18; // literary typewriter speed
-  state.typewriterTimer = setInterval(() => {
+  state.typewriterTimer = setInterval(capturePresentationCallback(() => {
     if (typewriterPresentationId !== state.currentPresentationId || typewriterEpoch !== currentSessionEpoch) {
       clearInterval(state.typewriterTimer);
       state.typewriterTimer = null;
@@ -1839,10 +2139,14 @@ function startTypewriter(targetEl, cursorEl, htmlContent, tags) {
     visibleHtml += tokens[tokenIdx++];
     targetEl.innerHTML = visibleHtml;
     scrollToBottom();
-  }, speedMs);
+  }), speedMs);
 }
 
 function fastForwardTypewriter() {
+  if (state === primaryReaderState && multiTrackReader.active) {
+    multiTrackReader.routeInput(fastForwardTypewriter);
+    return;
+  }
   if (!state.isTyping || !state.canFastForward) return;
   const currentPresId = state.currentPresentationId;
   const currentEpoch = currentSessionEpoch;
@@ -1871,7 +2175,6 @@ function finishTypewriter(cursorEl, tags, expectedPresentationId = null, expecte
     state.fastForwardLockTimer = null;
   }
   state.canFastForward = true;
-  if (el.btnFastForward) el.btnFastForward.disabled = true;
   if (cursorEl) cursorEl.style.display = 'none';
 
   setupHoldTimer(tags);
@@ -1913,6 +2216,31 @@ function estimateReadingTime(text, lang = null) {
 // ==========================================================================
 // Hold & Auto-Advance Timer (.next / .wait / #AUTO)
 // ==========================================================================
+function startDisplayLifetime(tags) {
+  const duration = tags.find(tag => tag.name.toLowerCase() === 'duration');
+  if (!duration) return;
+  const owner = state;
+  const displayLane = currentPresentationLane;
+  const identity = `${owner.currentSessionId}:${owner.currentPresentationId}`;
+  if (owner.displayLifetimeIdentity === identity) return;
+  if (owner.displayTimer) clearTimeout(owner.displayTimer);
+  owner.displayLifetimeIdentity = identity;
+  owner.displayTimer = null;
+  const passage = owner.currentActivePassageEl;
+  if (!duration || !passage) return;
+  const epoch = currentSessionEpoch;
+  owner.displayTimer = setTimeout(() => {
+    if (epoch !== currentSessionEpoch || owner.displayLifetimeIdentity !== identity) return;
+    // Only this content instance may hide. It never clears a renderer slot or advances Core.
+    passage.hidden = true;
+    if (displayLane?.isPassive && owner.currentActivePassageEl === passage) {
+      displayLane.panel.hidden = true;
+      multiTrackReader.checkPassiveState();
+    }
+    owner.displayTimer = null;
+  }, Math.max(0, Number(duration.namedArgs?.seconds) || 0) * 1000);
+}
+
 function setupHoldTimer(tags, defaultHoldSec = 0) {
   if (state.holdTimer) {
     clearInterval(state.holdTimer);
@@ -1922,18 +2250,27 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
   const holdPresentationId = state.currentPresentationId;
   const holdEpoch = currentSessionEpoch;
 
+  startDisplayLifetime(tags);
+  if (state.isAuxiliary || state.executionEnded) {
+    state.isHolding = false;
+    state.autoAdvanceOnHoldEnd = false;
+    state.allowClickInterrupt = false;
+    return;
+  }
+
   const nextTag = tags.find(t => t.name.toLowerCase() === 'next');
   const waitTag = tags.find(t => t.name.toLowerCase() === 'wait');
   const autoPolicy = state.autoPolicy || (state.payload && state.payload.autoPolicy);
 
-  const readingTime = estimateReadingTime(state.payload?.content || '', state.payload?.actualLanguage || state.requestedLocale);
-  state.usesEstimatedWait = !!waitTag && waitTag.positionalArgs.length === 0;
+  const readingTime = estimateReadingTime(state.payload?.readingContent ?? state.payload?.content ?? '', state.payload?.actualLanguage || state.requestedLocale);
+  state.usesEstimatedWait = !!waitTag && waitTag.namedArgs?.seconds === undefined;
   state.usesEstimatedAuto = false;
   state.minimumHoldDuration = waitTag
-    ? (state.usesEstimatedWait ? readingTime : Math.max(0, Number(waitTag.positionalArgs[0]) || 0)) : 0;
-  state.autoAdvanceOnHoldEnd = !!nextTag || !!autoPolicy?.enabled || state.autoPlay;
+    ? (state.usesEstimatedWait ? readingTime : Math.max(0, Number(waitTag.namedArgs?.seconds) || 0)) : 0;
+  const directiveAuto = state.payload?.stepType === 1 || state.payload?.stepType === 'Directive';
+  state.autoAdvanceOnHoldEnd = !state.isAuxiliary && (!!nextTag || !!autoPolicy?.enabled || state.autoPlay || directiveAuto);
   if (nextTag) {
-    state.autoAdvanceDuration = Math.max(0, Number(nextTag.positionalArgs[0]) || 0);
+    state.autoAdvanceDuration = Math.max(0, Number(nextTag.namedArgs?.seconds) || 0);
   } else if (waitTag) {
     // A local wait replaces the automatic default delay without enabling automatic playback.
     state.autoAdvanceDuration = 0;
@@ -1941,6 +2278,8 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     state.usesEstimatedAuto = autoPolicy.useEstimatedReadingTime &&
       (state.payload?.stepType === 0 || state.payload?.stepType === 'Text');
     state.autoAdvanceDuration = state.usesEstimatedAuto ? readingTime : Math.max(0, Number(autoPolicy.defaultWaitSeconds) || 0);
+  } else if (directiveAuto) {
+    state.autoAdvanceDuration = 0;
   } else if (state.autoPlay) {
     state.autoAdvanceDuration = 2.2;
   } else {
@@ -1965,7 +2304,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
     updateHoldHint();
 
     const intervalMs = 25;
-    state.holdTimer = setInterval(() => {
+    state.holdTimer = setInterval(capturePresentationCallback(() => {
       // Guard against stale presentation or session epoch
       if (holdPresentationId !== state.currentPresentationId || holdEpoch !== currentSessionEpoch) {
         clearInterval(state.holdTimer);
@@ -1994,7 +2333,7 @@ function setupHoldTimer(tags, defaultHoldSec = 0) {
           el.dockStepHint.textContent = getAdvanceHint();
         }
       }
-    }, intervalMs);
+    }), intervalMs);
   } else {
     // Normal manual step
     state.isHolding = false;
@@ -2058,6 +2397,11 @@ function refreshHoldLanguage(payload) {
 
 // Stage / Viewport Advance Trigger
 function handleAdvanceAction() {
+  if (state === primaryReaderState && multiTrackReader.active) {
+    multiTrackReader.routeInput(handleAdvanceAction);
+    return;
+  }
+  if (state.status === 'WaitingForClock') return;
   if (state.status !== 'SuspendedAtBeat') {
     return; // Player must select an option
   }
@@ -2083,6 +2427,7 @@ function handleAdvanceAction() {
   }
 
   // 3. Normal step
+  // The next delivered sentence retires this display; an unreleased at gate does not.
   stepSession(state.currentPresentationId);
 }
 
@@ -2099,6 +2444,7 @@ function clearTimers() {
 // Choice Menu Rendering (Ink Inline Style)
 // ==========================================================================
 function renderChoices(choicePayload) {
+  retireCurrentSentence();
   clearTimers();
   state.currentActiveTypingEl = null;
   state.currentActiveSpeakerEl = null;
@@ -2142,6 +2488,7 @@ function renderChoices(choicePayload) {
     const btn = document.createElement('button');
     btn.className = 'choice-card-btn';
     btn.disabled = !opt.canSelect;
+    btn.dataset.choiceId = opt.id;
 
     const consumedTag = opt.isConsumed
       ? `<span class="choice-state-tag">${state.requestedLocale === 'en' ? '✓ Visited' : state.requestedLocale === 'ja' ? '✓ 探索済み' : '✓ 已探索'}</span>`
@@ -2150,12 +2497,15 @@ function renderChoices(choicePayload) {
     btn.innerHTML = `
       <div class="choice-btn-left">
         <span class="choice-marker">${escapeHtml(opt.marker || '*')}</span>
-        <span class="choice-text">${renderTextValue(opt, opt.label, true)}</span>
+        <span class="choice-labels">
+          <span class="choice-text">${renderTextValue(opt.text?.primary, opt.label, true)}</span>
+          <span class="choice-secondary" hidden></span>
+        </span>
       </div>
       ${consumedTag}
     `;
 
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', capturePresentationCallback((e) => {
       e.stopPropagation();
       // Guard: Stale button clicks on old content must not affect new content
       if (state.currentSessionId !== choiceSessionId || state.currentPresentationId !== choicePresentationId ||
@@ -2169,12 +2519,13 @@ function renderChoices(choicePayload) {
       choiceGroup.classList.add('has-selection');
       state.currentActiveChoiceEl = null;
       submitChoice(opt.id, choicePresentationId, choiceSessionId);
-    });
+    }));
 
     listEl.appendChild(btn);
   });
 
   el.storyStream.appendChild(choiceGroup);
+  refreshSecondaryChoices(choicePayload);
   scrollToBottom();
 
   el.dockStepHint.textContent = state.requestedLocale === 'en'
@@ -2187,23 +2538,26 @@ function renderChoices(choicePayload) {
 // ==========================================================================
 // Status Updates
 // ==========================================================================
-function updateDockStatus(status) {
-  el.dockStatusText.textContent = status;
+const STATUS_LABELS = {
+  zh: { Ready: '就绪', SuspendedAtBeat: '等待推进', AwaitingChoice: '等待选择', Completed: '已完成', Error: '出错', WaitingForClock: '等待时钟', WaitingForTrack: '等待辅助结束' },
+  en: { Ready: 'Ready', SuspendedAtBeat: 'Waiting to advance', AwaitingChoice: 'Awaiting choice', Completed: 'Completed', Error: 'Error', WaitingForClock: 'Waiting for clock', WaitingForTrack: 'Waiting for auxiliary track' },
+  ja: { Ready: '準備完了', SuspendedAtBeat: '進行待ち', AwaitingChoice: '選択待ち', Completed: '完了', Error: 'エラー', WaitingForClock: 'クロック待ち', WaitingForTrack: '補助トラック待ち' }
+};
 
-  if (status === 'Completed') {
-    el.dockStatusDot.style.background = 'var(--accent-gold)';
-    el.dockStatusDot.style.boxShadow = '0 0 6px var(--accent-gold)';
-  } else if (status === 'AwaitingChoice') {
-    el.dockStatusDot.style.background = 'var(--accent-blue)';
-    el.dockStatusDot.style.boxShadow = '0 0 6px var(--accent-blue)';
-  } else {
-    el.dockStatusDot.style.background = 'var(--accent-green)';
-    el.dockStatusDot.style.boxShadow = '0 0 6px var(--accent-green)';
-  }
+function statusLabel(status, locale) {
+  const labels = STATUS_LABELS[locale] || STATUS_LABELS.en;
+  return labels[status] || status;
+}
+
+function updateDockStatus(status) {
+  el.dockStatusText.textContent = statusLabel(status, state.requestedLocale);
+  el.dockStatusDot.dataset.status = status;
 }
 
 // Helpers
 function reportSessionError(message) {
+  multiTrackReader.reset();
+  readerClocks.reset();
   clearTimers();
   state.status = 'Error';
   state.choice = null;
@@ -2227,3 +2581,598 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// A presentation renderer per lane, sharing the single-track display policies
+// above. Narrative execution remains entirely in Core and crosses one serial
+// request queue. A refreshed snapshot is not an instruction to replay a beat.
+class MultiTrackReader {
+  constructor() {
+    this.active = false;
+    this.lanes = new Map();
+    this.pending = new Set();
+    this.container = null;
+    this.lyricsDock = null;
+    this.lyricsScrim = null;
+  }
+
+  ensureLyricsDock() {
+    if (!this.lyricsDock) {
+      let dock = document.getElementById('readerLyricsDock');
+      let scrim = document.getElementById('readerLyricsScrim');
+      if (!dock) {
+        scrim = document.createElement('div');
+        scrim.className = 'lyrics-gradient-scrim';
+        scrim.id = 'readerLyricsScrim';
+        scrim.setAttribute('aria-hidden', 'true');
+
+        dock = document.createElement('aside');
+        dock.className = 'reader-lyrics-dock';
+        dock.id = 'readerLyricsDock';
+        dock.setAttribute('role', 'region');
+        dock.setAttribute('aria-label', 'Lyrics');
+
+        const floatingDock = document.getElementById('floatingDock');
+        if (floatingDock && floatingDock.parentNode) {
+          floatingDock.parentNode.insertBefore(scrim, floatingDock);
+          floatingDock.parentNode.insertBefore(dock, floatingDock);
+        } else if (document.body) {
+          document.body.appendChild(scrim);
+          document.body.appendChild(dock);
+        }
+      }
+      this.lyricsDock = dock;
+      this.lyricsScrim = scrim;
+    }
+    this.lyricsDock.hidden = false;
+    if (this.lyricsScrim) {
+      this.lyricsScrim.hidden = false;
+      this.lyricsScrim.classList?.add?.('visible');
+    }
+    const readerContainer = document.getElementById('readerContainer');
+    if (readerContainer) {
+      readerContainer.classList?.add?.('has-passive-lyrics');
+    }
+    return this.lyricsDock;
+  }
+
+  checkPassiveState() {
+    const hasPassive = [...this.lanes.values()].some(lane => lane.isPassive && !lane.panel.hidden && !lane.panel?.classList?.contains('lane-completed'));
+    if (!hasPassive) {
+      if (this.lyricsDock) this.lyricsDock.hidden = true;
+      if (this.lyricsScrim) {
+        this.lyricsScrim.classList.remove('visible');
+        this.lyricsScrim.hidden = true;
+      }
+      const readerContainer = document.getElementById('readerContainer');
+      if (readerContainer) {
+        readerContainer.classList?.remove?.('has-passive-lyrics');
+      }
+    } else {
+      if (this.lyricsDock) this.lyricsDock.hidden = false;
+      if (this.lyricsScrim) {
+        this.lyricsScrim.hidden = false;
+        this.lyricsScrim.classList?.add?.('visible');
+      }
+      const readerContainer = document.getElementById('readerContainer');
+      if (readerContainer) {
+        readerContainer.classList?.add?.('has-passive-lyrics');
+      }
+    }
+    if (this.container) {
+      const activeInteractiveCount = [...this.lanes.values()].filter(lane => !lane.isPassive && lane.panel.style.display !== 'none' && !lane.panel?.classList?.contains('lane-completed')).length;
+      if (activeInteractiveCount === 0) {
+        this.container.style.display = 'none';
+      } else {
+        this.container.style.display = '';
+        this.container.classList?.toggle?.('single-interactive-lane', activeInteractiveCount === 1);
+      }
+    }
+  }
+
+  reset() {
+    for (const lane of this.lanes.values()) {
+      if (lane.state.displayTimer) clearTimeout(lane.state.displayTimer);
+      this.retire(lane);
+    }
+    this.lanes.clear();
+    this.pending.clear();
+    this.active = false;
+    this.container = null;
+    if (this.lyricsDock) {
+      this.lyricsDock.innerHTML = '';
+      this.lyricsDock.hidden = true;
+    }
+    if (this.lyricsScrim) {
+      this.lyricsScrim.classList?.remove?.('visible');
+      this.lyricsScrim.hidden = true;
+    }
+    const readerContainer = document.getElementById('readerContainer');
+    if (readerContainer) {
+      readerContainer.classList?.remove?.('has-passive-lyrics');
+    }
+  }
+
+  retire(lane) {
+    withPresentationContext(lane, () => {
+      clearTimers();
+      clearAllPortraits();
+      state.currentPresentationId = 0;
+      state.status = 'Completed';
+      state.currentActiveChoiceEl?.querySelectorAll('.choice-card-btn').forEach(button => button.disabled = true);
+      lane.advance.hidden = true;
+      lane.panel.classList.add('lane-completed');
+      lane.elements.dockStepHint.textContent = '';
+    });
+    if (window.ktoryReaderHost) {
+      lane.panel.remove();
+    } else if (lane.isPassive) {
+      lane.panel.remove();
+      this.checkPassiveState();
+    } else if (lane.shouldHide) {
+      lane.panel.remove();
+    }
+  }
+
+  createLane(presentation, isPassive = false, shouldHide = false) {
+    const panel = document.createElement('section');
+    panel.className = isPassive ? 'reader-lane passive-lyrics-lane' : 'reader-lane';
+    panel.dataset.laneId = presentation.laneId;
+    if (shouldHide) panel.style.display = 'none';
+    const titleText = presentation.laneId === 'root' ? 'Story' : presentation.laneName;
+    const title = document.createElement('h3');
+    title.className = isPassive ? 'lyrics-badge-row' : 'reader-lane-title';
+    if (isPassive) {
+      title.innerHTML = `<span class="lyrics-badge-glyph">♫</span><span class="lyrics-badge-title">${escapeHtml(titleText)}</span>`;
+    } else {
+      title.textContent = titleText;
+    }
+    const portraits = document.createElement('div');
+    portraits.className = 'lane-portraits';
+    const left = document.createElement('div');
+    left.className = 'portrait-slot portrait-left';
+    const right = document.createElement('div');
+    right.className = 'portrait-slot portrait-right';
+    portraits.appendChild(left);
+    portraits.appendChild(right);
+    const stream = document.createElement('div');
+    stream.className = isPassive ? 'lane-stream lyrics-stream' : 'lane-stream';
+    const hint = document.createElement('div');
+    hint.className = isPassive ? 'lane-hint lyrics-hint' : 'lane-hint';
+    if (isPassive) hint.hidden = true;
+    const progress = document.createElement('div');
+    progress.className = isPassive ? 'lane-progress lyrics-progress' : 'lane-progress';
+    if (isPassive) progress.style.display = 'none';
+    const advance = document.createElement('button');
+    advance.className = 'lane-advance';
+    advance.type = 'button';
+    advance.textContent = primaryReaderState.requestedLocale === 'zh' ? '继续' : primaryReaderState.requestedLocale === 'ja' ? '進む' : 'Continue';
+    if (isPassive) advance.hidden = true;
+    panel.appendChild(title);
+    panel.appendChild(portraits);
+    panel.appendChild(stream);
+    panel.appendChild(progress);
+    panel.appendChild(hint);
+    panel.appendChild(advance);
+    if (isPassive) {
+      const lyricsDock = this.ensureLyricsDock();
+      lyricsDock.appendChild(panel);
+    } else if (this.container) {
+      this.container.appendChild(panel);
+    }
+    const lane = {
+      panel, advance, requiresInput: presentation.requiresInput, isPassive, shouldHide,
+      portraits: { left: { id: null, src: null, timer: null }, right: { id: null, src: null, timer: null } },
+      state: {
+        ...primaryReaderState, laneId: presentation.laneId, currentPresentationId: 0,
+        isTyping: false, isHolding: false, typewriterTimer: null, fastForwardLockTimer: null, holdTimer: null,
+        currentActivePassageEl: null, currentActiveTypingEl: null, currentActiveSpeakerEl: null,
+        currentActiveCursorEl: null, currentActiveChoiceEl: null, activeTags: [], fullTextHtml: ''
+      },
+      elements: {
+        ...primaryReaderElements, storyStream: stream, dockStepHint: hint, dockProgressBar: progress,
+        portraitSlotLeft: left, portraitSlotRight: right
+      }
+    };
+    withPresentationContext(lane, () => advance.addEventListener('click', capturePresentationCallback(event => {
+      event.stopPropagation();
+      if (lane.requiresInput) handleAdvanceAction();
+    })));
+
+    return lane;
+  }
+
+  syncOutputs(snapshot, languageRefresh) {
+    if (this.outputSession !== snapshot.sessionId) {
+      this.reset();
+      this.outputSession = snapshot.sessionId;
+      this.lastOutputSequence = 0;
+    }
+    if (!this.active) {
+      clearTimers();
+      this.active = true;
+      this.container = document.createElement('div');
+      this.container.className = 'parallel-reader';
+      primaryReaderElements.storyStream.appendChild(this.container);
+    }
+
+    const ensureLane = presentation => {
+      const id = presentation.laneId ?? presentation.trackId;
+      let lane = this.lanes.get(id);
+      if (!lane) {
+        const isMain = presentation.isMain === true;
+        lane = this.createLane({ ...presentation, laneId: id,
+          laneName: presentation.laneName ?? presentation.trackName ?? id,
+          requiresInput: isMain }, !isMain, false);
+        lane.isMain = isMain;
+        if (!isMain) lane.panel.hidden = true;
+        lane.state.isAuxiliary = !isMain;
+        this.lanes.set(id, lane);
+      }
+      return lane;
+    };
+    const display = (presentation, refresh = false) => {
+      const lane = ensureLane(presentation);
+      const token = presentation.token;
+      if (!token) return;
+      const isNew = lane.state.currentSessionId !== token.sessionId ||
+        lane.state.currentPresentationId !== token.presentationId;
+      if (refresh && isNew) return;
+      withPresentationContext(lane, () => {
+        if (isNew) clearTimers();
+        Object.assign(state, {
+          currentSessionId: token.sessionId, currentPresentationId: token.presentationId,
+          payload: prepareReaderPayload(presentation.payload), choice: presentation.choice,
+          requestedLocale: snapshot.requestedLanguage, secondaryLocale: snapshot.secondaryLanguage,
+          autoPolicy: presentation.autoPolicy || presentation.payload?.autoPolicy || null,
+          isAuxiliary: !lane.isMain
+        });
+        if (!refresh) {
+          state.executionEnded = false;
+          state.status = presentation.choice ? 'AwaitingChoice' : 'SuspendedAtBeat';
+        }
+        lane.requiresInput = lane.isMain && !state.executionEnded;
+        lane.advance.hidden = !lane.requiresInput || state.status !== 'SuspendedAtBeat';
+        if (state.choice) {
+          if (refresh && languageRefresh === 'secondary') refreshSecondaryChoices(state.choice);
+          else if (isNew || refresh) renderChoices(state.choice);
+        } else if (state.payload) {
+          if (isNew && state.payload.content) lane.panel.hidden = false;
+          if (refresh && languageRefresh === 'secondary') renderSecondaryText(state.payload);
+          else if (isNew) renderBeat(state.payload);
+          else if (refresh) renderBeat(state.payload, true);
+
+        }
+      });
+    };
+    const endExecution = lane => {
+      lane.requiresInput = false;
+      lane.advance.hidden = true;
+      lane.state.status = 'Completed';
+      lane.state.executionEnded = true;
+      // Printing and display lifetime may continue. Only input/advance work is retired.
+      clearInterval(lane.state.holdTimer);
+      lane.state.holdTimer = null;
+      lane.state.isHolding = false;
+      lane.state.autoAdvanceOnHoldEnd = false;
+      lane.state.currentActiveChoiceEl?.querySelectorAll('.choice-card-btn').forEach(button => button.disabled = true);
+    };
+
+    for (const output of snapshot.outputEvents || []) {
+      if (output.sessionId !== snapshot.sessionId || output.sequence <= this.lastOutputSequence) continue;
+      this.lastOutputSequence = output.sequence;
+      const kind = typeof output.kind === 'number'
+        ? ['Content', 'LanguageRefresh', 'TrackEnded', 'SessionEnded'][output.kind] : output.kind;
+      if (kind === 'Content' || kind === 'LanguageRefresh') display(output, kind === 'LanguageRefresh');
+      else if (kind === 'TrackEnded') {
+        const lane = this.lanes.get(output.trackId);
+        if (lane) endExecution(lane);
+      } else if (kind === 'SessionEnded') {
+        for (const lane of this.lanes.values()) endExecution(lane);
+      }
+    }
+
+    // Snapshots support initial observation/reconnection, never replay an existing beat's effects.
+    const missingRetainedHeads = new Set((snapshot.retainedPresentations || [])
+      .filter(presentation => !this.lanes.has(presentation.laneId)).map(presentation => presentation.laneId));
+    for (const presentation of snapshot.retainedPresentations || []) {
+      if (missingRetainedHeads.has(presentation.laneId)) display(presentation);
+    }
+    const active = new Map((snapshot.activePresentations || []).map(p => [p.laneId, p]));
+    const gates = new Map((snapshot.pendingClockGates || []).map(gate => [gate.laneId, gate]));
+    for (const gate of gates.values()) {
+      const lane = ensureLane({ ...gate, isMain: gate.isMain ?? gate.laneId === 'root' });
+      lane.clockGate = gate;
+      lane.requiresInput = false;
+      lane.advance.hidden = !lane.requiresInput;
+      lane.state.status = 'WaitingForClock';
+      lane.state.clockGate = gate;
+      lane.state.requiresInput = lane.requiresInput;
+      lane.state.currentSessionId = snapshot.sessionId;
+      // A gate has an execution token; it must not replace a displayed lyric's token.
+      if (!lane.state.currentPresentationId) lane.state.currentPresentationId = gate.token.presentationId;
+      const uiLocale = (window.ktoryReaderHost ? document.documentElement?.lang : snapshot.requestedLanguage) || 'en';
+      const hint = readerClocks.waitHint(gate, uiLocale);
+      lane.elements.dockStepHint.textContent = hint;
+      lane.panel.title = gate.sourceName ? hint : '';
+    }
+    for (const [id, lane] of this.lanes) {
+      if (gates.has(id)) continue;
+      lane.clockGate = null;
+      lane.panel.title = '';
+      if (active.has(id)) {
+        const presentation = active.get(id);
+        if (lane.state.currentPresentationId !== presentation.token.presentationId) display(presentation);
+        lane.requiresInput = lane.isMain;
+        lane.advance.hidden = !lane.isMain || Boolean(presentation.choice);
+      } else {
+        lane.requiresInput = false;
+        lane.advance.hidden = true;
+      }
+    }
+    if (snapshot.status === 'Completed' || snapshot.status === 'Error') {
+      for (const lane of this.lanes.values()) endExecution(lane);
+      primaryReaderElements.storyCompletedBanner.style.display = snapshot.status === 'Completed' ? 'block' : 'none';
+    }
+    this.checkPassiveState();
+    this.updateDock();
+    scrollToBottom();
+    return true;
+  }
+
+  sync(snapshot, languageRefresh) {
+    // Current multi-head snapshots always carry ordered output delivery. Legacy
+    // single-beat responses still use the primary renderer below this adapter.
+    if (!Array.isArray(snapshot.outputEvents)) return false;
+    return this.syncOutputs(snapshot, languageRefresh);
+  }
+
+  interactiveLane(requireInput = false) {
+    if (requireInput) {
+      return [...this.lanes.values()].find(lane => !lane.isPassive && lane.panel.style.display !== 'none' && lane.requiresInput) ||
+             [...this.lanes.values()].find(lane => lane.requiresInput) ||
+             null;
+    }
+    return [...this.lanes.values()].find(lane => !lane.isPassive && lane.panel.style.display !== 'none' && lane.requiresInput) ||
+           [...this.lanes.values()].find(lane => !lane.isPassive && lane.panel.style.display !== 'none') ||
+           [...this.lanes.values()][0];
+  }
+
+  routeInput(action) {
+    const lane = this.interactiveLane(true);
+    if (lane) withPresentationContext(lane, action);
+    this.updateDock();
+  }
+
+  chooseNumber(number) {
+    const lane = this.interactiveLane(true);
+    const option = Number.isInteger(number) && number >= 1 ? lane?.state.choice?.options[number - 1] : null;
+    if (option?.canSelect) this.command('choice', {
+      sessionId: lane.state.currentSessionId, presentationId: lane.state.currentPresentationId
+    }, option.id);
+  }
+
+  toggleAutoPlay() {
+    const enabled = !primaryReaderState.autoPlay;
+    primaryReaderState.autoPlay = enabled;
+    primaryReaderElements.btnAutoPlay.classList.toggle('active', enabled);
+    primaryReaderElements.btnAutoPlay.setAttribute('aria-pressed', String(enabled));
+    for (const lane of this.lanes.values()) {
+      if (lane.state.autoPlay !== enabled) withPresentationContext(lane, toggleAutoPlay);
+    }
+    this.updateDock();
+  }
+
+  updateDock() {
+    if (!this.active) return;
+    for (const item of this.lanes.values()) {
+      if (item.requiresInput || item.isPassive || item.shouldHide) continue;
+      const current = item.state;
+      if (current.isTyping) {
+        item.elements.dockStepHint.textContent = current.requestedLocale === 'zh' ? '自动轨道 · 文字呈现中' :
+          current.requestedLocale === 'ja' ? '自動トラック · テキスト表示中' : 'Automatic track · Presenting text';
+      } else if (current.isHolding) {
+        const remaining = Math.max(0, current.minimumHoldDuration - current.holdElapsed,
+          current.autoAdvanceOnHoldEnd ? current.autoAdvanceDuration - current.autoAdvanceElapsed : 0);
+        item.elements.dockStepHint.textContent = current.requestedLocale === 'zh' ? `自动轨道 · ${remaining.toFixed(1)} 秒` :
+          current.requestedLocale === 'ja' ? `自動トラック · ${remaining.toFixed(1)} 秒` : `Automatic track · ${remaining.toFixed(1)}s`;
+      }
+    }
+    const lane = this.interactiveLane();
+    const elements = primaryReaderElements;
+    elements.dockStatusText.textContent = statusLabel(primaryReaderState.status, primaryReaderState.requestedLocale);
+    elements.dockStatusDot.dataset.status = primaryReaderState.status;
+    elements.dockStepHint.textContent = lane?.elements.dockStepHint.textContent ||
+      (primaryReaderState.requestedLocale === 'zh' ? '各轨道独立推进中' : primaryReaderState.requestedLocale === 'ja' ? '各トラックを再生中' : 'Tracks running independently');
+    if (primaryReaderState.status === 'Completed' || primaryReaderState.status === 'WaitingForTrack') {
+      elements.dockStepHint.textContent = statusLabel(primaryReaderState.status, primaryReaderState.requestedLocale);
+      if (lane) lane.elements.dockStepHint.textContent = elements.dockStepHint.textContent;
+    }
+    if (primaryReaderState.status === 'WaitingForClock' || primaryReaderState.status === 'WaitingForTrack') {
+      const unavailable = readerClocks.gates.find(gate => {
+        const source = gate.sourceName || readerClocks.clocks.get(gate.clockId)?.sourceName;
+        return source && (source !== 'music.position' || readerClocks.readMusicPosition() === null);
+      });
+      if (unavailable) elements.dockStepHint.textContent = readerClocks.waitHint(unavailable, primaryReaderState.requestedLocale);
+    }
+    elements.dockLocaleTag.textContent = (lane?.state.payload?.actualLanguage || primaryReaderState.requestedLocale || '').toUpperCase();
+  }
+
+  findToken(token) {
+    return [...this.lanes.values()].find(lane => lane.state.currentSessionId === token.sessionId &&
+      lane.state.currentPresentationId === token.presentationId);
+  }
+
+  command(kind, token, choiceId) {
+    const lane = this.findToken(token);
+    if (!lane || lane.isMain === false || lane.state.executionEnded) return Promise.resolve();
+    if (kind === 'step' && lane.state.status === 'WaitingForClock') return Promise.resolve();
+    if ((kind === 'step' && lane.state.status !== 'SuspendedAtBeat') ||
+      (kind === 'choice' && lane.state.status !== 'AwaitingChoice')) return Promise.resolve();
+    const key = `${token.sessionId}:${token.presentationId}`;
+    if (this.pending.has(key)) return Promise.resolve();
+    this.pending.add(key);
+    withPresentationContext(lane, () => {
+      clearTimers();
+      if (kind === 'choice') {
+        state.currentActiveChoiceEl?.classList.add('has-selection');
+        state.currentActiveChoiceEl?.querySelectorAll('.choice-card-btn').forEach(button => button.disabled = true);
+        state.currentActiveChoiceEl = null;
+      }
+    });
+    return enqueueSessionOp(async epoch => {
+      try {
+        if (epoch !== currentSessionEpoch || !this.findToken(token)) return;
+        if (isWasmPending()) await ensureRuntimeReady();
+        let data;
+        const clockInput = readerClocks.captureInput(token.sessionId);
+        if (window.KtoryWasm?.[kind]) {
+          data = kind === 'choice'
+            ? await window.KtoryWasm.choice(choiceId, token.presentationId, token.sessionId, clockInput.deltaTime, clockInput.sourcePositions)
+            : await window.KtoryWasm.step(token.presentationId, token.sessionId, clockInput.deltaTime, clockInput.sourcePositions);
+        } else {
+          const response = await fetch(`/api/session/${kind}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...token, ...clockInput, ...(kind === 'choice' ? { choiceId } : {}) })
+          });
+          if (epoch !== currentSessionEpoch) return;
+          if (!response.ok) throw new Error((await response.json()).error || 'Story input failed');
+          data = await response.json();
+        }
+        if (epoch === currentSessionEpoch && data) updateState(data);
+      } catch (error) {
+        if (epoch === currentSessionEpoch) reportSessionError(error.message || String(error));
+      } finally { this.pending.delete(key); }
+    });
+  }
+}
+
+const multiTrackReader = new MultiTrackReader();
+
+class ReaderClocks {
+  constructor() {
+    this.sessionId = '';
+    this.gates = [];
+    this.clocks = new Map();
+    this.supportsClocks = false;
+    this.pending = new Set();
+    this.timer = null;
+  }
+
+  now() { return typeof performance !== 'undefined' ? performance.now() : Date.now(); }
+
+  reset() {
+    clearInterval(this.timer);
+    this.timer = null;
+    this.sessionId = '';
+    this.gates = [];
+    this.clocks.clear();
+    this.supportsClocks = false;
+    this.pending.clear();
+  }
+
+  captureInput(sessionId) {
+    if (!this.supportsClocks || sessionId !== this.sessionId) return {};
+    const sampledAt = this.now();
+    const deltaTime = Math.max(0, (sampledAt - this.sampledAt) / 1000);
+    this.sampledAt = sampledAt;
+    const sourcePositions = {};
+    for (const clock of this.clocks.values()) {
+      if (clock.sourceName === 'music.position') sourcePositions[clock.sourceName] = this.readMusicPosition();
+    }
+    return { deltaTime, sourcePositions };
+  }
+
+  sync(snapshot) {
+    if (!snapshot.sessionId || snapshot.status === 'Completed' || snapshot.status === 'Error') {
+      this.reset();
+      return;
+    }
+    if (this.sessionId !== snapshot.sessionId) {
+      this.reset();
+      this.sessionId = snapshot.sessionId;
+      this.sampledAt = this.now();
+    }
+    this.supportsClocks = Array.isArray(snapshot.clocks);
+    this.clocks = new Map((snapshot.clocks || []).map(clock => [clock.clockId, clock]));
+    this.gates = snapshot.pendingClockGates || [];
+    const hasResolvableGates = this.gates.some(gate => {
+      const clock = this.clocks.get(gate.clockId);
+      const source = gate.sourceName || clock?.sourceName;
+      return !source || source === 'music.position';
+    });
+    if (hasResolvableGates && !this.timer) {
+      this.timer = setInterval(() => this.tick(), 50);
+    } else if (!hasResolvableGates && this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.tick();
+  }
+
+  readMusicPosition() {
+    // This is the BGM player's actual media position, including pause and seek.
+    // Missing/loading/failed players have no value; never substitute wall time.
+    const audio = currentBgmAudio;
+    if (!audio || audio.readyState < 1 || audio.error || !Number.isFinite(audio.currentTime)) return null;
+    return audio.currentTime;
+  }
+
+  waitHint(gate, locale = 'en') {
+    const clock = this.clocks.get(gate.clockId);
+    const source = gate.sourceName || clock?.sourceName;
+    const label = `${gate.clockName ?? source ?? 'clock'} ≥ ${gate.position}`;
+    if (source && source !== 'music.position') {
+      return locale.startsWith('zh') ? `等待 ${label}；Reader 无法解析来源 ${source}` :
+        locale.startsWith('ja') ? `${label} を待機中：Reader は参照元 ${source} を解釈できません` :
+        `Waiting: ${label}; Reader cannot resolve source ${source}`;
+    }
+    if (source && this.readMusicPosition() === null) {
+      return locale.startsWith('zh') ? `等待 ${label}；BGM 播放器暂无可用进度` :
+        locale.startsWith('ja') ? `${label} を待機中：BGM の再生位置を取得できません` :
+        `Waiting: ${label}; BGM playback position is unavailable`;
+    }
+    return locale.startsWith('zh') ? `等待：${label}` : locale.startsWith('ja') ? `待機：${label}` : `Waiting: ${label}`;
+  }
+
+  tick() {
+    if (!this.sessionId || this.pending.has(this)) return;
+    for (const gate of this.gates) {
+      const clock = this.clocks.get(gate.clockId);
+      if (!clock) continue;
+      const source = gate.sourceName || clock.sourceName;
+      if (!source) {
+        const position = clock.position + Math.max(0, (this.now() - this.sampledAt) / 1000);
+        if (position >= gate.position) return this.advance();
+      } else if (source === 'music.position') {
+        const position = this.readMusicPosition();
+        if (position !== (clock.position ?? null)) return this.advance();
+      }
+    }
+  }
+
+  advance() {
+    const sessionId = this.sessionId;
+    this.pending.add(this);
+    return enqueueSessionOp(async epoch => {
+      try {
+        if (epoch !== currentSessionEpoch || sessionId !== this.sessionId) return;
+        const { deltaTime = 0, sourcePositions = {} } = this.captureInput(sessionId);
+        let data;
+        if (window.KtoryWasm?.advanceClocks) data = await window.KtoryWasm.advanceClocks(deltaTime, sessionId, sourcePositions);
+        else {
+          const response = await fetch('/api/session/clocks/advance', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deltaTime, sessionId, sourcePositions })
+          });
+          if (epoch !== currentSessionEpoch) return;
+          if (!response.ok) throw new Error((await response.json()).error || 'Clock advance failed');
+          data = await response.json();
+        }
+        if (epoch === currentSessionEpoch && sessionId === this.sessionId && data) updateState(data, 'clock');
+      } catch (error) {
+        if (epoch === currentSessionEpoch) reportSessionError(error.message || String(error));
+      } finally { if (sessionId === this.sessionId) this.pending.delete(this); }
+    });
+  }
+}
+
+const readerClocks = new ReaderClocks();

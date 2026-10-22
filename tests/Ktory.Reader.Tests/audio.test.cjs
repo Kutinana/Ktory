@@ -55,11 +55,14 @@ class MockAudio {
     this.volume = 1.0;
     this.paused = true;
     this.currentTime = 0;
+    this.readyState = 1;
     this.played = false;
+    this.playCalls = 0;
     MockAudio.instances.push(this);
   }
 
   play() {
+    this.playCalls++;
     this.paused = false;
     this.played = true;
     return Promise.resolve();
@@ -130,7 +133,7 @@ function loadReaderEnv(hostMode = false) {
       playBgm, setBgmVolume, stopBgm, processAudioTags,
       getCurrentBgmAudio: () => currentBgmAudio,
       getCurrentBgmTrack: () => currentBgmTrack,
-      renderBeat
+      renderBeat, readerClocks
     };
   `, context);
 
@@ -229,4 +232,55 @@ test('audio tags are ignored in VS Code host mode (window.ktoryReaderHost)', () 
 
   assert.equal(MockAudio.instances.length, 0);
   assert.equal(api.getCurrentBgmAudio(), null);
+});
+
+
+test('pausing and resuming BGM retains the real source position while replacement and stop retire it', () => {
+  const { api, MockAudio } = loadReaderEnv();
+  api.playBgm('first.mp3');
+  const first = api.getCurrentBgmAudio();
+  first.currentTime = 12.5;
+  api.processAudioTags([{ name: 'pauseBgm', positionalArgs: [], namedArgs: {} }]);
+  assert.equal(first.paused, true);
+  assert.equal(api.readerClocks.readMusicPosition(), 12.5);
+  api.playBgm('first.mp3');
+  assert.equal(api.getCurrentBgmAudio(), first);
+  assert.equal(first.currentTime, 12.5);
+  assert.equal(first.paused, false);
+  assert.equal(MockAudio.instances.length, 1);
+  api.playBgm('second.mp3');
+  const second = api.getCurrentBgmAudio();
+  second.readyState = 0;
+  assert.notEqual(second, first);
+  assert.equal(first.paused, true);
+  assert.equal(api.readerClocks.readMusicPosition(), null);
+  second.readyState = 1;
+  second.currentTime = 2;
+  assert.equal(api.readerClocks.readMusicPosition(), 2);
+  api.stopBgm();
+  assert.equal(api.readerClocks.readMusicPosition(), null);
+});
+
+
+test('late media errors cannot revive replaced BGM and fallback is attempted only once', () => {
+  const { api } = loadReaderEnv();
+  api.playBgm('old.mp3');
+  const old = api.getCurrentBgmAudio();
+  api.playBgm('new.mp3');
+  const current = api.getCurrentBgmAudio();
+  old.onerror();
+  assert.equal(old.paused, true);
+  assert.equal(old.playCalls, 1);
+  assert.equal(api.getCurrentBgmAudio(), current);
+  current.onerror();
+  assert.equal(current.src, 'new.mp3');
+  assert.equal(current.playCalls, 2);
+  // Browsers expose an absolute src even when the assigned fallback was relative.
+  current.src = 'https://reader.example/new.mp3';
+  current.onerror();
+  assert.equal(current.playCalls, 2);
+  api.stopBgm();
+  current.onerror();
+  assert.equal(current.paused, true);
+  assert.equal(current.playCalls, 2);
 });

@@ -9,7 +9,7 @@ const vm = require('node:vm');
 function reader(tags = [], options = {}) {
   let now = 0, nextId = 0;
   const timers = new Map();
-  const element = () => ({ style: {}, classList: { toggle() {} }, scrollTo() {}, innerHTML: '' });
+  const element = () => ({ style: {}, classList: { toggle() {} }, setAttribute() {}, scrollTo() {}, innerHTML: '' });
   const context = vm.createContext({
     console,
     document: { body: element(), getElementById: element, addEventListener() {} },
@@ -56,7 +56,9 @@ function reader(tags = [], options = {}) {
   };
 }
 
-const tag = (name, ...positionalArgs) => ({ name, positionalArgs });
+const tag = (name, ...args) => ({ name, positionalArgs: [], namedArgs: name === 'skippable'
+  ? { ...(args.length ? { enabled: args[0] } : {}), ...(args.length > 1 ? { seconds: args[1] } : {}) }
+  : args.length ? { seconds: args[0] } : {} });
 
 for (const [wait, seconds] of [[tag('wait', 2), 2], [tag('wait'), 1], [tag('wait', 0), 0]]) {
   test(`manual ${JSON.stringify(wait)} discards early clicks and needs a fresh click`, () => {
@@ -163,11 +165,7 @@ for (const next of [false, true]) {
     r.setupHoldTimer(tags);
     r.handleAdvanceAction();
     r.tick(2);
-    assert.equal(r.advances.length, next ? 1 : 0);
-    if (!next) {
-      r.handleAdvanceAction();
-      assert.equal(r.advances.length, 1);
-    }
+    assert.equal(r.advances.length, 1);
   });
 }
 
@@ -196,3 +194,29 @@ for (const initiallyAuto of [false, true]) {
     assert.equal(r.advances.length, initiallyAuto ? 0 : 1);
   });
 }
+
+test('Main duration can expire without advance and explicit next need not wait for it', () => {
+  const tags = [tag('duration', 3), tag('next', 1)];
+  const r = reader(tags);
+  const passage = { hidden: false };
+  r.state.currentActivePassageEl = passage;
+  r.setupHoldTimer(tags);
+  r.tick(1);
+  assert.equal(r.advances.length, 1);
+  assert.equal(passage.hidden, false);
+  r.tick(2);
+  assert.equal(passage.hidden, true);
+  assert.equal(r.advances.length, 1);
+});
+
+test('auxiliary duration has display lifetime without a presentation advance timer', () => {
+  const tags = [tag('duration', 2), tag('wait', 10), tag('next')];
+  const r = reader(tags, { isAuxiliary: true });
+  const passage = { hidden: false };
+  r.state.currentActivePassageEl = passage;
+  r.setupHoldTimer(tags);
+  r.tick(2);
+  assert.equal(passage.hidden, true);
+  assert.equal(r.state.isHolding, false);
+  assert.equal(r.advances.length, 0);
+});

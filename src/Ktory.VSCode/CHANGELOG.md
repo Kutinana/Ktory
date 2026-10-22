@@ -4,7 +4,7 @@
 
 - Add inline and multiline literal text with variable-length single-quote fences, including localized variants and literal markup in the offline preview.
 - Keep raw text out of decorator highlighting and locale suggestions; report unclosed fences at their opening position.
-- Fix prose dots such as `....wait` being highlighted as decorators.
+- Fix prose dots such as `....wait` being highlighted as decorators and an undefined variable in preview action routing.
 
 ## 0.2.1
 

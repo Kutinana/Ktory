@@ -102,6 +102,88 @@ exports.run = async () => {
   assert.equal(defaultSecond.snapshot.payload.tags.find(tag => tag.name === 'emotion').positionalArgs[0], 'normal');
 
   await edit(`@defaultLang: zh
+#.clock(name="song")
+#.track(source="Lyrics", name="lyric")
+:
+  @zh: 同时对白。
+  @en: Parallel dialogue.
+#choice
+  + [继续]
+    : 分支首拍。
+#.awaitTrack(name="lyric")
+: joined
+=== Lyrics ===
+  :
+    @zh: 同时歌词。
+    @en: Parallel lyric.
+    .at(value=.25, clock="song").duration(seconds=20)
+`);
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  const parallel = await waitFor(e => e?.snapshot?.retainedPresentations?.some(p => !p.isMain && p.payload),
+    'auxiliary output and built-in clock gate');
+  assert.equal(parallel.snapshot.status, 'SuspendedAtBeat');
+  assert.equal(parallel.snapshot.activePresentations.length, 1, 'only Main owns active input');
+  assert.equal(parallel.snapshot.pendingClockGates.length, 0);
+  const dialogueLane = parallel.snapshot.activePresentations[0];
+  const lyricLane = parallel.snapshot.retainedPresentations.find(lane => !lane.isMain);
+  await action({ action: 'secondary-language', locale: 'zh' });
+  const bilingual = await waitFor(e => e?.snapshot?.secondaryLanguage === 'zh', 'retained auxiliary secondary translation');
+  assert.deepEqual(bilingual.snapshot.activePresentations.map(lane => lane.token), parallel.snapshot.activePresentations.map(lane => lane.token));
+  assert.equal(bilingual.snapshot.retainedPresentations.find(lane => !lane.isMain).payload.text.secondary.content, '同时歌词。');
+  assert.equal(bilingual.snapshot.recentLaneTags.length, parallel.snapshot.recentLaneTags.length, 'secondary does not replay effects');
+  await sleep(1100);
+  await action({ action: 'advance', ...dialogueLane.token });
+  const parallelMenu = await waitFor(e => e?.snapshot?.activePresentations?.some(lane => lane.choice), 'targeted Main input');
+  const menuLane = parallelMenu.snapshot.activePresentations.find(lane => lane.choice);
+  await action({ action: 'choice', ...menuLane.token, id: menuLane.choice.options[0].id });
+  const parallelBranch = await waitFor(e => e?.snapshot?.activePresentations?.some(lane => lane.payload?.content === '分支首拍。'), 'Main choice first beat');
+  assert.deepEqual(parallelBranch.snapshot.retainedPresentations.find(lane => !lane.isMain).token, lyricLane.token, 'Main input cannot advance auxiliary display');
+  await action({ action: 'secondary-language', locale: null });
+  await waitFor(e => e?.snapshot?.secondaryLanguage === null, 'disable secondary translation');
+
+  await edit(`#.track(source="Init").await
+#.defaultClock(name="initialized")
+: initialized after await
+=== Init ===
+  #.clock(name="initialized")
+`);
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  const initialized = await waitFor(e => e?.snapshot?.payload?.content === 'initialized after await', 'anonymous track await initializes before Main continues');
+  assert.equal(initialized.snapshot.clocks.some(clock => clock.name === 'initialized'), true);
+  assert.equal(initialized.snapshot.recentTags.some(tag => tag.name === 'await'), false, 'await sugar stays inside Core');
+
+  await edit(`: clock intro
+#.clock(name="scene")
+: one .at(value=.5, clock="scene")
+#.resetClock(name="scene")
+: two .at(value=.5, clock="scene")
+#.resetClock(name="scene")
+: three .at(value=.5, clock="scene")
+`);
+  await vscode.commands.executeCommand('ktory.reloadPreview');
+  await waitFor(e => e?.snapshot?.payload?.content === 'clock intro', 'clock declaration prelude');
+  await sleep(900); // A later declaration must not inherit time spent reading the prelude.
+  await action({ action: 'advance' });
+  const declared = await waitFor(e => e?.snapshot?.pendingClockGates?.some(gate => gate.clockName === 'scene'), 'late explicit clock declaration');
+  const sceneClock = declared.snapshot.clocks.find(clock => clock.name === 'scene');
+  assert.equal(sceneClock.position, 0);
+  assert.equal(declared.snapshot.recentTags.some(tag => tag.name === 'clock'), false, 'clock operations stay inside Core');
+  await waitFor(e => e?.snapshot?.payload?.content === 'one', 'declared clock releases its gate');
+  await sleep(300);
+  await action({ action: 'advance' });
+  const redeclared = await waitFor(e => e?.snapshot?.pendingClockGates?.some(gate => gate.clockName === 'scene'), 'explicit reset restarts clock time');
+  const nextClock = redeclared.snapshot.clocks.find(clock => clock.name === 'scene');
+  assert.equal(nextClock.clockId, sceneClock.clockId);
+  assert.equal(nextClock.position, 0);
+  await waitFor(e => e?.snapshot?.payload?.content === 'two', 'redeclared clock releases its gate');
+  await sleep(300);
+  await action({ action: 'advance' });
+  const reset = await waitFor(e => e?.snapshot?.pendingClockGates?.some(gate => gate.clockName === 'scene'), 'explicit clock reset');
+  assert.equal(reset.snapshot.clocks.find(clock => clock.name === 'scene').clockId, nextClock.clockId);
+  assert.equal(reset.snapshot.clocks.find(clock => clock.name === 'scene').position, 0);
+  await waitFor(e => e?.snapshot?.payload?.content === 'three', 'reset clock releases its gate');
+
+  await edit(`@defaultLang: zh
 Alice:
   @zh: '''
     <b>.wait & **literal**</b>
@@ -111,17 +193,19 @@ Alice:
   .effect
 `);
   await vscode.commands.executeCommand('ktory.reloadPreview');
-  await waitFor(e => e?.snapshot?.payload?.segments?.some(piece => piece.isLiteral), 'raw text in real WASM');
+  await waitFor(e => e?.snapshot?.payload?.text?.primary?.segments?.some(piece => piece.isLiteral), 'raw text in real WASM');
   await action({ action: 'language', locale: 'zh' });
   const raw = await waitFor(e => e?.snapshot?.payload?.actualLanguage === 'zh' &&
-    e.snapshot.payload.segments?.some(piece => piece.isLiteral), 'multiline raw text in explicit language');
+    e.snapshot.payload.text.primary.segments?.some(piece => piece.isLiteral), 'multiline raw text in explicit primary language');
   assert.equal(raw.snapshot.payload.content, '<b>.wait & **literal**</b>\n// @fr: literal too');
   assert.deepEqual(raw.snapshot.recentTags.map(tag => tag.name), ['effect']);
+  await action({ action: 'secondary-language', locale: 'en' });
+  const rawBilingual = await waitFor(e => e?.snapshot?.payload?.text?.secondary?.segments?.some(piece => piece.isLiteral), 'raw secondary fragments');
+  assert.equal(rawBilingual.snapshot.payload.text.secondary.segments[0].content, '<b>Normal</b> with ');
+  assert.equal(rawBilingual.snapshot.payload.text.secondary.segments[1].content, '<i>.next</i>');
   await action({ action: 'language', locale: 'en' });
-  const rawEnglish = await waitFor(e => e?.snapshot?.payload?.actualLanguage === 'en', 'raw language refresh');
+  const rawEnglish = await waitFor(e => e?.snapshot?.payload?.actualLanguage === 'en', 'raw primary language refresh');
   assert.equal(rawEnglish.snapshot.presentationId, raw.snapshot.presentationId);
-  assert.equal(rawEnglish.snapshot.payload.segments[0].content, '<b>Normal</b> with ');
-  assert.equal(rawEnglish.snapshot.payload.segments[1].content, '<i>.next</i>');
   assert.equal(rawEnglish.snapshot.recentTags.length, 1, 'raw language refresh does not replay tags');
   await edit(": before\nAlice: '''unclosed");
   await vscode.commands.executeCommand('ktory.reloadPreview');
@@ -154,5 +238,5 @@ Alice:
     await sleep(45000);
   }
   api.panel.dispose();
-  console.log('PASS: VS Code webview boots bundled C# WASM, reads dirty buffers, preserves choice/language boundaries, rejects stale input, reports and recovers from errors, and reopens cleanly.');
+  console.log('PASS: VS Code webview boots bundled C# WASM, reads dirty buffers, preserves Main input and retained auxiliary output, refreshes languages without effects, resets clocks without replacing identity, preserves raw text, rejects stale input, recovers from errors, and reopens cleanly.');
 };

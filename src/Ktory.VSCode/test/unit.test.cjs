@@ -20,7 +20,15 @@ test('the contributed TextMate grammar highlights a representative .ktr document
     ['// author note', 'comment.line.double-slash.ktory'],
     ['=== Start ===', 'keyword.control.section.ktory'],
     ['  #choice.loop', 'keyword.control.anchor.ktory'],
-    ['#.sfx("wind.ogg").wait(1).next()', 'keyword.control.anchor.ktory'],
+    ['#parallel', 'invalid.deprecated.parallel.ktory'],
+    ['  #lane dialogue', 'invalid.deprecated.lane.ktory'],
+    ['    #LANE lyrics_2-id // background', 'invalid.deprecated.lane-name.ktory'],
+    ['#.sfx("wind.ogg").wait(seconds=1).next()', 'keyword.control.anchor.ktory'],
+    ['#.clock(name="bgm", source="music.position")', 'entity.name.function.decorator.ktory'],
+    ['#.resetClock(name="bgm")', 'entity.name.function.decorator.ktory'],
+    ['#.track(source="Lyrics", name="lyric")', 'entity.name.function.decorator.ktory'],
+    ['#.awaitTrack(name="lyric")', 'entity.name.function.decorator.ktory'],
+    [': 歌词 .at(value=3, clock="bgm").duration(seconds=2)', 'entity.name.function.decorator.ktory'],
     ['  * [继续] => Next', 'string.quoted.choice.ktory'],
     ['    .sfx("bell")', 'entity.name.function.decorator.ktory'],
     ['    @en: Hello.', 'constant.other.locale.ktory'],
@@ -50,13 +58,28 @@ test('the contributed TextMate grammar highlights a representative .ktr document
     assert.ok(!scopes.includes('entity.name.type.speaker.ktory'), `${line} must not be misidentified as speaker`);
   }
   assert.ok(scopeAt(declaration.indexOf('zh=')).includes('constant.other.locale.ktory'));
-  const anonymous = '#.sfx("wind.ogg").wait(1).next()';
+  const anonymous = '#.sfx("wind.ogg").wait(seconds=1).next()';
   const anonymousTokens = grammar.tokenizeLine(anonymous, tm.INITIAL).tokens;
   const anonymousScope = index => anonymousTokens.find(t => t.startIndex <= index && t.endIndex > index).scopes;
   assert.ok(anonymousScope(0).includes('keyword.control.anchor.ktory'));
   assert.ok(anonymousScope(anonymous.indexOf('.sfx')).includes('entity.name.function.decorator.ktory'));
   assert.ok(anonymousScope(anonymous.indexOf('.ogg')).includes('string.quoted.double.ktory'));
   assert.ok(!anonymousScope(anonymous.indexOf('.ogg')).includes('entity.name.function.decorator.ktory'));
+  const awaitedTrack = '#.track(source="Init", name="init").await';
+  const awaitedTokens = grammar.tokenizeLine(awaitedTrack, tm.INITIAL).tokens;
+  assert.ok(awaitedTokens.find(token => token.startIndex <= awaitedTrack.indexOf('.await') && token.endIndex > awaitedTrack.indexOf('.await'))
+    .scopes.includes('entity.name.function.decorator.ktory'));
+  const lane = '  #lane lyrics_2-id // background';
+  const laneTokens = grammar.tokenizeLine(lane, tm.INITIAL).tokens;
+  const laneScope = index => laneTokens.find(t => t.startIndex <= index && t.endIndex > index).scopes;
+  assert.ok(laneScope(lane.indexOf('#lane')).includes('invalid.deprecated.lane.ktory'));
+  assert.ok(laneScope(lane.indexOf('lyrics_2-id')).includes('invalid.deprecated.lane-name.ktory'));
+  assert.ok(laneScope(lane.indexOf('//')).includes('comment.line.double-slash.ktory'));
+  for (const line of ['#parallelized', '#lanes dialogue', ': #lane prose', '// #parallel', '"#lane quoted"']) {
+    const scopes = grammar.tokenizeLine(line, tm.INITIAL).tokens.flatMap(t => t.scopes);
+    assert.ok(!scopes.includes('invalid.deprecated.parallel.ktory'), `${line} must not be a parallel header`);
+    assert.ok(!scopes.includes('invalid.deprecated.lane.ktory'), `${line} must not be a lane header`);
+  }
   registry.dispose();
 });
 
@@ -82,9 +105,9 @@ test('decorator highlighting distinguishes prose dots from trailing and directiv
       ['  .wait', ['.wait']],
       ['  .wait(0).next .custom_tag', ['.wait', '.next', '.custom_tag']],
       ['#choice.loop', ['.loop']],
-      ['#.sfx("wind.ogg").wait(1).next()', ['.sfx', '.wait', '.next']],
+      ['#.sfx("wind.ogg").wait(seconds=1).next()', ['.sfx', '.wait', '.next']],
       [': ....wait .next', ['.next']],
-      ['Alice: Hello. .wait(1).next // .ignored', ['.wait', '.next']],
+      ['Alice: Hello. .wait(seconds=1).next // .ignored', ['.wait', '.next']],
       ['@en: Hello .sfx("a) .wav").next', ['.sfx', '.next']],
       [": Hello .sfx('it\\'s.wav').next", ['.sfx', '.next']],
       ['* [Continue] .once', ['.once']]
@@ -234,11 +257,15 @@ test('shared HTML renderer preserves anonymous anchors, quoted filenames and esc
   const grammar = JSON.parse(fs.readFileSync(path.join(root, 'syntaxes/ktory.tmLanguage.json'), 'utf8'));
   const highlighter = await createKtoryHighlighter(tm, onig, grammar);
   try {
-    const [line, escaped] = highlighter.highlightLines('#.sfx("wind.ogg").wait(1).next()\n: <img src=x onerror=alert(1)>');
+    const [line, escaped] = highlighter.highlightLines('#.sfx("wind.ogg").wait(seconds=1).next()\n: <img src=x onerror=alert(1)>');
     assert.match(line, /^<span class="ktr-token ktr-keyword"[^>]*>#<\/span>/);
     assert.match(line, /<span class="ktr-token ktr-string"[^>]*>&quot;wind\.ogg&quot;<\/span>/);
     assert.ok(!escaped.includes('<img'));
     assert.ok(escaped.includes('&lt;img'));
+    const [parallel, lane] = highlighter.highlightLines('#parallel\n  #lane lyrics');
+    assert.match(parallel, /class="ktr-token ktr-invalid"[^>]*>#parallel<\/span>/);
+    assert.match(lane, /class="ktr-token ktr-invalid"[^>]*>#lane<\/span>/);
+    assert.match(lane, /class="ktr-token ktr-invalid"[^>]*>lyrics<\/span>/);
   } finally { highlighter.dispose(); }
 });
 
@@ -257,6 +284,19 @@ test('linter service parses .ktr scripts and produces diagnostics via bundled WA
   const warn = await lintScript('@speaker alice: zh="爱丽丝"\nalice: 对白\n=== Aside ===\n  : 独立\n  -> return\n', frameworkDir);
   assert.ok(warn.some(item => item.code === 'KTR_W002'));
   assert.ok(warn.some(item => item.severity === 2));
+
+  const parallel = await lintScript('#parallel\n  #lane dialogue\n    : line\n  #lane lyrics\n    #AUTO.wait(seconds=1)\n    : lyric\n', frameworkDir);
+  assert.ok(parallel.some(item => item.severity === 1 && item.code === 'KTR_E011'));
+  const duplicateLane = await lintScript('#parallel\n  #lane first\n    : one\n  #lane FIRST\n    : two\n', frameworkDir);
+  assert.equal(duplicateLane.length, 1);
+  assert.equal(duplicateLane[0].code, 'KTR_E011');
+  assert.equal(duplicateLane[0].line, 1);
+  const clocks = await lintScript('#.bgm("song.ogg").clock(name="bgm", source="music.position").next\n: lyric .at(value=5, clock="bgm")\n#.resetClock(name="bgm")\n', frameworkDir);
+  assert.equal(clocks.length, 0);
+  const invalidClock = await lintScript(': prelude\n#.clock(name="bgm", source=12)\n', frameworkDir);
+  assert.equal(invalidClock.length, 1);
+  assert.equal(invalidClock[0].severity, 1);
+  assert.equal(invalidClock[0].line, 2);
 });
 
 test('linter initializes without proxy fetch protocol errors when global fetch rejects non-http URLs', async () => {
@@ -277,4 +317,3 @@ test('linter initializes without proxy fetch protocol errors when global fetch r
     globalThis.fetch = originalFetch;
   }
 });
-

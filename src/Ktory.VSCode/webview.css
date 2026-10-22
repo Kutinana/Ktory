@@ -1,7 +1,6 @@
 .vscode-reader {
   --bg-app: var(--vscode-editor-background, #181818);
   --bg-surface: var(--vscode-sideBar-background, #202020);
-  --bg-surface-elevated: var(--vscode-input-background, #282828);
   --bg-surface-hover: var(--vscode-list-hoverBackground, #333);
   --bg-dock: var(--vscode-editorWidget-background, #222);
   --text-main: var(--vscode-editor-foreground, #ddd);
