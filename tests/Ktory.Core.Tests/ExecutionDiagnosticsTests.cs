@@ -63,7 +63,7 @@ public class ExecutionDiagnosticsTests
     [Fact]
     public void LoopSnapshotsAndTrace_ReflectEachRealEntry()
     {
-        var seq = new KtorySequencer(KtoryParser.Parse(": repeat .loop(2).effect\n: after"));
+        var seq = new KtorySequencer(KtoryParser.Parse(": repeat .loop(count=2).effect\n: after"));
         var trace = new List<ExecutionTrace>();
         seq.OnTrace += trace.Add;
         seq.Start();
@@ -113,7 +113,7 @@ public class ExecutionDiagnosticsTests
     [Fact]
     public void TimingTelemetry_UsesLiveClockAndResetsAtChoice()
     {
-        var seq = new KtorySequencer(KtoryParser.Parse(": first .skippable(false, 2).wait(3).next(5)\n#choice\n    + [pick]\n      : branch"));
+        var seq = new KtorySequencer(KtoryParser.Parse(": first .skippable(enabled=false, seconds=2).wait(seconds=3).next(seconds=5)\n#choice\n    + [pick]\n      : branch"));
         var p = new PresentationController(seq);
         seq.Start();
         p.SetupForCurrentBeat();
@@ -151,7 +151,7 @@ public class ExecutionDiagnosticsTests
     [Fact]
     public void EstimatedTelemetry_PreservesLanguageProgressAndInfiniteRevealLock()
     {
-        var seq = new KtorySequencer(KtoryParser.Parse(":\n  @zh: 一二三四五六七八九十一二三四\n  @en: one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n  .skippable(false).wait.next(8)"));
+        var seq = new KtorySequencer(KtoryParser.Parse(":\n  @zh: 一二三四五六七八九十一二三四\n  @en: one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n  .skippable(enabled=false).wait.next(seconds=8)"));
         var p = new PresentationController(seq);
         seq.Start();
         p.SetupForCurrentBeat();

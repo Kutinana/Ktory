@@ -11,29 +11,54 @@ namespace Ktory.Core.Runtime
         public StepType StepType { get; set; } = StepType.Text;
         public int LineNumber { get; set; }
 
-        public string? Speaker { get; set; }
+        public LocalizedTextOutput Text { get; set; } = new LocalizedTextOutput();
+        public LocalizedTextOutput? SpeakerName { get; set; }
+
+        /// <summary>Stable declared speaker ID, or the source alias when no ID is declared.</summary>
+        public string? SpeakerId { get; set; }
+
+        /// <summary>Compatibility projection of the primary display name.</summary>
+        public string? Speaker
+        {
+            get => SpeakerName?.Primary.Content;
+            set
+            {
+                if (value == null) SpeakerName = null;
+                else
+                {
+                    if (SpeakerName == null) SpeakerName = new LocalizedTextOutput();
+                    SpeakerName.Primary.Content = value;
+                }
+            }
+        }
 
         /// <summary>
         /// The actual language of a declared speaker's localized display name.
         /// Null for narration, literal undeclared speakers, or an ID without a localized name.
         /// </summary>
-        public string? SpeakerActualLanguage { get; set; }
+        public string? SpeakerActualLanguage
+        {
+            get => SpeakerName?.Primary.ActualLanguage;
+            set
+            {
+                if (SpeakerName == null && value != null) SpeakerName = new LocalizedTextOutput();
+                if (SpeakerName != null) SpeakerName.Primary.ActualLanguage = value;
+            }
+        }
 
-        public string Content { get; set; } = string.Empty;
-
-        /// <summary>Literal/rich fragment boundaries. Render literal pieces as text when present.</summary>
-        public IReadOnlyList<TextSegment>? Segments { get; set; }
+        /// <summary>Compatibility projection of the primary content.</summary>
+        public string Content { get => Text.Primary.Content; set => Text.Primary.Content = value; }
 
         /// <summary>
         /// The actual language of the content (after fallback if requested was missing).
         /// Null for unlocalized content when script has no @defaultLang and no @locale.
         /// </summary>
-        public string? ActualLanguage { get; set; }
+        public string? ActualLanguage { get => Text.Primary.ActualLanguage; set => Text.Primary.ActualLanguage = value; }
 
         /// <summary>
         /// The locale that was originally requested by host/session.
         /// </summary>
-        public string? RequestedLanguage { get; set; }
+        public string? RequestedLanguage { get => Text.Primary.RequestedLanguage; set => Text.Primary.RequestedLanguage = value; }
 
         public IReadOnlyList<TagData> Tags { get; set; } = Array.Empty<TagData>();
 

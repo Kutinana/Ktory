@@ -124,7 +124,7 @@ namespace Ktory.Core.Parser
 
                 // Parse single argument (positional or named: key = value)
                 string? key = null;
-                object? val = null;
+                object? val;
 
                 // Check if it's a string literal
                 if (input[i] == '"' || input[i] == '\'')
@@ -183,6 +183,7 @@ namespace Ktory.Core.Parser
 
                 if (!string.IsNullOrEmpty(key))
                 {
+                    if (tag.NamedArgs.ContainsKey(key!)) tag.DuplicateNamedArgs.Add(key!);
                     tag.NamedArgs[key!] = val ?? string.Empty;
                 }
                 else if (val != null)
@@ -237,9 +238,8 @@ namespace Ktory.Core.Parser
                 if (i >= input.Length || input[i] == ')') break;
 
                 // Parse single argument (positional or named: key = value)
-                int start = i;
                 string? key = null;
-                object? val = null;
+                object? val;
 
                 // Check if it's a string literal
                 if (input[i] == '"' || input[i] == '\'')
@@ -289,6 +289,7 @@ namespace Ktory.Core.Parser
 
                 if (!string.IsNullOrEmpty(key))
                 {
+                    if (tag.NamedArgs.ContainsKey(key!)) tag.DuplicateNamedArgs.Add(key!);
                     tag.NamedArgs[key!] = val ?? string.Empty;
                 }
                 else if (val != null)

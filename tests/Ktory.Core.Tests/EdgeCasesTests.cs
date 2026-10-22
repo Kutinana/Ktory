@@ -40,7 +40,7 @@ namespace Ktory.Core.Tests
         public void Loop_Limit_ExhaustsAfterMaxIterations()
         {
             string script = @"
-#choice.loop(2)
+#choice.loop(count=2)
   + [重复选项]
     主角: 执行了一次。
 
@@ -72,7 +72,7 @@ namespace Ktory.Core.Tests
         public void Loop_Zero_EquivalentToOne_ExecutesOnce()
         {
             string script = @"
-#choice.loop(0)
+#choice.loop(count=0)
   + [重复选项]
     主角: 执行了一次。
 
@@ -87,8 +87,8 @@ namespace Ktory.Core.Tests
             sequencer.SubmitChoice("重复选项");
             Assert.Equal("执行了一次。", sequencer.CurrentPayload!.Content);
 
-            // After inline step completes, it returns to choice.loop(0).
-            // Because max iterations is 1 (equivalent to .loop(1)), loop limit is reached!
+            // After inline step completes, it returns to choice.loop(count=0).
+            // Because max iterations is 1 (equivalent to .loop(count=1)), loop limit is reached!
             // It must break out to post-loop line!
             sequencer.Step();
             Assert.Equal(ExecutionStatus.SuspendedAtBeat, sequencer.Status);
@@ -99,7 +99,7 @@ namespace Ktory.Core.Tests
         public void TextNode_Loop_ReEntersNodeAndReDispatchesTags()
         {
             string script = @"
-: 警告！ .loop(3) .sfx(""alarm"")
+: 警告！ .loop(count=3) .sfx(""alarm"")
 : 正常继续。
 ";
             var file = KtoryParser.Parse(script);
@@ -141,7 +141,7 @@ namespace Ktory.Core.Tests
         public void TextNode_LoopZero_ExecutesOnce()
         {
             string script = @"
-: 只说一次。 .loop(0)
+: 只说一次。 .loop(count=0)
 : 接着下一句。
 ";
             var file = KtoryParser.Parse(script);
@@ -188,7 +188,7 @@ namespace Ktory.Core.Tests
         public void DirectiveNode_Loop_ReEntersDirectiveBeat()
         {
             string script = @"
-#shake .loop(2) .camera_shake(0.5)
+#shake .loop(count=2) .camera_shake(0.5)
 : 震动结束。
 ";
             var file = KtoryParser.Parse(script);
@@ -266,8 +266,8 @@ namespace Ktory.Core.Tests
             string script = @"
 #AUTO.wait
 : 中文短句。
-: 这一句被局部覆盖为固定三秒。 .wait(3)
-: 这一句被局部覆盖为立即推进。 .wait(0)
+: 这一句被局部覆盖为固定三秒。 .wait(seconds=3)
+: 这一句被局部覆盖为立即推进。 .wait(seconds=0)
 #AUTO_END
 ";
             var file = KtoryParser.Parse(script);
@@ -287,14 +287,14 @@ namespace Ktory.Core.Tests
 
             // Simulate hold end and advance to Beat 2
             controller.Update(controller.HoldDuration);
-            // Beat 2: .wait(3) overrides auto default
+            // Beat 2: .wait(seconds=3) overrides auto default
             Assert.Equal("这一句被局部覆盖为固定三秒。", sequencer.CurrentPayload!.Content);
             controller.NotifyPrintingFinished();
             Assert.Equal(3.0, controller.HoldDuration);
 
             // Simulate hold end and advance to Beat 3
             controller.Update(3.0);
-            // Beat 3: .wait(0) overrides to 0 (immediate advance)
+            // Beat 3: .wait(seconds=0) overrides to 0 (immediate advance)
             Assert.Equal("这一句被局部覆盖为立即推进。", sequencer.CurrentPayload!.Content);
             controller.NotifyPrintingFinished();
             // With wait(0), finishes and immediately advances past #AUTO_END to completed!
@@ -639,7 +639,7 @@ namespace Ktory.Core.Tests
 -> end
 
 === Sub ===
-  #choice.loop(1)
+  #choice.loop(count=1)
     + [返回主线] -> return
   : 不应该因为上次调用而跳过菜单。
   -> return
@@ -648,7 +648,7 @@ namespace Ktory.Core.Tests
             var sequencer = new KtorySequencer(file);
 
             sequencer.Start();
-            // First call to Sub: should await choice on Sub's #choice.loop(1)
+            // First call to Sub: should await choice on Sub's #choice.loop(count=1)
             Assert.Equal(ExecutionStatus.AwaitingChoice, sequencer.Status);
             Assert.Equal(1, sequencer.ActiveLoopCount);
             Assert.Contains(sequencer.CurrentChoice!.Options, o => o.Label == "返回主线");
@@ -681,14 +681,14 @@ namespace Ktory.Core.Tests
         public void Sequencer_OuterLoopCallsSubroutineWithInnerLoop_InnerReturnPreservesOuterLoop()
         {
             string script = @"
-#choice.loop(2)
+#choice.loop(count=2)
   + [调用子过程] => Sub
   + [退出] -> break
 : 外部循环结束。
 -> end
 
 === Sub ===
-  #choice.loop(1)
+  #choice.loop(count=1)
     + [子过程返回] -> return
   : 子过程结束。
   -> return
@@ -953,7 +953,7 @@ namespace Ktory.Core.Tests
             string script = @"
 #AUTO.wait
 : 估算阅读时间。
-#AUTO.wait(3.5)
+#AUTO.wait(seconds=3.5)
 : 固定3.5秒。
 #AUTO_END
 ";
@@ -1216,13 +1216,13 @@ namespace Ktory.Core.Tests
             Assert.Empty(step1.Tags);
 
             // Case 2: Extension in middle followed by genuine trailing tag
-            string script2 = @": 请打开 .ktr 文件。 .wait(2)";
+            string script2 = @": 请打开 .ktr 文件。 .wait(seconds=2)";
             var file2 = KtoryParser.Parse(script2);
             var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
             Assert.Equal("请打开 .ktr 文件。", step2.TextVariants[""]);
             Assert.Single(step2.Tags);
             Assert.Equal("wait", step2.Tags[0].Name);
-            Assert.Equal(2L, step2.Tags[0].PositionalArgs[0]);
+            Assert.Equal(2L, step2.Tags[0].NamedArgs["seconds"]);
 
             // Case 3: Dot without whitespace
             string script3 = @": 请查看config.ktr文件";
@@ -1262,7 +1262,7 @@ namespace Ktory.Core.Tests
             Assert.Equal("smile", step1.Tags[0].PositionalArgs[0]);
 
             // Case 2: Multiple contractions and multiple tags
-            string script2 = @": It's Bob's turn, don't rush. .wait(1) .sfx('chime')";
+            string script2 = @": It's Bob's turn, don't rush. .wait(seconds=1) .sfx('chime')";
             var file2 = KtoryParser.Parse(script2);
             var step2 = Assert.IsType<TextStep>(file2.RootBlock.Steps[0]);
             Assert.Equal("It's Bob's turn, don't rush.", step2.TextVariants[""]);
@@ -1402,7 +1402,7 @@ namespace Ktory.Core.Tests
         public void PresentationId_IncrementsOnLoopReplay_SameSourceLine()
         {
             string script = @"
-#choice.loop(2)
+#choice.loop(count=2)
   + [再次倾听]
     : 重播台词。
   + [离开]
@@ -1609,8 +1609,8 @@ alice:
         public void PresentationController_FastForward_NotifyPrintingFinishedInCallback_DoesNotDoubleAdvanceZeroSecondAuto()
         {
             string script = @"
-: 第一句 .wait(0).next
-: 第二句 .wait(0).next
+: 第一句 .wait(seconds=0).next
+: 第二句 .wait(seconds=0).next
 : 第三句
 ";
             var file = KtoryParser.Parse(script);

@@ -75,6 +75,9 @@ namespace Ktory.Core.Parser
         private static string ClassifyErrorCode(string message)
         {
             if (message.StartsWith("Unterminated raw text fence", StringComparison.Ordinal)) return "KTR_E012";
+            if (message.IndexOf("#parallel", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("#lane", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("Parallel and lane headers", StringComparison.OrdinalIgnoreCase) >= 0) return "KTR_E011";
             if (message.IndexOf("Unrecognized control flow", StringComparison.OrdinalIgnoreCase) >= 0) return "KTR_E002";
             if (message.IndexOf("has no target specified", StringComparison.OrdinalIgnoreCase) >= 0) return "KTR_E003";
             if (message.IndexOf("Target section", StringComparison.OrdinalIgnoreCase) >= 0 &&
@@ -92,22 +95,18 @@ namespace Ktory.Core.Parser
 
         private static void CheckUnreachableCode(KtoryFile file, List<KtoryDiagnostic> diagnostics)
         {
-            foreach (var kvp in file.Blocks)
+            void CheckSteps(List<StepNode> steps, string context, bool checkTerminal)
             {
-                var block = kvp.Value;
-                if (block.IsRoot) continue;
-
                 bool terminalEncountered = false;
                 int terminalLine = 0;
-
-                foreach (var step in block.Steps)
+                foreach (var step in steps)
                 {
-                    if (terminalEncountered)
+                    if (checkTerminal && terminalEncountered)
                     {
                         diagnostics.Add(new KtoryDiagnostic(
                             KtoryDiagnosticSeverity.Warning,
                             "KTR_W001",
-                            $"Unreachable code in section '=== {block.Label} ==='. Step at line {step.LineNumber} appears after terminal control flow at line {terminalLine}.",
+                            $"Unreachable code in {context}. Step at line {step.LineNumber} appears after terminal control flow at line {terminalLine}.",
                             step.LineNumber,
                             1
                         ));
@@ -117,8 +116,15 @@ namespace Ktory.Core.Parser
                         terminalEncountered = true;
                         terminalLine = step.LineNumber;
                     }
+
+                    if (step is ContainerStep container)
+                        foreach (var item in container.Items)
+                            CheckSteps(item.InlineSteps, context, checkTerminal);
                 }
             }
+
+            foreach (var block in file.Blocks.Values)
+                CheckSteps(block.Steps, $"section '=== {block.Label} ==='", checkTerminal: !block.IsRoot);
         }
 
         private static void CheckUnreferencedSections(KtoryFile file, List<KtoryDiagnostic> diagnostics)
@@ -127,6 +133,9 @@ namespace Ktory.Core.Parser
 
             void CollectReferences(StepNode step)
             {
+                foreach (var operation in TrackOperation.FromTags(step.Tags, step.LineNumber))
+                    if (operation.Kind == TrackOperationKind.Create && operation.Source != null)
+                        referenced.Add(operation.Source);
                 if (step is ControlFlowStep cf && !string.IsNullOrEmpty(cf.TargetLabel))
                 {
                     referenced.Add(cf.TargetLabel);

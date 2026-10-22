@@ -39,7 +39,7 @@ app.MapPost("/api/session/start", (StartSessionRequest req, RunnerSessionService
 {
     try
     {
-        var state = sessionService.Start(req.Script, req.RequestedLocale ?? "en", req.EntryBlock);
+        var state = sessionService.Start(req.Script, req.RequestedLocale ?? "en", req.EntryBlock, req.SecondaryLocale);
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -57,7 +57,7 @@ app.MapPost("/api/session/step", async (HttpRequest request, RunnerSessionServic
         {
             req = await request.ReadFromJsonAsync<StepRequest>();
         }
-        var state = sessionService.Step(new PresentationToken(req?.SessionId ?? "", req?.PresentationId ?? 0));
+        var state = sessionService.Step(new PresentationToken(req?.SessionId ?? "", req?.PresentationId ?? 0), req?.DeltaTime, req?.SourcePositions);
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -70,7 +70,7 @@ app.MapPost("/api/session/choice", (SubmitChoiceRequest req, RunnerSessionServic
 {
     try
     {
-        var state = sessionService.SubmitChoice(req.ChoiceId, new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0));
+        var state = sessionService.SubmitChoice(req.ChoiceId, new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0), req.DeltaTime, req.SourcePositions);
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -83,7 +83,7 @@ app.MapPost("/api/session/break", (StepRequest req, RunnerSessionService session
 {
     try
     {
-        var state = sessionService.Break(new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0));
+        var state = sessionService.Break(new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0), req.DeltaTime, req.SourcePositions);
         return Results.Ok(state);
     }
     catch (Exception ex)
@@ -110,18 +110,46 @@ app.MapGet("/api/session/state", (RunnerSessionService sessionService) =>
     return Results.Ok(sessionService.GetState());
 });
 
+app.MapPost("/api/session/secondary-language", (SetSecondaryLanguageRequest req, RunnerSessionService sessionService) =>
+{
+    try
+    {
+        var state = sessionService.SetSecondaryLanguage(req.Locale, new PresentationToken(req.SessionId ?? "", req.PresentationId ?? 0));
+        return Results.Ok(state);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 app.MapGet("/api/samples", () =>
 {
     return Results.Ok(SampleScripts.Catalog);
 });
 
+app.MapPost("/api/session/clock", (ReportClockRequest req, RunnerSessionService sessionService) =>
+{
+    try { return Results.Ok(sessionService.ReportClockPosition(req.SourceName, req.Position, req.SessionId, req.DeltaTime, req.SourcePositions)); }
+    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+app.MapPost("/api/session/clocks/advance", (AdvanceClocksRequest req, RunnerSessionService sessionService) =>
+{
+    try { return Results.Ok(sessionService.AdvanceClocks(req.DeltaTime, req.SessionId, req.SourcePositions)); }
+    catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
 app.Run();
 
 // Data Models
-public record StartSessionRequest(string Script, string? RequestedLocale, string? EntryBlock);
-public record SubmitChoiceRequest(string ChoiceId, long? PresentationId = null, string? SessionId = null);
-public record StepRequest(long? PresentationId = null, string? SessionId = null);
+public record StartSessionRequest(string Script, string? RequestedLocale, string? EntryBlock, string? SecondaryLocale = null);
+public record SubmitChoiceRequest(string ChoiceId, long? PresentationId = null, string? SessionId = null, double? DeltaTime = null, Dictionary<string, double?>? SourcePositions = null);
+public record StepRequest(long? PresentationId = null, string? SessionId = null, double? DeltaTime = null, Dictionary<string, double?>? SourcePositions = null);
 public record SetLanguageRequest(string Locale, long? PresentationId = null, string? SessionId = null);
+public record SetSecondaryLanguageRequest(string? Locale, long? PresentationId = null, string? SessionId = null);
+public record ReportClockRequest(string SourceName, double Position, string SessionId, double? DeltaTime = null, Dictionary<string, double?>? SourcePositions = null);
+public record AdvanceClocksRequest(double DeltaTime, string SessionId, Dictionary<string, double?>? SourcePositions = null);
 
 public class RunnerSessionState
 {
@@ -130,14 +158,20 @@ public class RunnerSessionState
     public long PresentationId { get; set; }
     public TextPayload? Payload { get; set; }
     public ChoicePayload? Choice { get; set; }
+    public IReadOnlyList<LanePresentation> ActivePresentations { get; set; } = Array.Empty<LanePresentation>();
+    public IReadOnlyList<LanePresentation> RetainedPresentations { get; set; } = Array.Empty<LanePresentation>();
+    public IReadOnlyList<StoryOutput> OutputEvents { get; set; } = Array.Empty<StoryOutput>();
+    public IReadOnlyList<LaneClockGate> PendingClockGates { get; set; } = Array.Empty<LaneClockGate>();
+    public IReadOnlyList<ClockSnapshot> Clocks { get; set; } = Array.Empty<ClockSnapshot>();
     public string RequestedLanguage { get; set; } = "en";
+    public string? SecondaryLanguage { get; set; }
     public string? DefaultLanguage { get; set; }
     public List<string> VisitedItems { get; set; } = new List<string>();
     public int CallStackDepth { get; set; }
     public List<TagData> RecentTags { get; set; } = new List<TagData>();
+    public List<LaneTagDispatch> RecentLaneTags { get; set; } = new List<LaneTagDispatch>();
     public List<ExecutionTrace> Diagnostics { get; set; } = new List<ExecutionTrace>();
     public AutoPolicyData? AutoPolicy { get; set; }
-    public string? ErrorMessage { get; set; }
 }
 
 public class RunnerSessionService
@@ -145,9 +179,11 @@ public class RunnerSessionService
     private readonly object _lock = new object();
     private KtorySequencer? _sequencer;
     private readonly List<TagData> _recentTags = new List<TagData>();
+    private readonly List<LaneTagDispatch> _recentLaneTags = new List<LaneTagDispatch>();
     private readonly List<ExecutionTrace> _diagnostics = new List<ExecutionTrace>();
+    private readonly List<StoryOutput> _outputs = new List<StoryOutput>();
 
-    public RunnerSessionState Start(string script, string requestedLocale, string? entryBlock)
+    public RunnerSessionState Start(string script, string requestedLocale, string? entryBlock, string? secondaryLocale = null)
     {
         lock (_lock)
         {
@@ -155,12 +191,15 @@ public class RunnerSessionService
             _sequencer?.InvalidateSession();
             _sequencer = null;
             _recentTags.Clear();
+            _recentLaneTags.Clear();
             _diagnostics.Clear();
+            _outputs.Clear();
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file)
             {
                 Evaluator = new DefaultExpressionEvaluator { IgnoreUnknownConditions = true }
             };
+            sequencer.OnOutput += output => _outputs.Add(output);
             sequencer.OnTrace += trace =>
             {
                 if (trace.Kind != ExecutionTraceKind.Warning && trace.Kind != ExecutionTraceKind.InputIgnored) return;
@@ -172,16 +211,23 @@ public class RunnerSessionService
                 _recentTags.AddRange(tags);
                 if (_recentTags.Count > 50) _recentTags.RemoveRange(0, _recentTags.Count - 50);
             };
+            sequencer.OnLaneTagsDispatched += dispatch =>
+            {
+                _recentLaneTags.Add(dispatch);
+                if (_recentLaneTags.Count > 50) _recentLaneTags.RemoveAt(0);
+            };
 
             try
             {
-                sequencer.Start(entryBlock, requestedLocale);
+                sequencer.Start(entryBlock, requestedLocale, secondaryLocale);
             }
             catch
             {
                 sequencer.InvalidateSession();
                 _recentTags.Clear();
+                _recentLaneTags.Clear();
                 _diagnostics.Clear();
+            _outputs.Clear();
                 throw;
             }
 
@@ -200,11 +246,12 @@ public class RunnerSessionService
         }
     }
 
-    public RunnerSessionState Step(PresentationToken token)
+    public RunnerSessionState Step(PresentationToken token, double? deltaTime = null, Dictionary<string, double?>? sourcePositions = null)
     {
         lock (_lock)
         {
             if (_sequencer == null) return GetStateInternal();
+            AdvanceForPresentationInput(token, deltaTime, sourcePositions);
             _sequencer.Step(token);
             return GetStateInternal();
         }
@@ -220,11 +267,12 @@ public class RunnerSessionService
         }
     }
 
-    public RunnerSessionState SubmitChoice(string choiceId, PresentationToken token)
+    public RunnerSessionState SubmitChoice(string choiceId, PresentationToken token, double? deltaTime = null, Dictionary<string, double?>? sourcePositions = null)
     {
         lock (_lock)
         {
             if (_sequencer == null) return GetStateInternal();
+            AdvanceForPresentationInput(token, deltaTime, sourcePositions);
             _sequencer.SubmitChoice(choiceId, token);
             return GetStateInternal();
         }
@@ -240,11 +288,12 @@ public class RunnerSessionService
         }
     }
 
-    public RunnerSessionState Break(PresentationToken token)
+    public RunnerSessionState Break(PresentationToken token, double? deltaTime = null, Dictionary<string, double?>? sourcePositions = null)
     {
         lock (_lock)
         {
             if (_sequencer == null) return GetStateInternal();
+            AdvanceForPresentationInput(token, deltaTime, sourcePositions);
             _sequencer.Break(token);
             return GetStateInternal();
         }
@@ -278,6 +327,55 @@ public class RunnerSessionService
         }
     }
 
+    public RunnerSessionState ReportClockPosition(string sourceName, double position, string expectedSessionId, double? deltaTime = null, Dictionary<string, double?>? sourcePositions = null)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            if (deltaTime.HasValue)
+            {
+                var batch = sourcePositions == null ? new Dictionary<string, double?>() : new Dictionary<string, double?>(sourcePositions);
+                batch[sourceName] = position;
+                _sequencer.UpdateClocks(deltaTime.Value, batch, expectedSessionId);
+            }
+            else _sequencer.PublishClockPosition(sourceName, position, expectedSessionId);
+            return GetStateInternal();
+        }
+    }
+
+    public RunnerSessionState SetSecondaryLanguage(string? locale, PresentationToken token)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            _sequencer.SetSecondaryLanguage(locale, token);
+            return GetStateInternal();
+        }
+    }
+
+    public RunnerSessionState AdvanceClocks(double deltaTime, string expectedSessionId, Dictionary<string, double?>? sourcePositions = null)
+    {
+        lock (_lock)
+        {
+            if (_sequencer == null) return GetStateInternal();
+            _sequencer.UpdateClocks(deltaTime, sourcePositions ?? new Dictionary<string, double?>(), expectedSessionId);
+            return GetStateInternal();
+        }
+    }
+
+    private void AdvanceForPresentationInput(PresentationToken token, double? deltaTime, Dictionary<string, double?>? sourcePositions)
+    {
+        if (deltaTime.HasValue && _sequencer?.GetPresentation(token) != null)
+            _sequencer.UpdateClocks(deltaTime.Value, sourcePositions ?? new Dictionary<string, double?>(), token.SessionId);
+    }
+
+    private StoryOutput[] DrainOutputs()
+    {
+        var batch = _outputs.ToArray();
+        _outputs.Clear();
+        return batch;
+    }
+
     private RunnerSessionState GetStateInternal()
     {
         if (_sequencer == null)
@@ -292,11 +390,18 @@ public class RunnerSessionService
             PresentationId = _sequencer.CurrentPresentationId,
             Payload = _sequencer.CurrentPayload,
             Choice = _sequencer.CurrentChoice,
+            ActivePresentations = _sequencer.GetActivePresentations(),
+            RetainedPresentations = _sequencer.GetRetainedPresentations(),
+            OutputEvents = DrainOutputs(),
+            PendingClockGates = _sequencer.GetPendingClockGates(),
+            Clocks = _sequencer.GetClocks(),
             RequestedLanguage = _sequencer.RequestedLanguage,
+            SecondaryLanguage = _sequencer.SecondaryLanguage,
             DefaultLanguage = _sequencer.DefaultLanguage,
             VisitedItems = new List<string>(_sequencer.VisitedItemIds),
             CallStackDepth = _sequencer.CallStack.Count,
             RecentTags = new List<TagData>(_recentTags),
+            RecentLaneTags = new List<LaneTagDispatch>(_recentLaneTags),
             Diagnostics = new List<ExecutionTrace>(_diagnostics),
             AutoPolicy = _sequencer.ActiveAutoPolicy?.ToData()
         };

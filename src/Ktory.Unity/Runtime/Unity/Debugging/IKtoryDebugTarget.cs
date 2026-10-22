@@ -34,5 +34,22 @@ namespace Ktory.Unity.Debugging
     {
         void CollectDebugInfo(ICollection<KeyValuePair<string, string>> entries);
     }
+
+    /// <summary>Optional secondary-language control through the host's normal presentation refresh path.</summary>
+    public interface IKtorySecondaryLanguageDebugTarget
+    {
+        void SetSecondaryLanguage(string? requestedLocale);
+    }
+
+    /// <summary>
+    /// Optional multi-track commands. Each command targets its originating presentation and
+    /// uses the host's own input gates; observing a lane must never advance its controller.
+    /// </summary>
+    public interface IKtoryLaneDebugTarget
+    {
+        PresentationController? GetPresentationController(string laneId);
+        void RequestAdvance(PresentationToken token);
+        void SubmitChoice(string optionId, PresentationToken token);
+    }
 }
 #endif

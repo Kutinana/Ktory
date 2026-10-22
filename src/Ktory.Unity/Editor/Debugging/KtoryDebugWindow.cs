@@ -87,76 +87,74 @@ namespace Ktory.Unity.Editor.Debugging
         {
             var target = player.Target;
             var seq = target.Sequencer;
-            var payload = seq.CurrentPayload;
             using (new EditorGUI.DisabledScope(true))
             {
                 EditorGUILayout.ObjectField("Owner", target.Owner, typeof(UnityEngine.Object), true);
                 EditorGUILayout.ObjectField("Script", target.SourceAsset, typeof(TextAsset), false);
             }
             EditorGUILayout.LabelField("Execution", seq.Status.ToString());
-            string node = seq.Status == ExecutionStatus.Completed ? "End"
-                : seq.Status == ExecutionStatus.AwaitingChoice ? "Choice"
-                : payload?.StepType == StepType.Directive ? "Directive"
-                : payload != null ? payload.IsNarration ? "Narration" : "Dialogue" : seq.CurrentNodeType;
-            EditorGUILayout.LabelField("Current node", $"{node} / {seq.CurrentBlockLabel} / presentation {seq.CurrentPresentationId}");
-            SourceButton(target.SourceAsset, seq.CurrentLineNumber);
-            if (payload != null)
-            {
-                EditorGUILayout.LabelField("Speaker", payload.Speaker ?? "(narration / no speaker)");
-                EditorGUILayout.SelectableLabel(payload.Content, EditorStyles.textArea, GUILayout.MinHeight(48));
-            }
-
-            EditorGUILayout.Space();
-            DrawTiming(target);
             string? hostBlock = target.InputBlockReason;
             if (!string.IsNullOrEmpty(hostBlock)) EditorGUILayout.HelpBox("Host input blocked: " + hostBlock, MessageType.Warning);
-            bool allowed = string.IsNullOrEmpty(hostBlock) && seq.Status == ExecutionStatus.SuspendedAtBeat &&
-                (target.Presentation == null || target.Presentation.CanHandleUserClick);
-            long presentationId = seq.CurrentPresentationId;
-            using (new EditorGUI.DisabledScope(!allowed))
-                if (GUILayout.Button(target.Presentation?.Phase == PresentationPhase.Printing ? "Reveal text (normal input)" : "Advance (normal input)"))
-                    Run(player, () => target.RequestAdvance(presentationId));
+            var active = seq.GetActivePresentations();
+            EditorGUILayout.LabelField("Active presentations", active.Count.ToString());
+            foreach (var lane in active) DrawLane(player, lane, hostBlock);
+            var activeTokens = new HashSet<PresentationToken>();
+            foreach (var lane in active) activeTokens.Add(lane.Token);
+            foreach (var retained in seq.GetRetainedPresentations())
+                if (!activeTokens.Contains(retained.Token)) DrawRetainedPresentation(target, retained);
+            foreach (var gate in seq.GetPendingClockGates())
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField($"{gate.LaneName} · {gate.LaneId}", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Waiting for source", $"{gate.ClockName} >= {gate.Position}");
+                SourceButton(target.SourceAsset, gate.LineNumber);
+            }
+            var clocks = seq.GetClocks();
+            if (clocks.Count > 0)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Shared clocks", EditorStyles.boldLabel);
+                foreach (var clock in clocks)
+                {
+                    EditorGUILayout.LabelField($"{clock.Name} · instance {clock.ClockId}",
+                        clock.Position.HasValue ? clock.Position.Value.ToString("0.###") : "No source sample");
+                    EditorGUILayout.LabelField("Source", clock.SourceName ?? "Ktory elapsed time since declaration");
+                    EditorGUILayout.LabelField("Declared at", $"session {clock.DeclaredAtElapsedSeconds:0.###} s · line {clock.LineNumber}");
+                }
+            }
             if (GUILayout.Button("Restart current script")) Run(player, target.Restart);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Language", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Script default", seq.DefaultLanguage);
-            EditorGUILayout.LabelField("Current request", seq.RequestedLanguage);
+            EditorGUILayout.LabelField("Primary request", seq.RequestedLanguage);
             bool follows = EditorGUILayout.Toggle("Follow script default", target.FollowsDefaultLanguage);
             if (follows != target.FollowsDefaultLanguage)
                 Run(player, () => target.SetLanguage(follows ? null : seq.RequestedLanguage));
             using (new EditorGUI.DisabledScope(follows))
             {
-                string locale = EditorGUILayout.DelayedTextField("Requested locale", seq.RequestedLanguage);
+                string locale = EditorGUILayout.DelayedTextField("Primary locale", seq.RequestedLanguage);
                 if (!string.IsNullOrWhiteSpace(locale) && !string.Equals(locale.Trim(), seq.RequestedLanguage, StringComparison.OrdinalIgnoreCase))
                     Run(player, () => target.SetLanguage(locale.Trim()));
             }
-            if (payload?.StepType == StepType.Text)
+            if (target is IKtorySecondaryLanguageDebugTarget secondaryTarget)
             {
-                EditorGUILayout.LabelField("Body output", LanguageLabel(payload.ActualLanguage, seq.RequestedLanguage));
-                if (!string.IsNullOrEmpty(payload.SpeakerActualLanguage))
-                    EditorGUILayout.LabelField("Speaker output", LanguageLabel(payload.SpeakerActualLanguage, seq.RequestedLanguage));
+                string secondary = EditorGUILayout.DelayedTextField("Secondary locale (blank = off)", seq.SecondaryLanguage ?? string.Empty);
+                string? requested = string.IsNullOrWhiteSpace(secondary) ? null : secondary.Trim();
+                if (!string.Equals(requested, seq.SecondaryLanguage, StringComparison.OrdinalIgnoreCase))
+                    Run(player, () => secondaryTarget.SetSecondaryLanguage(requested));
             }
-            else if (seq.CurrentChoice == null)
-                EditorGUILayout.LabelField("Body output", "No localized text at this node");
-
-            var choice = seq.CurrentChoice;
-            if (choice != null)
+            else
             {
-                EditorGUILayout.LabelField("Options", EditorStyles.boldLabel);
-                foreach (var option in choice.Options)
-                {
-                    EditorGUILayout.LabelField($"{option.Marker} {option.Label}", EditorStyles.wordWrappedLabel);
-                    EditorGUILayout.LabelField($"Selectable: {option.CanSelect} / consumed: {option.IsConsumed} / {LanguageLabel(option.ActualLanguage, option.RequestedLanguage)}");
-                    using (new EditorGUI.DisabledScope(!option.CanSelect || !string.IsNullOrEmpty(hostBlock)))
-                        if (GUILayout.Button("Submit option · line " + option.LineNumber))
-                            Run(player, () => target.SubmitChoice(option.Id, choice.PresentationId));
-                }
+                EditorGUILayout.LabelField("Secondary request", seq.SecondaryLanguage ?? "Off");
+                EditorGUILayout.LabelField("Host does not expose secondary language editing.", EditorStyles.wordWrappedMiniLabel);
             }
 
             _showFlow = EditorGUILayout.Foldout(_showFlow, "Control flow and session history", true);
             if (_showFlow)
             {
+                if (active.Count > 1)
+                    EditorGUILayout.LabelField("Stack diagnostics below show the parent scope; active outputs are listed above.", EditorStyles.wordWrappedLabel);
                 EditorGUILayout.LabelField("Call stack (top first)", EditorStyles.boldLabel);
                 foreach (var frame in seq.GetCallStackSnapshot())
                     EditorGUILayout.LabelField($"{frame.Type}: {frame.Block} → {(frame.ResumeLine > 0 ? "line " + frame.ResumeLine : "end of section")}");
@@ -180,15 +178,82 @@ namespace Ktory.Unity.Editor.Debugging
             }
         }
 
-        private static void DrawTiming(IKtoryDebugTarget target)
+        private void DrawLane(KtoryDebugRegistration player, LanePresentation lane, string? hostBlock)
         {
-            var seq = target.Sequencer;
-            var p = target.Presentation;
-            EditorGUILayout.LabelField("Presentation and input", EditorStyles.boldLabel);
-            if (seq.Status != ExecutionStatus.SuspendedAtBeat)
+            var target = player.Target;
+            var laneTarget = target as IKtoryLaneDebugTarget;
+            bool supportsInput = laneTarget != null || lane.LaneId == "root";
+            var controller = laneTarget?.GetPresentationController(lane.LaneId) ??
+                (lane.LaneId == "root" ? target.Presentation : null);
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField($"{lane.LaneName} · {lane.LaneId}", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Presentation", $"{lane.Token.PresentationId} / {lane.Status}" + (lane.RequiresInput ? " / interactive" : " / automatic"));
+            SourceButton(target.SourceAsset, lane.Payload?.LineNumber ?? lane.Choice?.LineNumber ?? 0);
+            if (lane.Payload != null)
             {
-                EditorGUILayout.HelpBox(seq.Status == ExecutionStatus.AwaitingChoice ? "Choose a selectable option to continue."
-                    : "No active beat accepts advance input: " + seq.Status, MessageType.Info);
+                if (lane.Payload.SpeakerName != null) DrawLocalizedValue("Speaker", lane.Payload.SpeakerName);
+                if (lane.Payload.StepType == StepType.Text) DrawLocalizedValue("Body", lane.Payload.Text);
+                else EditorGUILayout.LabelField("Directive", lane.Payload.Content);
+            }
+            DrawTiming(lane, controller);
+            bool allowed = supportsInput && string.IsNullOrEmpty(hostBlock) && lane.Status == ExecutionStatus.SuspendedAtBeat &&
+                (controller == null || controller.CanHandleUserClick);
+            using (new EditorGUI.DisabledScope(!allowed))
+                if (GUILayout.Button(controller?.Phase == PresentationPhase.Printing ? "Reveal text (normal input)" : "Advance this lane (normal input)"))
+                    Run(player, () =>
+                    {
+                        if (laneTarget != null) laneTarget.RequestAdvance(lane.Token);
+                        else target.RequestAdvance(lane.Token.PresentationId);
+                    });
+            if (!supportsInput)
+                EditorGUILayout.LabelField("This host exposes observation only for parallel lanes.", EditorStyles.wordWrappedMiniLabel);
+            if (lane.Choice != null)
+                foreach (var option in lane.Choice.Options)
+                {
+                    DrawLocalizedValue($"{option.Marker} Option", option.Text);
+                    EditorGUILayout.LabelField($"Selectable: {option.CanSelect} / consumed: {option.IsConsumed}");
+                    using (new EditorGUI.DisabledScope(!supportsInput || !option.CanSelect || !string.IsNullOrEmpty(hostBlock)))
+                        if (GUILayout.Button("Submit option · line " + option.LineNumber))
+                            Run(player, () =>
+                            {
+                                if (laneTarget != null) laneTarget.SubmitChoice(option.Id, lane.Token);
+                                else target.SubmitChoice(option.Id, lane.Token.PresentationId);
+                            });
+                }
+        }
+
+        private static void DrawRetainedPresentation(IKtoryDebugTarget target, LanePresentation lane)
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField($"Retained display · {(lane.IsMain ? "Main" : "Auxiliary")} · {lane.LaneName} · {lane.LaneId}", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Presentation", $"{lane.Token.PresentationId} / {lane.Status} / read only");
+            SourceButton(target.SourceAsset, lane.Payload?.LineNumber ?? lane.Choice?.LineNumber ?? 0);
+            if (lane.Payload != null)
+            {
+                if (lane.Payload.SpeakerName != null) DrawLocalizedValue("Speaker", lane.Payload.SpeakerName);
+                if (lane.Payload.StepType == StepType.Text) DrawLocalizedValue("Body", lane.Payload.Text);
+            }
+            // Retained text may outlive its playhead or session execution. It never grants input.
+        }
+
+        private static void DrawLocalizedValue(string label, LocalizedTextOutput output)
+        {
+            EditorGUILayout.LabelField(label + " primary", LanguageLabel(output.Primary.ActualLanguage, output.Primary.RequestedLanguage));
+            EditorGUILayout.SelectableLabel(output.Primary.Content, EditorStyles.textArea, GUILayout.MinHeight(32));
+            if (output.Secondary != null)
+            {
+                EditorGUILayout.LabelField(label + " secondary", LanguageLabel(output.Secondary.ActualLanguage, output.Secondary.RequestedLanguage));
+                EditorGUILayout.SelectableLabel(output.Secondary.Content, EditorStyles.textArea, GUILayout.MinHeight(32));
+            }
+        }
+
+        private static void DrawTiming(LanePresentation lane, PresentationController? p)
+        {
+            EditorGUILayout.LabelField("Presentation and input", EditorStyles.boldLabel);
+            if (lane.Status != ExecutionStatus.SuspendedAtBeat)
+            {
+                EditorGUILayout.HelpBox(lane.Status == ExecutionStatus.AwaitingChoice ? "Choose a selectable option to continue."
+                    : "No active beat accepts advance input: " + lane.Status, MessageType.Info);
                 return;
             }
             if (p == null)
@@ -211,7 +276,7 @@ namespace Ktory.Unity.Editor.Debugging
             string pending = p.Phase == PresentationPhase.Printing ? " (starts after printing)" : "";
             EditorGUILayout.LabelField("Minimum hold remaining", Seconds(p.MinimumHoldRemaining) + pending + (p.UsesEstimatedWait ? " · estimated" : ""));
             EditorGUILayout.LabelField("AUTO effective", p.AutoAdvanceOnHoldEnd ? "Yes · " + p.AutoAdvanceSource : "No");
-            var policy = seq.ActiveAutoPolicy;
+            var policy = lane.AutoPolicy;
             EditorGUILayout.LabelField("Lexical AUTO policy", policy == null || !policy.Enabled ? "Off"
                 : policy.UseEstimatedReadingTime ? "Estimated reading time" : Seconds(policy.DefaultWaitSeconds));
             EditorGUILayout.LabelField("Auto delay remaining", p.AutoAdvanceOnHoldEnd ? Seconds(p.AutoAdvanceRemaining) + pending + (p.UsesEstimatedAuto ? " · estimated" : "") : "Inactive");
@@ -251,7 +316,7 @@ namespace Ktory.Unity.Editor.Debugging
 
         private bool Matches(KtoryDebugLogEntry entry) => (_filter & entry.Trace.Kind) != 0 && (_allPlayers || entry.PlayerId == _selectedId);
         private static string Seconds(double value) => value.ToString("0.00") + " s";
-        private static string LanguageLabel(string actual, string requested) => string.IsNullOrEmpty(actual) ? "No output language"
+        private static string LanguageLabel(string? actual, string? requested) => string.IsNullOrEmpty(actual) ? "No output language"
             : actual + (string.Equals(actual, requested, StringComparison.OrdinalIgnoreCase) ? " (requested)" : " (fallback from " + requested + ")");
 
         private static void SourceButton(TextAsset? asset, int line)

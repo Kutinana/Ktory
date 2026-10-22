@@ -18,7 +18,7 @@ registration = Ktory.Unity.Debugging.KtoryDebugRegistry.Register(this);
 
 `this` 须实现 `IKtoryDebugTarget`。可直接参考并导入 Package Manager 的 **Debugging host probe** sample：[`DebuggableKtoryProbe.cs`](../src/Ktory.Unity/Samples~/Debugging/DebuggableKtoryProbe.cs)。这是可编译的日志宿主示例，不是完整对话框。已有项目应在自己的播放器上实现接口，复用已有 Sequencer，不再启动这个示例播放器。
 
-示例保留调试窗口的同步接口，并为游戏排队输入提供完整令牌重载。创建打字机任务时调用 `CapturePrintingCompletion()` 得到捕获旧控制器与旧令牌的完成回调；任务结束后调用这份回调，不能临时读取新会话的令牌。`OnDisable` 与重启先调用 `InvalidateSession()`，使仍持有旧对象的闭包失效，再清理宿主订阅。
+示例使用 `MultiTrackPresentationController` 管理同一 Sequencer 的 Main 呈现策略，保留调试窗口的同步接口，并为游戏排队输入提供完整令牌重载。创建 Main 打字机任务时调用 `CapturePrintingCompletion(laneId)` 得到捕获管理器与原呈现令牌的完成回调；任务结束后调用这份回调，不能临时读取新会话的令牌。辅助输出通过 `OnOutput` 接收，显示及 duration 独立管理，不等待打印完成或建立辅助推进控制器。无参数兼容接口选择 Main 当前交互呈现。`OnDisable` 与重启先调用 `InvalidateSession()`，使仍持有旧对象的闭包失效，再清理宿主订阅。
 
 接口成员的关键约定：
 
@@ -33,6 +33,14 @@ registration = Ktory.Unity.Debugging.KtoryDebugRegistry.Register(this);
 
 可选项目扩展示例（同样置于 `#if UNITY_EDITOR`）：
 
+- `IKtoryLaneDebugTarget` 提供 `GetPresentationController(laneId)`、`RequestAdvance(token)` 和 `SubmitChoice(optionId, token)`，窗口用它显示 Main 计时并把操作送回宿主。既有 `IKtoryDebugTarget` 无需修改即可继续使用；辅助与保留显示始终只读，不产生推进或选择按钮。
+- `IKtorySecondaryLanguageDebugTarget.SetSecondaryLanguage(locale)` 支持副语言编辑；null 关闭。先更新 Sequencer，再调用管理器 `RefreshLanguage(secondaryOnly: true)`，保留所有轨道的打印阶段与计时。主语言变化调用 `RefreshLanguage(completePrintingOnLanguageSwitch: false)`，按既有主语言规则保持阅读进度。
+- `MultiTrackPresentationController.Update(deltaTime)` 统一采样时钟并在有界批次内处理 Main 推进，辅助由 Core 独立执行；不要再逐个调用子控制器的 `Update`，也不要重复调用 `UpdateClocks`。宿主提交选项或外部更新位置后，调用 `Synchronize()` 建立新呈现，未变化呈现的计时保持不变。
+- 示例的 `BindClock(name, Func<double>)`／`UnbindClock(name)` 注册／移除 Core 的宿主来源，可传入 `() => audioSource.time` 或其他浮点值；例如注册 `music.position` 后由脚本 `#.clock(name="bgm", source="music.position")` 引用。绑定本身不声明时钟，脚本内置时钟须用 `.clock` 明确声明后才按帧 delta 累计。绑定不会播放音频，也不会回滚已执行剧情。`GetClocks()` 与 `GetPendingClockGates()` 均只读，不采样 getter；可检查声明、来源、当前位置和等待阈值。
+- `BindClock(name, source, reset)` 可选传入宿主重置动作。首次声明与同一声明的再次执行均不调用它；显式执行 `#.resetClock(name="bgm")` 时才调用对应来源的动作，没有动作则继续使用来源的原始值。重置不更换时钟 ID；有重置动作时旧采样失效，窗口可能暂时显示尚未采样，下一次门控或帧更新会读到新值。Probe 只转接动作，具体音乐播放位置由项目控制。
+
+额外世界／演出状态仍通过 `IKtoryDebugInfoProvider` 提供：
+
 ```csharp
 public void CollectDebugInfo(
     System.Collections.Generic.ICollection<System.Collections.Generic.KeyValuePair<string, string>> rows)
@@ -46,15 +54,15 @@ public void CollectDebugInfo(
 
 ## 显示与生命周期
 
-包含纯文本围栏的正文／选项版本通过`TextPayload.Segments`／`ChoiceOption.Segments` 保留片段边界。游戏渲染器应将 `IsLiteral=true` 的片段按字面显示并保留换行、空白，其他片段沿用已有富文本处理；不要仅把拼接后的 `Content` 再交给富文本组件。每次语言切换和回退随实际选中的版本读取片段。调试窗口继续以文本查看 `Content`，它的显示不代替游戏内富文本适配验收；具体语法及载荷见[实现规格](ktory-implementation_v1.md)。
+包含纯文本围栏的正文／选项版本通过各语言结果的 `Segments` 保留片段边界。游戏渲染器应将 `IsLiteral=true` 的片段按字面显示并保留换行、空白，其他片段沿用已有富文本处理；不要仅把拼接后的 `Content` 再交给富文本组件。主／副语言及回退结果各自携带片段，不能使用整拍共用的纯文本开关。调试窗口继续以文本查看 `Content`，它的显示不代替游戏内富文本适配验收；具体语法及载荷见[实现规格](ktory-implementation_v1.md)。
 
-语言栏分别显示剧本默认、当前请求、正文实际语言和回退；选项各自显示实际语言。已声明名字有 `SpeakerActualLanguage` 时另列 Speaker output，不用正文语言代替名字语言。没有本地化文本的指令拍不伪报输出语言。取消“Follow script default”后可输入 locale，确认输入即时刷新。
+窗口读取 `GetActivePresentations()` 显示 Main 当前输入呈现，再补充 `GetRetainedPresentations()` 中令牌未重复的保留显示，包括辅助末句、Main 空拍／选择前的正文以及会话自然结束后的文本。各份正文与名字分别显示主／副语言及来源实例；保留显示标为只读，不提供输入按钮或失效的推进计时。显示撤下后宿主可调用 `ReleaseOutput(token)`，使其不再参与保留观察与语言刷新。全局语言栏分别显示剧本默认、主请求和可选副请求；取消“Follow script default”后可编辑主语言，副语言留空即关闭。每个字段报告自身实际语言，不用正文语言代替名字语言。指令拍不伪报输出语言。全局控制栈面板仅显示 Main，不能冒充辅助执行栈。
 
-正文、选项和已声明名字在请求／默认语言都缺失时按已有有效译文顺序选取第三语言，报告 `Warning` 并保留真实语言。`TextPayload.SpeakerActualLanguage` 单独标记已声明名字；未声明名字按字面显示，不伪报语言。如 `@speaker alice:` 的空名字声明须加载时报错并指出行号；正文／选项空声明不据此新增规则。内置游戏求值器对未知条件 `Warning + false`，独立试读才显式启用宽容模式。
+主语言的正文、选项和已声明名字在请求／默认语言都缺失时按已有有效译文顺序选取第三语言，报告 `Warning` 并保留真实语言。副语言只输出所请求语言的有效译文，缺译不回退；与主语言实际语言相同的字段省略，不同语言即使字符相同也保留。未本地化正文和未声明名字没有副语言输出；文件默认语言下的未标注文本仍属于该默认语言。`TextPayload.SpeakerActualLanguage` 继续投影主语言名字的实际语言。如 `@speaker alice:` 的空名字声明须加载时报错并指出行号；正文／选项空声明不据此新增规则。内置游戏求值器对未知条件 `Warning + false`，独立试读才显式启用宽容模式。
 
-文字显示中，最低停留与自动延迟展示的是**显示结束后才开始的时长**；显示完成后才展示倒计时。两者并行，自动推进等待两者都满足。`.skippable(false)` 显示“等待自然显示完成”；宿主未使用共享控制器时，不推测其私有计时和 AUTO。
+Main 文字显示中，最低停留与自动延迟展示的是**显示结束后才开始的时长**；显示完成后才展示倒计时。两者并行，自动推进等待两者都满足。`.skippable(enabled=false)` 显示“等待自然显示完成”；宿主未使用共享控制器时，不推测其私有计时和 AUTO。辅助执行不受 wait／next 影响；两类显示的 duration 都不参与推进门控。
 
-标签记录表示 Core 派发尝试，行号指向所属节点或选项锚点，不代表项目演出已经成功或结束；出错不回滚已有副作用。
+标签记录保留 lane、scope 及源码行，表示 Core 派发尝试，不代表项目演出已经成功或结束；出错不回滚已有副作用。宿主订阅 `OnLaneTagsDispatched` 可定位所属轨道；不要同时消费它和兼容 `OnTagsDispatched` 而重复执行同一演出。
 
 过期或重复操作仅记录后台 `InputIgnored` 并忽略，不中断剧情；不要将它作为玩家错误弹窗。`Warning` 用于第三语言回退、未知条件或未知容器等可恢复诊断。当前令牌有效但选项本身非法仍报错，不属于可忽略的过期输入。悬空修饰符属于加载期语法错误，须显示行号并停止加载。
 
@@ -73,8 +81,12 @@ UPM 带有 `Tests/Editor/DebuggingTests.cs`。在游戏 `Packages/manifest.json`
 | 用例 | 预期 |
 | --- | --- |
 | 两个已运行播放器，反复开关窗口和切换实例 | 位置、标签数、计时不因窗口变化；按钮只作用于所选实例 |
-| 打字中快显锁、`.wait(2).next(5)`、`#AUTO.wait` | 原始输入被正确丢弃／快显／推进，剩余时间与游戏一致 |
+| 打字中快显锁、`.wait(seconds=2).next(seconds=5)`、`#AUTO.wait` | 原始输入被正确丢弃／快显／推进，剩余时间与游戏一致 |
 | 打字、停留、选择三个阶段切语言；请求／默认双缺译；跟随默认 | 当前节点及 ID 不变、标签不重放、消费不变；第三语言回退有 Warning、正文／名字／选项各自报告实际语言，固定计时不重启 |
+| Main 与辅助同时输出，Main 接受选择／点击，辅助按 at 继续；Main 显式 awaitTrack | 输入仅作用于 Main；辅助正文可只读检查；辅助停止后解除显式等待，日志保留来源 |
+| 辅助停止或会话自然结束后切主／副语言 | 保留显示仍能刷新双语，原令牌不变，不重放标签或结束通知；无推进／选择按钮，已释放显示不复现 |
+| 打字与停留期间开关副语言，正文缺译但名字有译文 | 副语言按字段缺译省略、不回退；当前轨迹、打印阶段和阅读计时不变 |
+| `.at` 等待默认来源或宿主绑定浮点来源 | 窗口只读显示目标位置；来源达到目标才入拍，后退不回滚；实音频对齐另行验证 |
 | 宿主额外门禁、自定义呈现（Presentation=null） | 显示项目原因或计时不可用，操作仍经过游戏门禁 |
 | 提交一次性选项并循环重入；调用／返回／break | 首拍停顿、选项消费、栈和循环计数与实际执行一致 |
 | 销毁、场景切换、重启、退出／再次进入 Play，关闭 Domain Reload | 无旧实例和旧订阅；项目正常重启，新会话可重新注册 |

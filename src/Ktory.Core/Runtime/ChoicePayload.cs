@@ -8,12 +8,10 @@ namespace Ktory.Core.Runtime
     {
         public string Id { get; set; } = string.Empty;
         public int LineNumber { get; set; }
-        public string? ActualLanguage { get; set; }
-        public string? RequestedLanguage { get; set; }
-        public string Label { get; set; } = string.Empty;
-
-        /// <summary>Literal/rich fragment boundaries. Render literal pieces as text when present.</summary>
-        public IReadOnlyList<TextSegment>? Segments { get; set; }
+        public LocalizedTextOutput Text { get; set; } = new LocalizedTextOutput();
+        public string? ActualLanguage { get => Text.Primary.ActualLanguage; set => Text.Primary.ActualLanguage = value; }
+        public string? RequestedLanguage { get => Text.Primary.RequestedLanguage; set => Text.Primary.RequestedLanguage = value; }
+        public string Label { get => Text.Primary.Content; set => Text.Primary.Content = value; }
         public char Marker { get; set; } = '*';
         public bool IsConsumed { get; set; }
         public bool CanSelect { get; set; } = true;

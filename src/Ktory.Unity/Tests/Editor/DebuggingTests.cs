@@ -17,13 +17,14 @@ namespace Ktory.Unity.Tests
         {
             public UnityEngine.Object Owner { get; } = new GameObject("Debug test player");
             public string DisplayName => Owner.name;
-            public TextAsset SourceAsset { get; } = new TextAsset(": first .effect.wait(2)\n: second");
+            public TextAsset SourceAsset { get; }
             public KtorySequencer Sequencer { get; }
             public PresentationController Presentation { get; }
             public bool FollowsDefaultLanguage { get; private set; } = true;
             public string InputBlockReason { get; set; }
-            public Target()
+            public Target(string source = ": first .effect.wait(seconds=2)\n: second")
             {
+                SourceAsset = new TextAsset(source);
                 Sequencer = new KtorySequencer(KtoryParser.Parse(SourceAsset.text));
                 Presentation = new PresentationController(Sequencer);
             }
@@ -85,6 +86,69 @@ namespace Ktory.Unity.Tests
             yield return new ExitPlayMode();
             Assert.AreEqual(0, KtoryDebugRegistry.GetPlayers().Count);
             Assert.AreEqual(0, KtoryDebugRegistry.GetLogSnapshot().Count);
+        }
+
+        [UnityTest]
+        public IEnumerator RetainedBilingualObservation_PreservesOriginsAndDoesNotRequireNewHostInterfaces()
+        {
+            yield return new EnterPlayMode();
+            // An existing adapter still supports read-only auxiliary diagnostics; optional
+            // token commands are deliberately absent on this legacy target.
+            var target = new Target("@defaultLang: en\n#.clock(name=\"song\")\n#.track(source=\"Lyrics\", name=\"lyrics\")\n: hello\n  @zh: 你好\n  .effect\n=== Lyrics ===\n  : lyrics\n    @zh: 歌词\n    .at(value=0, clock=\"song\").duration(seconds=2).music");
+            var registration = KtoryDebugRegistry.Register(target);
+            try
+            {
+                target.Sequencer.Start();
+                var before = target.Sequencer.GetActivePresentations();
+                var retained = target.Sequencer.GetRetainedPresentations();
+                Assert.AreEqual(1, before.Count);
+                Assert.IsTrue(before[0].IsMain);
+                Assert.AreEqual(2, retained.Count);
+                bool dialogue = false, lyrics = false;
+                foreach (var entry in KtoryDebugRegistry.GetLogSnapshot())
+                {
+                    if (entry.PlayerId != registration.Id || entry.Trace.Kind != ExecutionTraceKind.Tag) continue;
+                    dialogue |= entry.Trace.LaneId == "root";
+                    lyrics |= entry.Trace.LaneName == "lyrics";
+                }
+                Assert.IsTrue(dialogue && lyrics);
+                int count = KtoryDebugRegistry.GetLogSnapshot().Count;
+                KtoryDebugWindow.Open();
+                yield return null;
+                EditorWindow.GetWindow<KtoryDebugWindow>().Close();
+                var after = target.Sequencer.GetActivePresentations();
+                Assert.AreEqual(before[0].Token, after[0].Token);
+                target.Sequencer.SetSecondaryLanguage("zh", before[0].Token);
+                foreach (var display in target.Sequencer.GetRetainedPresentations())
+                    Assert.AreEqual("zh", display.Payload.Text.Secondary.ActualLanguage);
+                Assert.AreEqual(count, KtoryDebugRegistry.GetLogSnapshot().Count);
+
+                target.Sequencer.Step(before[0].Token);
+                Assert.AreEqual(ExecutionStatus.Completed, target.Sequencer.Status);
+                Assert.AreEqual(0, target.Sequencer.GetActivePresentations().Count);
+                target.Sequencer.SetLanguageOutput("zh", "en", before[0].Token);
+                count = KtoryDebugRegistry.GetLogSnapshot().Count;
+                KtoryDebugWindow.Open();
+                yield return null;
+                EditorWindow.GetWindow<KtoryDebugWindow>().Close();
+                var ended = target.Sequencer.GetRetainedPresentations();
+                Assert.AreEqual(2, ended.Count);
+                for (int i = 0; i < ended.Count; i++)
+                {
+                    Assert.AreEqual(retained[i].Token, ended[i].Token);
+                    Assert.AreEqual("zh", ended[i].Payload.Text.Primary.ActualLanguage);
+                    Assert.AreEqual("en", ended[i].Payload.Text.Secondary.ActualLanguage);
+                    Assert.IsFalse(ended[i].RequiresInput);
+                }
+                Assert.AreEqual(count, KtoryDebugRegistry.GetLogSnapshot().Count);
+            }
+            finally
+            {
+                registration.Dispose();
+                UnityEngine.Object.DestroyImmediate(target.Owner);
+                UnityEngine.Object.DestroyImmediate(target.SourceAsset);
+            }
+            yield return new ExitPlayMode();
         }
 
         [UnityTest]

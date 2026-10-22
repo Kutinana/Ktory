@@ -189,7 +189,7 @@ public class SessionInputRegressionTests
     [Fact]
     public void DelayedPresentationCallbacks_DoNotChangeTheNextBeatOrItsTimers()
     {
-        var sequencer = new KtorySequencer(KtoryParser.Parse(": first .next(1)\n: second .next(1)\n: third .effect"));
+        var sequencer = new KtorySequencer(KtoryParser.Parse(": first .next(seconds=1)\n: second .next(seconds=1)\n: third .effect"));
         var controller = new PresentationController(sequencer);
         var trace = new List<ExecutionTrace>();
         sequencer.OnTrace += trace.Add;
@@ -219,7 +219,7 @@ public class SessionInputRegressionTests
     [Fact]
     public void RestartAndSetup_RejectCapturedOldPrintingAndTimerCallbacks()
     {
-        var sequencer = new KtorySequencer(KtoryParser.Parse(": first .next(1)\n: second"));
+        var sequencer = new KtorySequencer(KtoryParser.Parse(": first .next(seconds=1)\n: second"));
         var controller = new PresentationController(sequencer);
         sequencer.Start();
         controller.SetupForCurrentBeat();
@@ -296,7 +296,7 @@ public class SessionInputRegressionTests
     [Fact]
     public void DuplicatePrintingCompletion_DoesNotResetAnActiveHoldTimer()
     {
-        var sequencer = new KtorySequencer(KtoryParser.Parse(": first .next(2)\n: second"));
+        var sequencer = new KtorySequencer(KtoryParser.Parse(": first .next(seconds=2)\n: second"));
         var controller = new PresentationController(sequencer);
         var trace = new List<ExecutionTrace>();
         sequencer.OnTrace += trace.Add;
@@ -425,7 +425,7 @@ public class SessionInputRegressionTests
     [Fact]
     public void DeferredAutoBatches_ContinueAcrossTicks_InTheSameSession()
     {
-        var sequencer = new KtorySequencer(KtoryParser.Parse("#pause.loop(5).next\n: after"));
+        var sequencer = new KtorySequencer(KtoryParser.Parse("#pause.loop(count=5).next\n: after"));
         var controller = new PresentationController(sequencer) { MaxAutoAdvancesPerBatch = 1 };
         sequencer.Start();
         controller.SetupForCurrentBeat();

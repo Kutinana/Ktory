@@ -6,7 +6,9 @@ namespace Ktory.Core.Runtime
         SuspendedAtBeat,
         AwaitingChoice,
         Completed,
-        Error
+        Error,
+        WaitingForClock = 7,
+        WaitingForTrack = 8
     }
 
     public enum StepType

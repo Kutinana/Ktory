@@ -70,7 +70,7 @@ public class SectionBoundaryTests
   主角:
     @zh: 房间里乱成一团，看来之前有人在这里匆忙寻找过什么。
     @en: The room is in complete disarray. Someone was searching for something in a hurry.
-  #do .camera_shake(intensity=0.4) .sfx(""metal_drop"") .next(0.5)
+  #do .camera_shake(intensity=0.4) .sfx(""metal_drop"") .next(seconds=0.5)
   艾莉丝:
     @zh: 刚才的声音是从[书桌]{desk}那边传来的！
     @en: That sound came from the desk!

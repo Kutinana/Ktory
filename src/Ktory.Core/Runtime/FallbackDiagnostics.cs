@@ -8,7 +8,7 @@ namespace Ktory.Core.Runtime
     {
         // Refreshing the same presentation may discover a new missing locale, but does not
         // repeat a warning already reported for that presentation and locale combination.
-        private readonly HashSet<string> _reportedFallbackWarnings = new HashSet<string>(StringComparer.Ordinal);
+        private HashSet<string> _reportedFallbackWarnings => _lane.FallbackWarnings;
 
         private void WarnFallbackOnce(string message, int line)
         {
@@ -25,31 +25,77 @@ namespace Ktory.Core.Runtime
 
         private void RefreshTextPayload(TextStep step, TextPayload payload)
         {
-            payload.Content = step.GetText(RequestedLanguage, DefaultLanguage, out var actualLocale, out var textFallback);
-            payload.ActualLanguage = actualLocale;
-            payload.RequestedLanguage = RequestedLanguage;
-            payload.Segments = ResolveSegments(step.TextVariants, step.TextVariantSegments);
+            var content = step.GetText(RequestedLanguage, DefaultLanguage, out var actualLocale, out var textFallback);
+            payload.Text = ResolveOutput(step.TextVariants, content, actualLocale, step.TextVariantSegments);
             if (textFallback) WarnMissingTranslations("Text", step.LineNumber, actualLocale ?? string.Empty);
 
-            payload.SpeakerActualLanguage = null;
             if (!string.IsNullOrEmpty(step.Speaker) && File.SpeakersByAlias.TryGetValue(step.Speaker, out var speaker))
             {
-                payload.Speaker = speaker.GetDisplayName(RequestedLanguage, DefaultLanguage, out var nameLocale, out var nameFallback);
-                payload.SpeakerActualLanguage = nameLocale;
+                var name = speaker.GetDisplayName(RequestedLanguage, DefaultLanguage, out var nameLocale, out var nameFallback);
+                payload.SpeakerName = ResolveOutput(speaker.DisplayNames, name, nameLocale);
+                payload.SpeakerId = speaker.Id ?? step.Speaker;
                 if (nameFallback)
                     WarnMissingTranslations($"Speaker '{step.Speaker}' (declared at line {speaker.LineNumber})", step.LineNumber, nameLocale!);
             }
             else
             {
-                payload.Speaker = File.ResolveSpeaker(step.Speaker, RequestedLanguage, DefaultLanguage);
+                var name = File.ResolveSpeaker(step.Speaker, RequestedLanguage, DefaultLanguage);
+                payload.SpeakerId = step.Speaker;
+                payload.SpeakerName = name == null ? null : new LocalizedTextOutput
+                {
+                    Primary = new ResolvedLocalizedValue { Content = name, RequestedLanguage = RequestedLanguage }
+                };
             }
         }
 
-        private IReadOnlyList<TextSegment>? ResolveSegments(Dictionary<string, string> variants,
-            Dictionary<string, IReadOnlyList<TextSegment>> segments)
+        private void RefreshChoiceOptionLanguage(ContainerItem item, ChoiceOption option)
+        {
+            var label = item.GetLabel(RequestedLanguage, DefaultLanguage, out var actualLocale, out var fallback);
+            option.Text = ResolveOutput(item.LabelVariants, label, actualLocale, item.LabelVariantSegments);
+            if (fallback) WarnMissingTranslations("Choice label", item.LineNumber, actualLocale ?? string.Empty);
+        }
+
+        private LocalizedTextOutput ResolveOutput(Dictionary<string, string> variants, string content, string? actualLocale,
+            Dictionary<string, IReadOnlyList<TextSegment>>? segments = null)
         {
             LocalizedValueSelector.Select(variants, RequestedLanguage, DefaultLanguage, out _, out _, out _, out var key);
-            return key != null && segments.TryGetValue(key, out var pieces) ? pieces : null;
+            return new LocalizedTextOutput
+            {
+                Primary = new ResolvedLocalizedValue
+                {
+                    Content = content,
+                    RequestedLanguage = RequestedLanguage,
+                    ActualLanguage = actualLocale,
+                    Segments = key != null && segments != null && segments.TryGetValue(key, out var pieces) ? pieces : null
+                },
+                Secondary = ResolveSecondary(variants, actualLocale, segments)
+            };
+        }
+
+        private ResolvedLocalizedValue? ResolveSecondary(Dictionary<string, string> variants, string? primaryActualLocale,
+            Dictionary<string, IReadOnlyList<TextSegment>>? segments)
+        {
+            var requested = SecondaryLanguage;
+            if (requested == null || string.Equals(requested, primaryActualLocale, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            // Secondary output is an additional translation, never a fallback copy. A bare
+            // value belongs to the file's default language only when one is defined.
+            string key = requested;
+            if (!variants.TryGetValue(key, out var content) || string.IsNullOrEmpty(content))
+            {
+                key = string.Empty;
+                if (!(string.Equals(requested, DefaultLanguage, StringComparison.OrdinalIgnoreCase) &&
+                      variants.TryGetValue(key, out content) && !string.IsNullOrEmpty(content))) return null;
+            }
+
+            return new ResolvedLocalizedValue
+            {
+                Content = content,
+                RequestedLanguage = requested,
+                ActualLanguage = requested,
+                Segments = segments != null && segments.TryGetValue(key, out var pieces) ? pieces : null
+            };
         }
 
         private bool EvaluateGuard(string expression, int line)

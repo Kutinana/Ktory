@@ -12,6 +12,8 @@ namespace Ktory.Core.Ast
         public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, KtoryBlock> Blocks { get; set; } = new Dictionary<string, KtoryBlock>(StringComparer.OrdinalIgnoreCase);
         public KtoryBlock RootBlock { get; set; } = new KtoryBlock("root", isRoot: true);
+        public Dictionary<string, StepNode> ClockDeclarations { get; } = new Dictionary<string, StepNode>(StringComparer.Ordinal);
+        public Dictionary<string, StepNode> TrackDeclarations { get; } = new Dictionary<string, StepNode>(StringComparer.Ordinal);
 
         public List<SpeakerDefinition> Speakers { get; } = new List<SpeakerDefinition>();
         public Dictionary<string, SpeakerDefinition> SpeakersByAlias { get; } = new Dictionary<string, SpeakerDefinition>(StringComparer.Ordinal);
@@ -102,7 +104,8 @@ namespace Ktory.Core.Ast
                         effective.Add(new TagData(tag.Name)
                         {
                             PositionalArgs = new List<object>(tag.PositionalArgs),
-                            NamedArgs = new Dictionary<string, object>(tag.NamedArgs, StringComparer.OrdinalIgnoreCase)
+                            NamedArgs = new Dictionary<string, object>(tag.NamedArgs, StringComparer.OrdinalIgnoreCase),
+                            DuplicateNamedArgs = new List<string>(tag.DuplicateNamedArgs)
                         });
                     }
                     effective.AddRange(text.Tags);
@@ -146,9 +149,9 @@ namespace Ktory.Core.Ast
                         double defaultWait = 0;
                         if (waitTag != null)
                         {
-                            if (waitTag.PositionalArgs.Count > 0)
+                            if (waitTag.NamedArgs.ContainsKey("seconds"))
                             {
-                                defaultWait = waitTag.GetPositional<double>(0, 0);
+                                defaultWait = waitTag.GetNamed<double>("seconds", 0);
                                 useEstimated = false;
                             }
                             else

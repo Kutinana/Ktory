@@ -111,8 +111,8 @@ namespace Ktory.Core.Tests
         {
             string script = @"
 主角: 这是一句需要测试呈现倒计时的重要线索。
-  .skippable(true)
-  .next(2)
+  .skippable(enabled=true)
+  .next(seconds=2)
 ";
             var file = KtoryParser.Parse(script);
             var sequencer = new KtorySequencer(file);

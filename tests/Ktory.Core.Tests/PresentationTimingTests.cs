@@ -17,9 +17,9 @@ public class PresentationTimingTests
     }
 
     [Theory]
-    [InlineData(".wait(2)", 2)]
+    [InlineData(".wait(seconds=2)", 2)]
     [InlineData(".wait", 1)]
-    [InlineData(".wait(0)", 0)]
+    [InlineData(".wait(seconds=0)", 0)]
     public void Wait_DiscardsEarlyInput_RequiresFreshClick(string tags, double duration)
     {
         var (player, controller) = Start(tags);
@@ -41,13 +41,13 @@ public class PresentationTimingTests
     }
 
     [Theory]
-    [InlineData(".wait(2).next(2)", 2)]
-    [InlineData(".next(2).wait(2)", 2)]
-    [InlineData(".wait(2).next(5)", 5)]
-    [InlineData(".next(5).wait(2)", 5)]
-    [InlineData(".wait(5).next(2)", 5)]
-    [InlineData(".next(2).wait(5)", 5)]
-    [InlineData(".wait(2).next", 2)]
+    [InlineData(".wait(seconds=2).next(seconds=2)", 2)]
+    [InlineData(".next(seconds=2).wait(seconds=2)", 2)]
+    [InlineData(".wait(seconds=2).next(seconds=5)", 5)]
+    [InlineData(".next(seconds=5).wait(seconds=2)", 5)]
+    [InlineData(".wait(seconds=5).next(seconds=2)", 5)]
+    [InlineData(".next(seconds=2).wait(seconds=5)", 5)]
+    [InlineData(".wait(seconds=2).next", 2)]
     [InlineData(".next.wait", 1)]
     [InlineData(".wait.next", 1)]
     public void WaitAndNext_UseConcurrentTimers_RegardlessOfOrder(string tags, double duration)
@@ -70,7 +70,7 @@ public class PresentationTimingTests
     [InlineData(true)]
     public void WaitEndsBeforeNext_FreshClickCanAdvance(bool hostManaged)
     {
-        var (player, controller) = Start(".next(5).wait(2)");
+        var (player, controller) = Start(".next(seconds=5).wait(seconds=2)");
         controller.AutoStepSequencer = !hostManaged;
         int requests = 0;
         controller.OnAdvanceRequested += () => requests++;
@@ -92,8 +92,8 @@ public class PresentationTimingTests
     }
 
     [Theory]
-    [InlineData(".skippable(false)")]
-    [InlineData(".skippable(false, 2)")]
+    [InlineData(".skippable(enabled=false)")]
+    [InlineData(".skippable(enabled=false, seconds=2)")]
     public void SkippableLock_DoesNotRememberInput(string tags)
     {
         var (player, controller) = Start(tags);
@@ -116,26 +116,21 @@ public class PresentationTimingTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void DirectiveWait_OnlyAutoAdvancesWithNextOrAuto(bool next, bool auto)
+    public void DirectiveWait_DefaultAutomaticStillRespectsMinimumHold(bool next, bool auto)
     {
-        var (player, controller) = Start(".wait(2)" + (next ? ".next" : ""), directive: true, auto: auto);
+        var (player, controller) = Start(".wait(seconds=2)" + (next ? ".next" : ""), directive: true, auto: auto);
         long first = player.CurrentPresentationId;
         controller.HandleUserClick();
         controller.Update(1);
         Assert.Equal(first, player.CurrentPresentationId);
         controller.Update(1);
-        if (!next && !auto)
-        {
-            Assert.Equal(first, player.CurrentPresentationId);
-            controller.HandleUserClick();
-        }
         Assert.Equal("Second", player.CurrentPayload!.Content);
     }
 
     [Fact]
     public void EstimatedWait_LanguageRefreshPreservesNextClock_AndDoesNotRelock()
     {
-        var player = new KtorySequencer(KtoryParser.Parse("@defaultLang: zh\n:\n  @zh: 一二三四五六七\n  @en: one two three four five six seven\n  .wait.next(3)\n: Second"));
+        var player = new KtorySequencer(KtoryParser.Parse("@defaultLang: zh\n:\n  @zh: 一二三四五六七\n  @en: one two three four five six seven\n  .wait.next(seconds=3)\n: Second"));
         var controller = new PresentationController(player);
         player.Start();
         controller.SetupForCurrentBeat();

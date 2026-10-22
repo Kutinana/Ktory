@@ -21,11 +21,12 @@ namespace Ktory.Unity.Debugging
             PlayerName = player.Target.DisplayName;
             SourceAsset = player.Target.SourceAsset;
             // Bound retained text as well as entry count, even for huge tag arguments/errors.
-            Trace = new ExecutionTrace(trace.Kind, Clip(trace.Block), trace.LineNumber, Clip(trace.Message));
+            Trace = new ExecutionTrace(trace.Kind, Clip(trace.Block), trace.LineNumber, Clip(trace.Message),
+                Clip(trace.LaneId), Clip(trace.LaneName));
         }
 
         private static string Clip(string value) => value.Length <= 4096 ? value : value.Substring(0, 4096) + "…";
-        public override string ToString() => $"{TimeUtc:O} [{PlayerName} #{PlayerId}] {Trace.Kind} {Trace.Block}:L{Trace.LineNumber} {Trace.Message}";
+        public override string ToString() => $"{TimeUtc:O} [{PlayerName} #{PlayerId}] [{Trace.LaneName}/{Trace.LaneId}] {Trace.Kind} {Trace.Block}:L{Trace.LineNumber} {Trace.Message}";
     }
 
     public sealed class KtoryDebugRegistration : IDisposable

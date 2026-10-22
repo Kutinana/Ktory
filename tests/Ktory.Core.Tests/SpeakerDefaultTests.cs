@@ -65,7 +65,7 @@ public class SpeakerDefaultTests
     {
         var seq = new KtorySequencer(KtoryParser.Parse("""
             @speaker alice: zh="爱丽丝" | en="Alice"
-              .sfx(bell).wait(2)
+              .sfx(bell).wait(seconds=2)
             alice:
               @zh: 你好
               @en: Hello
@@ -82,7 +82,7 @@ public class SpeakerDefaultTests
     {
         var seq = new KtorySequencer(KtoryParser.Parse("""
             @speaker alice: zh="爱丽丝"
-              .loop(2).wait(2).next(3)
+              .loop(count=2).wait(seconds=2).next(seconds=3)
             alice: repeated
             : done
             """));

@@ -8,6 +8,7 @@ namespace Ktory.Core.Ast
         public string Name { get; set; } = string.Empty;
         public List<object> PositionalArgs { get; set; } = new List<object>();
         public Dictionary<string, object> NamedArgs { get; set; } = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        internal List<string> DuplicateNamedArgs { get; set; } = new List<string>();
 
         public TagData() { }
 

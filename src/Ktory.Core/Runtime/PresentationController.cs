@@ -13,12 +13,18 @@ namespace Ktory.Core.Runtime
 
     /// <summary>
     /// Standard presentation timing controller complying with Ktory Specification §2.6.
-    /// Manages .skippable, .next(t), and .wait(t) logic for both standalone runner and Unity host.
+    /// Manages Main presentation input and named .skippable/.next/.wait timing. Display lifetime is independent.
     /// </summary>
     public class PresentationController
     {
         private readonly KtorySequencer _sequencer;
         private PresentationToken _presentationToken;
+        private readonly string? _laneId;
+        private LanePresentation? BoundPresentation => _laneId == null
+            ? _sequencer.GetPresentation(_sequencer.CurrentPresentationToken)
+            : _sequencer.GetLanePresentation(_laneId);
+        private TextPayload? CurrentPayload => BoundPresentation?.Payload;
+        private ExecutionStatus CurrentStatus => BoundPresentation?.Status ?? ExecutionStatus.Completed;
 
         /// <summary>Capture this token when scheduling work for the currently configured beat.</summary>
         public PresentationToken CurrentPresentationToken => _presentationToken;
@@ -51,7 +57,7 @@ namespace Ktory.Core.Runtime
             : Phase == PresentationPhase.Printing ? _autoAdvanceDuration
             : Phase == PresentationPhase.Holding ? Math.Max(0, _autoAdvanceDuration - _elapsedForAutoAdvance) : 0;
         public bool CanHandleUserClick => _sequencer.MatchesCurrentPresentation(_presentationToken) &&
-            _sequencer.Status == ExecutionStatus.SuspendedAtBeat &&
+            CurrentStatus == ExecutionStatus.SuspendedAtBeat &&
             ((Phase == PresentationPhase.Printing && CanFastForward && ElapsedInPhase >= FastForwardLockDuration) ||
              (Phase == PresentationPhase.Holding && AllowClickInterruptHold));
 
@@ -122,9 +128,10 @@ namespace Ktory.Core.Runtime
         /// </summary>
         public event Action<int>? OnBatchAdvanceLimitReached;
 
-        public PresentationController(KtorySequencer sequencer)
+        public PresentationController(KtorySequencer sequencer, string? laneId = null)
         {
             _sequencer = sequencer ?? throw new ArgumentNullException(nameof(sequencer));
+            _laneId = laneId;
         }
 
         public void SetupForCurrentBeat()
@@ -144,12 +151,12 @@ namespace Ktory.Core.Runtime
         public void RefreshLanguage(bool completePrintingOnLanguageSwitch = true)
         {
             if (!AcceptInput(_presentationToken, nameof(RefreshLanguage))) return;
-            if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat || _sequencer.CurrentPayload == null)
+            if (CurrentStatus != ExecutionStatus.SuspendedAtBeat || CurrentPayload == null)
             {
                 return;
             }
 
-            var payload = _sequencer.CurrentPayload;
+            var payload = CurrentPayload;
 
             // Directives have no localized text; preserve hold state
             if (payload.StepType == StepType.Directive)
@@ -194,6 +201,13 @@ namespace Ktory.Core.Runtime
             OnLanguageRefreshed?.Invoke();
         }
 
+        /// <summary>Notify a secondary-only redraw without touching primary printing or timing.</summary>
+        public void RefreshSecondaryLanguage()
+        {
+            if (!AcceptInput(_presentationToken, nameof(RefreshSecondaryLanguage))) return;
+            OnLanguageRefreshed?.Invoke();
+        }
+
         public void NotifyPrintingFinished() => NotifyPrintingFinished(_presentationToken);
 
         public void NotifyPrintingFinished(PresentationToken expected)
@@ -206,9 +220,9 @@ namespace Ktory.Core.Runtime
             }
 
             ElapsedInPhase = 0;
-            if (_sequencer.CurrentPayload != null)
+            if (CurrentPayload != null)
             {
-                SetupHoldPhase(_sequencer.CurrentPayload);
+                SetupHoldPhase(CurrentPayload);
             }
             else
             {
@@ -227,7 +241,7 @@ namespace Ktory.Core.Runtime
         public void HandleUserClick(PresentationToken expected)
         {
             if (!AcceptInput(expected, nameof(HandleUserClick))) return;
-            if (_sequencer.Status == ExecutionStatus.AwaitingChoice)
+            if (CurrentStatus == ExecutionStatus.AwaitingChoice)
             {
                 return; // Choices require specific item clicks
             }
@@ -335,7 +349,7 @@ namespace Ktory.Core.Runtime
 
         private void ApplyBeatState()
         {
-            _presentationToken = _sequencer.CurrentPresentationToken;
+            _presentationToken = BoundPresentation?.Token ?? new PresentationToken(_sequencer.CurrentSessionId, 0);
             _pendingAdvances = 0;
             _hasDeferredAdvance = false;
             ElapsedInPhase = 0;
@@ -350,16 +364,16 @@ namespace Ktory.Core.Runtime
             _usesEstimatedWait = false;
             _usesEstimatedAuto = false;
 
-            if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat || _sequencer.CurrentPayload == null)
+            if (CurrentStatus != ExecutionStatus.SuspendedAtBeat || CurrentPayload == null)
             {
                 Phase = PresentationPhase.Idle;
                 return;
             }
 
-            var payload = _sequencer.CurrentPayload;
+            var payload = CurrentPayload;
 
             // Directives do not print text, they go straight to holding or advance
-            if (payload.StepType == StepType.Directive)
+            if (payload.StepType == StepType.Directive || string.IsNullOrEmpty(payload.Content))
             {
                 SetupHoldPhase(payload);
                 return;
@@ -373,11 +387,11 @@ namespace Ktory.Core.Runtime
             var skippableTag = FindTag(payload, "skippable");
             if (skippableTag != null)
             {
-                if (skippableTag.PositionalArgs.Count > 0 && skippableTag.GetPositional<bool>(0) == false)
+                if (skippableTag.GetNamed<bool>("enabled", true) == false)
                 {
                     CanFastForward = false;
-                    FastForwardLockDuration = skippableTag.PositionalArgs.Count > 1 
-                        ? skippableTag.GetPositional<double>(1, 0) 
+                    FastForwardLockDuration = skippableTag.HasArg("seconds")
+                        ? skippableTag.GetNamed<double>("seconds", 0)
                         : double.MaxValue;
                 }
                 else
@@ -395,7 +409,7 @@ namespace Ktory.Core.Runtime
 
         private bool ShouldAutoAdvanceImmediately()
         {
-            if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat)
+            if (CurrentStatus != ExecutionStatus.SuspendedAtBeat)
             {
                 return false;
             }
@@ -413,7 +427,7 @@ namespace Ktory.Core.Runtime
             {
                 int advancesThisBatch = 0;
 
-                while (_sequencer.Status == ExecutionStatus.SuspendedAtBeat &&
+                while (CurrentStatus == ExecutionStatus.SuspendedAtBeat &&
                     _sequencer.MatchesCurrentPresentation(_presentationToken))
                 {
                     bool shouldAdvance = (_pendingAdvances > 0) || ShouldAutoAdvanceImmediately();
@@ -445,7 +459,7 @@ namespace Ktory.Core.Runtime
                         // If a subscriber to OnAdvanceRequested already invoked sequencer.Step(),
                         // The whole token changes on restart as well as advance. Do not step twice
                         // or apply this request to a new session that reuses the same numeric id.
-                        if (_sequencer.MatchesCurrentPresentation(tokenBefore) && _sequencer.Status == ExecutionStatus.SuspendedAtBeat)
+                        if (_sequencer.MatchesCurrentPresentation(tokenBefore) && CurrentStatus == ExecutionStatus.SuspendedAtBeat)
                         {
                             _sequencer.Step(tokenBefore);
                         }
@@ -467,7 +481,7 @@ namespace Ktory.Core.Runtime
                     }
                 }
 
-                if (_sequencer.Status != ExecutionStatus.SuspendedAtBeat)
+                if (CurrentStatus != ExecutionStatus.SuspendedAtBeat)
                 {
                     _pendingAdvances = 0;
                 }
@@ -491,18 +505,18 @@ namespace Ktory.Core.Runtime
         {
             var nextTag = FindTag(payload, "next");
             var waitTag = FindTag(payload, "wait");
-            var autoPolicy = _sequencer.ActiveAutoPolicy;
-            _usesEstimatedWait = waitTag != null && waitTag.PositionalArgs.Count == 0;
+            var autoPolicy = payload.AutoPolicy;
+            _usesEstimatedWait = waitTag != null && !waitTag.HasArg("seconds");
             _usesEstimatedAuto = false;
             _minimumHoldDuration = waitTag == null ? 0 : _usesEstimatedWait
                 ? EstimateReadingTime(payload.Content, payload.ActualLanguage)
-                : Math.Max(0, waitTag.GetPositional<double>(0, 0));
-            AutoAdvanceOnHoldEnd = nextTag != null || (autoPolicy != null && autoPolicy.Enabled);
-            AutoAdvanceSource = nextTag != null ? ".next" : AutoAdvanceOnHoldEnd ? "#AUTO" : "None";
+                : Math.Max(0, waitTag.GetNamed<double>("seconds", 0));
+            AutoAdvanceOnHoldEnd = nextTag != null || (autoPolicy != null && autoPolicy.Enabled) || payload.StepType == StepType.Directive;
+            AutoAdvanceSource = nextTag != null ? ".next" : autoPolicy?.Enabled == true ? "#AUTO" : payload.StepType == StepType.Directive ? "#" : "None";
 
             if (nextTag != null)
             {
-                _autoAdvanceDuration = Math.Max(0, nextTag.GetPositional<double>(0, 0));
+                _autoAdvanceDuration = Math.Max(0, nextTag.GetNamed<double>("seconds", 0));
             }
             else if (waitTag == null && autoPolicy != null && autoPolicy.Enabled)
             {

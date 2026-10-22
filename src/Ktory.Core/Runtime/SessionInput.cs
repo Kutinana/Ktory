@@ -16,6 +16,8 @@ namespace Ktory.Core.Runtime
         /// </summary>
         public void InvalidateSession()
         {
+            EnsureNotExecuting();
+            ResetExecutionLanes();
             CurrentSessionId = string.Empty;
             CurrentPresentationId = 0;
             CurrentPayload = null;
@@ -41,10 +43,25 @@ namespace Ktory.Core.Runtime
 
         public void Break(PresentationToken expected)
         {
-            if (AcceptInput(expected, nameof(Break))) Break();
+            if (AcceptInput(expected, nameof(Break))) ExecuteInput(expected.PresentationId, BreakCore);
         }
 
-        public void SetLanguage(string requestedLocale, PresentationToken expected)
+        public void SetLanguage(string? requestedLocale, PresentationToken expected)
+        {
+            if (AcceptLanguageInput(expected, nameof(SetLanguage))) SetLanguage(requestedLocale);
+        }
+
+        public void SetSecondaryLanguage(string? requestedLocale, PresentationToken expected)
+        {
+            if (AcceptLanguageInput(expected, nameof(SetSecondaryLanguage))) SetSecondaryLanguage(requestedLocale);
+        }
+
+        public void SetLanguageOutput(string? primaryLocale, string? secondaryLocale, PresentationToken expected)
+        {
+            if (AcceptLanguageInput(expected, nameof(SetLanguageOutput))) SetLanguageOutput(primaryLocale, secondaryLocale);
+        }
+
+        private bool AcceptLanguageInput(PresentationToken expected, string operation)
         {
             // Language is a session preference, not a request to advance a particular beat.
             // A queued language change remains valid after a same-session step or natural completion.
@@ -52,16 +69,13 @@ namespace Ktory.Core.Runtime
                 string.Equals(expected.SessionId, CurrentSessionId, StringComparison.Ordinal) &&
                 Status != ExecutionStatus.Error)
             {
-                SetLanguage(requestedLocale);
-                return;
+                return true;
             }
-            TraceIgnoredInput(nameof(SetLanguage), expected);
+            TraceIgnoredInput(operation, expected);
+            return false;
         }
 
-        internal bool MatchesCurrentPresentation(PresentationToken expected) =>
-            expected.PresentationId > 0 && !string.IsNullOrEmpty(expected.SessionId) &&
-            expected == CurrentPresentationToken &&
-            (Status == ExecutionStatus.SuspendedAtBeat || Status == ExecutionStatus.AwaitingChoice);
+        internal bool MatchesCurrentPresentation(PresentationToken expected) => FindPresentationLane(expected) != null;
 
         internal void TraceIgnoredInput(string operation, PresentationToken expected)
         {

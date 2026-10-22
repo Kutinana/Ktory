@@ -90,7 +90,7 @@ public class RuntimeBoundaryRegressionTests
     public void UnknownContainerLoop_WarnsOncePerRealEntry_NotAfterLoopExhaustion()
     {
         var sequencer = new KtorySequencer(KtoryParser.Parse(
-            "#mystery.loop(2)\n  + [pick]\n    : branch\n: after"));
+            "#mystery.loop(count=2)\n  + [pick]\n    : branch\n: after"));
         var trace = new List<ExecutionTrace>();
         sequencer.OnTrace += trace.Add;
         sequencer.Start();

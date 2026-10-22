@@ -18,13 +18,17 @@ namespace Ktory.Core.Runtime
         public string Block { get; }
         public int LineNumber { get; }
         public string Message { get; }
+        public string LaneId { get; }
+        public string LaneName { get; }
 
-        public ExecutionTrace(ExecutionTraceKind kind, string block, int lineNumber, string message)
+        public ExecutionTrace(ExecutionTraceKind kind, string block, int lineNumber, string message, string laneId = "root", string laneName = "root")
         {
             Kind = kind;
             Block = block;
             LineNumber = lineNumber;
             Message = message;
+            LaneId = laneId;
+            LaneName = laneName;
         }
     }
 
@@ -88,27 +92,41 @@ namespace Ktory.Core.Runtime
             return result.AsReadOnly();
         }
 
+        private bool _isTracing;
+
         private void Trace(ExecutionTraceKind kind, string message, int? line = null)
         {
             var observers = OnTrace;
-            if (observers == null) return;
-            var entry = new ExecutionTrace(kind, CurrentBlockLabel, line ?? CurrentLineNumber, message);
-            foreach (Action<ExecutionTrace> observer in observers.GetInvocationList())
+            if (observers == null || _isTracing) return;
+            var entry = new ExecutionTrace(kind, CurrentBlockLabel, line ?? CurrentLineNumber, message, _lane.Id, _lane.Name);
+            _isTracing = true;
+            try
             {
-                try { observer(entry); }
-                catch { /* Diagnostics must never change narrative execution. */ }
+                foreach (Action<ExecutionTrace> observer in observers.GetInvocationList())
+                {
+                    try { observer(entry); }
+                    catch { /* Diagnostics must never change narrative execution. */ }
+                }
             }
+            finally { _isTracing = false; }
         }
 
         private void DispatchTags(IReadOnlyList<Ast.TagData> tags, int line)
         {
             if (OnTrace != null)
                 foreach (var tag in tags) Trace(ExecutionTraceKind.Tag, tag.ToString(), line);
+            OnLaneTagsDispatched?.Invoke(new LaneTagDispatch(CurrentSessionId, _lane, line, tags));
             OnTagsDispatched?.Invoke(tags);
+            // A host tag may start/seek a media source. The next gate must sample its new value.
+            _sampledClockSources.Clear();
         }
+
+        private Exception? _lastTracedError;
 
         private void TraceError(Exception error)
         {
+            if (ReferenceEquals(_lastTracedError, error)) return;
+            _lastTracedError = error;
             int line = error is Common.KtoryException ktory && ktory.Line > 0 ? ktory.Line : CurrentLineNumber;
             Trace(ExecutionTraceKind.Error, error.Message, line);
         }

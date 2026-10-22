@@ -26,6 +26,7 @@ namespace Ktory.Core.Parser
         private static readonly Regex GuardConditionRegex = new Regex(@"^\?\s*\{([^\{\}]+)\}\s*(.*)$", RegexOptions.Compiled);
         private static readonly Regex SpeakerDeclarationRegex = new Regex(@"^@speaker(?:\s+([a-zA-Z0-9_\-]+))?\s*[:：]\s*(.*)$", RegexOptions.Compiled);
         private static readonly Regex OptionVariantRegex = new Regex(@"^@([a-zA-Z0-9_\-]+)\s*[:：]\s*(.*)$", RegexOptions.Compiled);
+        private static readonly Regex ParallelHeaderRegex = new Regex(@"^#\s*(parallel|lane)(?=$|[^a-zA-Z0-9_\-])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private RawTextProcessor _rawText = null!;
 
         public static KtoryFile Parse(string source)
@@ -123,6 +124,17 @@ namespace Ktory.Core.Parser
         {
             if (index >= lines.Count) return null;
             var line = lines[index];
+
+            // Parallel and lane are structural headers, never ordinary directive beats.
+            var structuralText = line.Text;
+            var structuralGuard = GuardConditionRegex.Match(structuralText);
+            if (structuralGuard.Success) structuralText = structuralGuard.Groups[2].Value.Trim();
+            var structuralHeader = ParallelHeaderRegex.Match(structuralText);
+            if (structuralHeader.Success)
+            {
+                throw new KtoryException("Legacy #parallel/#lane syntax is no longer supported. Migrate to #.track(source=..., name=...) and explicit #.awaitTrack(name=...) where completion is required.", line.LineNumber, line.Indent + 1);
+            }
+
             // 0. Check @speaker declaration
             if (line.Text.StartsWith("@speaker"))
             {
@@ -295,7 +307,7 @@ namespace Ktory.Core.Parser
             // Parse directive name and tags on the # line
             // e.g. #do .camera_shake(0.5) or #choice.loop.timeout(0) or #
             string rest = text.Substring(1).TrimStart();
-            string name = string.Empty;
+            string name;
             int tagStart = rest.IndexOf('.');
 
             if (tagStart >= 0)
@@ -367,7 +379,7 @@ namespace Ktory.Core.Parser
 
                     if (ItemRegex.IsMatch(childLine.Text))
                     {
-                        var item = ParseContainerItem(lines, ref index, lineIndent, file);
+                        var item = ParseContainerItem(lines, ref index, file);
                         container.Items.Add(item);
                         continue;
                     }
@@ -393,7 +405,7 @@ namespace Ktory.Core.Parser
             }
         }
 
-        private ContainerItem ParseContainerItem(List<SourceLine> lines, ref int index, int containerIndent, KtoryFile file)
+        private ContainerItem ParseContainerItem(List<SourceLine> lines, ref int index, KtoryFile file)
         {
             var line = lines[index];
             int itemIndent = line.Indent;
@@ -519,8 +531,8 @@ namespace Ktory.Core.Parser
                 text = guardMatch.Groups[2].Value.Trim();
             }
 
-            string? speaker = null;
-            string? content = null;
+            string? speaker;
+            string? content;
 
             // First colon rule: find first ':' or '：'
             int halfColon = text.IndexOf(':');

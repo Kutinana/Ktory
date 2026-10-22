@@ -27,16 +27,16 @@ namespace Ktory.Core.Ast
             var loopTag = GetTag("loop");
             if (loopTag == null) return 1;
 
-            if (loopTag.PositionalArgs.Count == 0)
+            if (!loopTag.NamedArgs.ContainsKey("count"))
             {
                 // .loop or .loop() without argument means infinite loop (-1 represents infinite)
                 return -1;
             }
 
-            var limit = loopTag.GetPositional<int>(0, 0);
+            var limit = loopTag.GetNamed<int>("count", 1);
             if (limit <= 1)
             {
-                // .loop(0) is equivalent to .loop(1) -> executes once
+                // Explicit counts <= 1 retain the existing execute-once behavior.
                 return 1;
             }
             return limit;

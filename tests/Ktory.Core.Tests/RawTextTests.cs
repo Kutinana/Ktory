@@ -14,13 +14,13 @@ public class RawTextTests
     [Fact]
     public void InlineSpansProtectSyntaxAndPreserveSurroundingFormattingAndRealTags()
     {
-        var step = Text("Alice: **我想写'''<b>.wait // [字]{音} **原文** \\x</b>'''。** .wait(1).next");
+        var step = Text("Alice: **我想写'''<b>.wait // [字]{音} **原文** \\x</b>'''。** .wait(seconds=1).next");
         Assert.Equal("<b>我想写<b>.wait // [字]{音} **原文** \\x</b>。</b>", step.TextVariants[""]);
         var pieces = step.TextVariantSegments[""];
         Assert.Equal(new[] { false, true, false }, pieces.Select(piece => piece.IsLiteral));
         Assert.Equal("<b>.wait // [字]{音} **原文** \\x</b>", pieces[1].Content);
         Assert.Equal(new[] { "wait", "next" }, step.Tags.Select(tag => tag.Name));
-        Assert.Equal(1L, step.Tags[0].PositionalArgs[0]);
+        Assert.Equal(1L, step.Tags[0].NamedArgs["seconds"]);
     }
 
     [Theory]
@@ -63,6 +63,18 @@ public class RawTextTests
     }
 
     [Fact]
+    public void RawBodyDoesNotCreateSectionsOrLanesAndDedentingContentDoesNotExitBranch()
+    {
+        var file = KtoryParser.Parse("#choice\n  + [Open]\n    Alice: '''\n=== Fake ===\n-> end\n#lane fake\n'''\n      .wait(seconds=1)\n    : after\n: joined");
+        Assert.Single(file.Blocks);
+        var menu = Assert.IsType<ContainerStep>(file.RootBlock.Steps[0]);
+        Assert.Equal(2, menu.Items[0].InlineSteps.Count);
+        var raw = Assert.IsType<TextStep>(menu.Items[0].InlineSteps[0]);
+        Assert.Equal("=== Fake ===\n-> end\n#lane fake", raw.TextVariants[""]);
+        Assert.Single(raw.Tags);
+    }
+
+    [Fact]
     public void CommentsAndDecoratorStringsDoNotOpenFencesAndTokensCannotCollideWithSourceText()
     {
         var file = KtoryParser.Parse("// ''' ignored\n#.sfx(\"'''\")\n: normal // ''' ignored\n: \uF000raw0\uF001 '''literal''' .sfx(\"'''\")");
@@ -90,57 +102,50 @@ public class RawTextTests
     }
 
     [Fact]
-    public void LanguageSwitchAndFallbackKeepFragmentsWithoutReplayingTags()
+    public void LanguageSelectionKeepsFragmentBoundariesForExactFallbackAndSecondaryWithoutReplayingTags()
     {
-        var seq = new KtorySequencer(KtoryParser.Parse("@defaultLang: zh\nAlice: '''<b>same</b>'''\n  @en: <b>same</b>\n  @ja: '''\n    .wait\n    @fr: literal\n  '''\n  .effect"));
+        const string script = "@defaultLang: zh\nAlice: '''<b>same</b>'''\n  @en: <b>same</b>\n  @ja: '''\n    .wait\n    @fr: literal\n  '''\n  .effect";
+        var sequencer = new KtorySequencer(KtoryParser.Parse(script));
         int effects = 0;
-        seq.OnTagsDispatched += _ => effects++;
-        seq.Start(requestedLocale: "fr");
-        var token = seq.CurrentPresentationToken;
-        Assert.Equal("zh", seq.CurrentPayload!.ActualLanguage);
-        Assert.True(seq.CurrentPayload.Segments!.Single().IsLiteral);
-        var content = seq.CurrentPayload.Content;
-        seq.SetLanguage("en");
-        Assert.Equal(token, seq.CurrentPresentationToken);
-        Assert.Equal(content, seq.CurrentPayload.Content);
-        Assert.Null(seq.CurrentPayload.Segments);
-        seq.SetLanguage("ja");
-        Assert.Equal(".wait\n@fr: literal", seq.CurrentPayload.Segments!.Single().Content);
+        sequencer.OnTagsDispatched += _ => effects++;
+        sequencer.Start(requestedLocale: "fr", secondaryLocale: "en");
+        var token = sequencer.CurrentPresentationToken;
+        Assert.Equal("zh", sequencer.CurrentPayload!.ActualLanguage);
+        Assert.True(sequencer.CurrentPayload.Text.Primary.Segments!.Single().IsLiteral);
+        Assert.Null(sequencer.CurrentPayload.Text.Secondary!.Segments);
+        sequencer.SetLanguageOutput("en", "ja");
+        Assert.Equal(token, sequencer.CurrentPresentationToken);
+        Assert.Null(sequencer.CurrentPayload.Text.Primary.Segments);
+        Assert.Equal(".wait\n@fr: literal", sequencer.CurrentPayload.Text.Secondary!.Segments!.Single().Content);
         Assert.Equal(1, effects);
-    }
 
-    [Fact]
-    public void RawBlockDoesNotCreateSectionsAndDedentingContentDoesNotExitBranch()
-    {
-        var file = KtoryParser.Parse("#choice\n  + [Open]\n    Alice: '''\n=== Fake ===\n-> end\n#choice literal\n'''\n      .wait(1)\n    : after\n: joined");
-        Assert.Single(file.Blocks);
-        var menu = Assert.IsType<ContainerStep>(file.RootBlock.Steps[0]);
-        Assert.Equal(2, menu.Items[0].InlineSteps.Count);
-        var raw = Assert.IsType<TextStep>(menu.Items[0].InlineSteps[0]);
-        Assert.Equal("=== Fake ===\n-> end\n#choice literal", raw.TextVariants[""]);
-        Assert.Single(raw.Tags);
+        // Equal string projections do not imply equal fragment semantics.
+        sequencer.SetLanguageOutput("zh", "en");
+        Assert.Equal(sequencer.CurrentPayload.Text.Primary.Content, sequencer.CurrentPayload.Text.Secondary!.Content);
+        Assert.NotNull(sequencer.CurrentPayload.Text.Primary.Segments);
+        Assert.Null(sequencer.CurrentPayload.Text.Secondary.Segments);
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BridgesSerializeFragmentsForLocalizedTextAndChoices(bool wasm)
+    public void BridgesSerializeLiteralSegmentsInBothLanguagesAndChoices(bool wasm)
     {
         const string script = "@defaultLang: zh\nAlice:\n  @zh: 前'''<b>.wait</b>'''后\n  @en: '''\n    **literal**\n    // text\n  '''\n#choice\n  + [@zh: '''[literal]'''] [@en: '''<i>literal</i>''']\n    : branch";
         var bridge = new KtoryWasmBridge();
         var http = new RunnerSessionService();
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        var first = wasm ? JsonSerializer.Deserialize<JsonElement>(bridge.Start(script, "zh", null))
-            : JsonSerializer.SerializeToElement(http.Start(script, "zh", null), options);
-        Assert.True(first.GetProperty("payload").GetProperty("segments")[1].GetProperty("isLiteral").GetBoolean());
+        var first = wasm ? JsonSerializer.Deserialize<JsonElement>(bridge.StartWithLanguages(script, "zh", null, "en"))
+            : JsonSerializer.SerializeToElement(http.Start(script, "zh", null, "en"), options);
+        var text = first.GetProperty("payload").GetProperty("text");
+        Assert.True(text.GetProperty("primary").GetProperty("segments")[1].GetProperty("isLiteral").GetBoolean());
+        Assert.Equal("**literal**\n// text", text.GetProperty("secondary").GetProperty("segments")[0].GetProperty("content").GetString());
         var token = new PresentationToken(first.GetProperty("sessionId").GetString()!, first.GetProperty("presentationId").GetInt64());
-        var translated = wasm ? JsonSerializer.Deserialize<JsonElement>(bridge.SetLanguage("en", token.PresentationId, token.SessionId))
-            : JsonSerializer.SerializeToElement(http.SetLanguage("en", token), options);
-        Assert.Equal("**literal**\n// text", translated.GetProperty("payload").GetProperty("segments")[0].GetProperty("content").GetString());
         var next = wasm ? JsonSerializer.Deserialize<JsonElement>(bridge.Step(token.PresentationId, token.SessionId))
             : JsonSerializer.SerializeToElement(http.Step(token), options);
-        var choice = next.GetProperty("choice").GetProperty("options")[0];
-        Assert.Equal("<i>literal</i>", choice.GetProperty("segments")[0].GetProperty("content").GetString());
-        Assert.True(choice.GetProperty("segments")[0].GetProperty("isLiteral").GetBoolean());
+        var choice = next.GetProperty("choice").GetProperty("options")[0].GetProperty("text");
+        Assert.Equal("[literal]", choice.GetProperty("primary").GetProperty("segments")[0].GetProperty("content").GetString());
+        Assert.True(choice.GetProperty("secondary").GetProperty("segments")[0].GetProperty("isLiteral").GetBoolean());
     }
+
 }
