@@ -1,0 +1,27 @@
+{
+  "name": "com.ktory.unity",
+  "version": "0.1.0-preview.2",
+  "displayName": "Ktory for Unity",
+  "description": "Unity integration, asset importer, and runtime tools for the Ktory narrative system.",
+  "unity": "2021.3",
+  "samples": [
+    {
+      "displayName": "Debugging host probe",
+      "description": "Minimal live host demonstrating the debugging adapter; adapt it to your existing player.",
+      "path": "Samples~/Debugging"
+    }
+  ],
+  "author": {
+    "name": "Kuchinashi Hoshikawa",
+    "url": "https://github.com/Kutinana/Ktory",
+    "email": "kanade@yoisaki.com"
+  },
+  "keywords": [
+    "dialogue",
+    "narrative",
+    "visual novel",
+    "importer",
+    "ktory"
+  ],
+  "documentationUrl": "https://ktory.ink"
+}
